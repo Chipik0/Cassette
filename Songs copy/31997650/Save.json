@@ -1,0 +1,76 @@
+{
+    "audio": {
+        "title": "bad to the bone",
+        "artist": "bbno$, Lentra",
+        "start_sample": 0,
+        "end_sample": 6218100,
+        "sampling_rate": 44100,
+        "duration": 141.0,
+        "bpm": 120,
+        "beats": [],
+        "fade_in": null,
+        "fade_out": null
+    },
+    "progress": 0,
+    "model": "Phone (2)",
+    "version": "0.1_PRE",
+    "glyphs": {
+        "1": {
+            "track": "4",
+            "start": 610.0,
+            "duration": 715.0,
+            "brightness": 100,
+            "effect": {
+                "name": "Sidebeat",
+                "settings": {
+                    "selector1": "Both",
+                    "segmented": true
+                }
+            }
+        },
+        "2": {
+            "track": "4",
+            "start": 1633.4596061706543,
+            "duration": 715.0,
+            "brightness": 100,
+            "effect": {
+                "name": "Soft Strobe",
+                "settings": {
+                    "selector1": "Disabled",
+                    "slider2": 7,
+                    "slider3": 100,
+                    "slider4": 62,
+                    "segmented": false
+                }
+            }
+        },
+        "3": {
+            "track": "4",
+            "start": 2810.0,
+            "duration": 715.0,
+            "brightness": 100,
+            "effect": {
+                "name": "Shocker",
+                "settings": {
+                    "selector1": "Disabled",
+                    "slider2": 7,
+                    "checkbox3": true,
+                    "segmented": true
+                }
+            }
+        },
+        "4": {
+            "track": "4",
+            "start": 4025.0,
+            "duration": 1160.0,
+            "brightness": 100,
+            "effect": {
+                "name": "Fill",
+                "settings": {
+                    "selector1": "To the left",
+                    "segmented": true
+                }
+            }
+        }
+    }
+}
