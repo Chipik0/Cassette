@@ -1,4 +1,4 @@
-![Hello.](github/Title.png)
+![Hello.](title.png)
 ## 🎵 Say Hello to **Cassette**  
 Create stunning **Glyphtones** — easier than ever before.
 
