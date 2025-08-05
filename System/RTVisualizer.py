@@ -52,15 +52,11 @@ class GlyphSyncer:
         self._scanner_timer.start(3000)
 
         self._scanner_thread.start()
-    
-    # GlyphSyncer.py
-
-# ... (ваш импорт и код класса)
 
     def init_device(self, device_id):
         subprocess.run([ADB_PATH, "-s", device_id, "forward", "tcp:7777", "tcp:7777"], check=True)
         subprocess.run([ADB_PATH, "shell", "settings", "put", "global", "nt_glyph_interface_debug_enable", "1"])
-        #subprocess.run([ADB_PATH, "shell", "am", "force-stop", "com.glyph.receiver"], check = True)
+        subprocess.run([ADB_PATH, "shell", "am", "force-stop", "com.glyph.receiver"], check = True)
         subprocess.run([ADB_PATH, "shell", "am", "start-foreground-service", "-n", "com.glyph.receiver/.MainService"], check = True)
 
         self.connected_model = self.get_model(device_id)
