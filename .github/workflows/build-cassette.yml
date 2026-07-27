@@ -147,11 +147,11 @@ jobs:
           fi
 
           pyinstaller --noconfirm cassette.spec
-      
+
       - name: Install zip (Linux)
-              if: runner.os == 'Linux'
-              run: sudo apt-get install -y zip
-      
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y zip
+
       - name: Package artifact
         shell: bash
         run: |
