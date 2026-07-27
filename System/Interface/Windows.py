@@ -1654,7 +1654,6 @@ class Settings(FloatingWindowGPU):
             self.settings.setValue(key, widget.getValue())
 
 # Glyph Visualizer
-
 @Dev.track_ram
 class GlyphVisualizer(FloatingWindowGPU):
     def __init__(
@@ -1673,7 +1672,8 @@ class GlyphVisualizer(FloatingWindowGPU):
         )
 
         self.parent            = parent
-        self.map_data          = Constants.DEVICES[model].visualization_map
+        self.device            = Constants.DEVICES[model]
+        self.map_data          = self.device.visualization_map
         self.map_w, self.map_h = self.map_data["size"]
 
         self.visual_scale:    float = 1.0
@@ -1885,8 +1885,34 @@ class GlyphVisualizer(FloatingWindowGPU):
         )
 
     def set_schedule(self, schedule_dict: dict) -> None:
+        resolved: dict[str, dict] = {}
+
+        for display_track, items in schedule_dict.items():
+            for real_track, real_items in self.expand_display_track_items(display_track, items).items():
+                resolved.setdefault(real_track, {}).update(real_items)
+
         for glyph in self.glyphs_gpu:
-            glyph["schedule"] = list(schedule_dict.get(glyph["id"], {}).values())
+            glyph["schedule"] = list(resolved.get(glyph["id"], {}).values())
+
+    def expand_display_track_items(self, display_track: str, items: dict) -> dict:
+        if display_track != Constants.MASTER_TRACK_ID and not self.device.is_segment_track(display_track):
+            return {display_track: items}
+
+        expanded: dict[str, dict] = {}
+
+        for key, item in items.items():
+            for real_track, real_segments in self.device.expand_display_track(display_track, item.get("segments")):
+                item_copy = dict(item)
+
+                if real_segments is None:
+                    item_copy.pop("segments", None)
+
+                else:
+                    item_copy["segments"] = real_segments
+
+                expanded.setdefault(real_track, {})[f"{key}:{real_track}"] = item_copy
+
+        return expanded
 
     def play_all(self, ms_start: int = 0) -> None:
         self.virtual_time      = ms_start

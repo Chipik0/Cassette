@@ -386,7 +386,7 @@ class ScrollableContent(QGraphicsView):
         self.playback_manager.speed_changed.connect(self.composition.syncer.set_speed)
         self.composition.syncer.error_occurred.connect(self.show_error_dialog)
 
-        self.track_names = [f"{i + 1}" for i in range(composition.track_number)]
+        self.track_names = composition.track_names
 
         self.wheel_controller    = Controllers.WheelController(self)
         self.glyph_controller    = Controllers.GlyphController(self)
@@ -1036,15 +1036,15 @@ class ScrollableContent(QGraphicsView):
         if not selected_ids or not selected_items:
             return {}, False
 
-        segments_map = Constants.DEVICES[self.composition.model].segments_map
+        device = Constants.DEVICES[self.composition.model]
 
         has_non_segmented = [
-            not segments_map.get(self.composition.get_glyph(glyph_id)["track"], False)
+            not device.get_track_segment_count(self.composition.get_glyph(glyph_id)["track"])
             for glyph_id in selected_ids
         ]
 
         has_segmented = [
-            segments_map.get(self.composition.get_glyph(glyph_id)["track"], False)
+            device.get_track_segment_count(self.composition.get_glyph(glyph_id)["track"])
             for glyph_id in selected_ids
         ]
 
@@ -1171,7 +1171,7 @@ class ScrollableContent(QGraphicsView):
 
         popup = Windows.SegmentEditor(
             "Segments",
-            Constants.DEVICES[self.composition.model].segments_map[first_glyph["track"]],
+            Constants.DEVICES[self.composition.model].get_track_segment_count(first_glyph["track"]),
             first_glyph.get("segments")
         )
 

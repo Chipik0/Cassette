@@ -7,6 +7,8 @@ from dataclasses import (
     dataclass
 )
 
+from enum import Enum
+
 current_settings = Utils.SettingsController("chips047", "Cassette")
 
 def load_settings() -> None:
@@ -56,6 +58,13 @@ def prepare_default_settings(setting_components: dict[str, list]) -> None:
 
 # Models and Related
 
+MASTER_TRACK_ID = "A"
+
+class MasterTrackMode(Enum):
+    ALL_LIT      = "all_lit"
+    MERGED_ZONES = "merged_zones"
+    MIRROR_ZONES = "mirror_zones"
+
 @dataclass
 class DeviceConfig:
     code_name:          str
@@ -75,6 +84,9 @@ class DeviceConfig:
     base_tracks:        int              = field(init = False)
     custom2_str:        str              = field(init = False)
 
+    master_track_mode:     MasterTrackMode = field(init = False)
+    master_track_segments: int | None      = field(init = False)
+
     # to support phone (1) 5 cols mode (for import function)
     legacy_tracks: dict[int, dict[str, list[str]]] = field(default_factory=dict)
     
@@ -85,12 +97,16 @@ class DeviceConfig:
         
         self.setup_offset_calc()
 
+        self.master_track_mode     = self.compute_master_track_mode()
+        self.master_track_segments = self.compute_master_track_segments()
+
         logger.info(f"\n\nModel {self.full_name}")
         logger.debug(f"Total columns (Glyphs + Segments): {self.columns}")
         logger.debug(f"Base Tracks: {self.base_tracks}")
         logger.debug(f"Hardware: {self.hardware_codes[0]}")
         logger.debug(f"Glyph Indexes: {self.glyph_indexes}")
         logger.debug(f"Zone Indexes: {self.zone_indexes}")
+        logger.debug(f"Master Track Mode: {self.master_track_mode} ({self.master_track_segments} zones)")
 
     def setup_offset_calc(self) -> None:
         if not self.segments_map:
@@ -125,6 +141,171 @@ class DeviceConfig:
         
         return total
 
+    @property
+    def track_names(self) -> list[str]:
+        if self.master_track_mode is MasterTrackMode.MIRROR_ZONES:
+            return [MASTER_TRACK_ID] + [str(i) for i in range(1, self.master_track_segments + 1)]
+
+        return [MASTER_TRACK_ID] + [str(i) for i in range(1, self.base_tracks + 1)]
+
+    def compute_master_track_mode(self) -> MasterTrackMode:
+        if self.base_tracks == 1 and "1" in self.segments_map:
+            return MasterTrackMode.MIRROR_ZONES
+
+        all_base_tracks_segmented = all(
+            str(i) in self.segments_map
+            for i in range(1, self.base_tracks + 1)
+        )
+
+        if self.base_tracks > 1 and all_base_tracks_segmented:
+            return MasterTrackMode.MERGED_ZONES
+
+        return MasterTrackMode.ALL_LIT
+
+    def compute_master_track_segments(self) -> int | None:
+        if self.master_track_mode is MasterTrackMode.MIRROR_ZONES:
+            return self.segments_map["1"]
+
+        if self.master_track_mode is MasterTrackMode.MERGED_ZONES:
+            return self.total_tracks_with_segments
+
+        return None
+
+    def is_master_track(self, track: str) -> bool:
+        return track == MASTER_TRACK_ID
+
+    def is_segment_track(self, track: str) -> bool:
+        return (
+            self.master_track_mode is MasterTrackMode.MIRROR_ZONES and
+            not self.is_master_track(track)
+        )
+
+    def resolve_segment_track(self, track: str) -> tuple[str, int]:
+        if not self.is_segment_track(track):
+            raise ValueError(f"'{track}' is not a segment track for {self.full_name}")
+
+        return "1", int(track) - 1
+
+    def get_track_segment_count(self, track: str) -> int | None:
+        if self.is_master_track(track):
+            return self.master_track_segments
+
+        if self.is_segment_track(track):
+            return None
+
+        return self.segments_map.get(track)
+
+    def resolve_master_zone(self, zone_index: int) -> tuple[str, int]:
+        if self.master_track_mode is MasterTrackMode.MIRROR_ZONES:
+            return "1", zone_index
+
+        if self.master_track_mode is MasterTrackMode.MERGED_ZONES:
+            offset = 0
+
+            for i in range(1, self.base_tracks + 1):
+                track          = str(i)
+                track_segments = self.segments_map[track]
+
+                if zone_index < offset + track_segments:
+                    return track, zone_index - offset
+
+                offset += track_segments
+
+            raise IndexError(f"Master zone index {zone_index} is out of range for {self.full_name}")
+
+        raise ValueError(f"{self.full_name} has no zone-mapped master track (mode is {self.master_track_mode})")
+
+    def resolve_master_track(self) -> list[tuple[str, int | None]]:
+        if self.master_track_mode is MasterTrackMode.ALL_LIT:
+            return [(str(i), None) for i in range(1, self.base_tracks + 1)]
+
+        return [
+            self.resolve_master_zone(zone_index)
+            for zone_index in range(self.master_track_segments)
+        ]
+
+    def is_full_track_segments(self, track: str, segments: list[int]) -> bool:
+        total = self.segments_map.get(track)
+
+        if not total:
+            return False
+
+        return set(segments) == set(range(total))
+
+    def expand_display_track(
+            self,
+            display_track: str,
+            segments:      list[int] | None = None
+        ) -> list[tuple[str, list[int] | None]]:
+
+        if self.is_master_track(display_track):
+            if self.master_track_mode is MasterTrackMode.ALL_LIT:
+                return [(real_track, None) for real_track, _ in self.resolve_master_track()]
+
+            active_segments = segments if segments is not None else range(self.master_track_segments)
+
+            zones_by_real_track: dict[str, list[int]] = {}
+
+            for virtual_zone in active_segments:
+                real_track, real_zone = self.resolve_master_zone(virtual_zone)
+                zones_by_real_track.setdefault(real_track, []).append(real_zone)
+
+            return [
+                (
+                    real_track,
+                    None if self.is_full_track_segments(real_track, real_zones) else sorted(real_zones)
+                )
+                for real_track, real_zones in zones_by_real_track.items()
+            ]
+
+        if self.is_segment_track(display_track):
+            real_track, real_zone = self.resolve_segment_track(display_track)
+
+            return [(real_track, [real_zone])]
+
+        return [(display_track, segments)]
+
+    def get_master_array_indexes(self, active_segments: list[int] | None = None) -> list[int]:
+        if self.master_track_mode is MasterTrackMode.ALL_LIT:
+            indexes: list[int] = []
+
+            for i in range(1, self.base_tracks + 1):
+                indexes.extend(self.get_array_indexes(i, 0))
+
+            return indexes
+
+        if active_segments is None:
+            active_segments = range(self.master_track_segments)
+
+        return [
+            self.get_array_indexes(int(real_track), real_zone + 1)[0]
+            for real_track, real_zone in (
+                self.resolve_master_zone(virtual_zone)
+                for virtual_zone in active_segments
+            )
+        ]
+
+    def get_display_array_indexes(
+            self,
+            display_track: str,
+            segments:      list[int] | None = None
+        ) -> list[int]:
+
+        if self.is_master_track(display_track):
+            return self.get_master_array_indexes(segments)
+
+        if self.is_segment_track(display_track):
+            real_track, real_zone = self.resolve_segment_track(display_track)
+
+            return [self.get_array_indexes(int(real_track), real_zone + 1)[0]]
+
+        real_track = int(display_track)
+
+        if segments:
+            return [self.get_array_indexes(real_track, segment + 1)[0] for segment in segments]
+
+        return self.get_array_indexes(real_track, 0)
+
     def get_array_indexes(
             self,
             glyph_index: int,
@@ -147,6 +328,9 @@ class DeviceConfig:
             total_tracks: int
         ) -> list[tuple[str, int | None]]:
         
+        if self.is_master_track(input_track):
+            return self.resolve_master_track()
+
         if total_tracks in self.legacy_tracks:
             mapping = self.legacy_tracks[total_tracks]
             

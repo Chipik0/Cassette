@@ -502,6 +502,7 @@ class Composition(BaseComposition):
         self.brightness     = Constants.DEFAULT_BRIGHTNESS
         self.duration_ms    = Constants.DEFAULT_DURATION
         self.track_number   = Constants.DEVICES[self.model].base_tracks
+        self.track_names    = Constants.DEVICES[self.model].track_names
         self.save_version   = settings.get("version", self.version)
         self.default_effect = "none"
 

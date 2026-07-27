@@ -1,3 +1,4 @@
+import re
 import random
 import string
 import webbrowser
@@ -526,9 +527,9 @@ class Textbox(Lifecycle.LoomAnimationMixin, QLineEdit):
             easing_function            = Easing.linear,
             multiply_duration_by_speed = False
         )
-
 @Dev.track_ram
 class SearchTextbox(Textbox):
+
     random_titles: tuple = (
         "CYCLE",
         "BREAK",
@@ -546,6 +547,40 @@ class SearchTextbox(Textbox):
         "STAND DOWN",
         "HORIZON DID NOT LIE",
         "FIX IT"
+    )
+
+    dick_lengths: dict = {
+        1: (
+            "A small dick. You just typed a small dick. What the fuck are you doing?",
+            "Microscopic. Genuinely impressive in the wrong direction.",
+            "Shorter than my poop."
+        ),
+        2: (
+            "Bro. You have spent your time to type a... dick. Dick in the searchbox.",
+            "Below average. Shortie.",
+            "Still not much to write home about.",
+            "Shortie."
+        ),
+        3: (
+            "Now we're talking. A respectable, median - sized dick.",
+            "Solid effort.",
+            "Confidence looks good on you.",
+        ),
+        4: (
+            "Someone's feeling good about themselves.",
+            "Bold. Statistically improbable, but bold.",
+        ),
+        5: (
+            "Five. FIVE. Centimeters.",
+            "You've fully left the realm of anatomy and entered fantasy."
+        ),
+    }
+
+    glitch_lengths: tuple = (
+        "y̶̠̓o̶̗͐u̸̡͐ ̴̙͘d̷͙͝ị̴̈d̶͇̾ ̸̜̕n̷̙̈o̸̠͝t̴̬̒ ̶̙͘n̷̙̈ë̴̗́ë̷̠́d̶͇̾ ̸̜̕t̷̬̒ḧ̷̙ï̴̈s̸̠͝ ̴̙͘m̶̠̓ü̷̗c̸̡͐h̴̙͘",
+        "t̶̠̓h̶̗͐ë̸̡͐ ̴̙͘s̷͙͝ë̴̈ȧ̶r̴̬̒c̷̙̈h̸̠͝ ̴̙͘b̶̠̓o̷̗x̸̡͐ ̴̙͘c̷͙͝ä̴̈ṅ̶n̴̬̒ö̷̙t̸̠͝ ̴̙͘c̶̠̓o̷̗n̸̡͐t̴̙͘ä̷͙͝ï̴̈ṅ̶ ̴̬̒ẗ̷̙h̸̠͝ï̴̈s̶̠̓",
+        "1̸͓̈́̌̂̚1̸͔̼̭̙̲́̑0̵͎̕͟",
+        "Longer than the Cassette's creator body height. Still shorter than his... Uhm. PEGI - 16."
     )
 
     def __init__(self) -> None:
@@ -590,9 +625,11 @@ class SearchTextbox(Textbox):
         self.glitch_count_reset_timer.start()
 
         if self.search_box_glitch_count == 60:
+            self.setText("That's slightly illogical.")
             Player.ui_player.play_sound("Packs/NOK/Illogical")
 
         elif self.search_box_glitch_count == 150:
+            self.setText("0.0004%...")
             Player.ui_player.play_sound("Packs/NOK/ZZZ")
 
         elif self.search_box_glitch_count == 250:
@@ -615,12 +652,34 @@ class SearchTextbox(Textbox):
 
         self.random_title_timer.start(random.randint(30, 400))
 
+    def get_dick_response(self, text: str) -> str | None:
+        match = re.fullmatch(r"[38](=+)3", text)
+
+        if not match:
+            return None
+
+        length = len(match.group(1))
+
+        if length > 8:
+            return random.choice(self.glitch_lengths)
+
+        bucket = self.dick_lengths.get(length, self.dick_lengths[max(self.dick_lengths)])
+
+        return random.choice(bucket)
+
     def on_text_changed(self, text: str) -> None:
         text = (text or "").lower().strip().replace(" ", "")
 
+        dick_response = self.get_dick_response(text)
+
+        if dick_response:
+            self.setText(dick_response)
+            return
+
         easter_eggs = {
             "subject106": lambda: self.random_title_timer.start(),
-            "chips047":   lambda: webbrowser.open("https://github.com/Chipik0")
+            "chips047":   lambda: webbrowser.open("https://github.com/Chipik0"),
+            "hello":      lambda: self.setText("well uhH hello Hi Hello Hello Hellliio hiiii")
         }
 
         if text in easter_eggs:

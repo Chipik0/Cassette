@@ -351,6 +351,7 @@ class GlyphController(QObject):
         )
 
         self.track_map = {
+            Qt.Key.Key_A:     Constants.MASTER_TRACK_ID,
             Qt.Key.Key_1:     "1",
             Qt.Key.Key_2:     "2",
             Qt.Key.Key_3:     "3",
@@ -591,8 +592,8 @@ class GlyphController(QObject):
         self.elements_changed.emit()
         self.refresh_stack_indicators()
 
-    def spawn_glyph_on_track(self, track_index: int) -> None:
-        if int(track_index) > self.composition.track_number:
+    def spawn_glyph_on_track(self, track_index: str) -> None:
+        if track_index not in self.composition.track_names:
             return
 
         current_playhead_ms = int(self.conductor.get_playhead_position_ms())

@@ -42,13 +42,13 @@ def extract_glyph_data(
     total_segments     = None
     active_segments    = glyph.get("segments")
 
-    model = Constants.DEVICES.get(model)
+    device = Constants.DEVICES.get(model)
 
-    if not model:
+    if not device:
         total_segments = 30
     
     else:
-        total_segments = model.segments_map.get(track)
+        total_segments = device.get_track_segment_count(track)
 
     return {
         "start":              start,

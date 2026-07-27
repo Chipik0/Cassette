@@ -92,14 +92,9 @@ def parse_glyphs(glyphs: dict, device: Constants.DeviceConfig) -> list[dict]:
         if rounded_end <= rounded_start:
             rounded_end = rounded_start + TIME_STEP_MS
 
-        track_index = int(glyph["track"])
-        segments    = glyph.get("segments")
-
-        if segments:
-            indices = [device.get_array_indexes(track_index, segment + 1)[0] for segment in segments]
-
-        else:
-            indices = device.get_array_indexes(track_index, 0)
+        track_id = glyph["track"]
+        segments = glyph.get("segments")
+        indices  = device.get_display_array_indexes(track_id, segments)
 
         item: dict = {
             "rastered_start": rounded_start,

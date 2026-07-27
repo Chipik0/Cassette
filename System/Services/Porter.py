@@ -154,6 +154,18 @@ def make_glyph(
 
     return new_glyph
 
+def expand_display_track_glyph(glyph: dict, model: str) -> list[dict]:
+    device        = Constants.DEVICES[model]
+    display_track = glyph["track"]
+
+    if display_track == Constants.MASTER_TRACK_ID or device.is_segment_track(display_track):
+        return [
+            make_glyph(glyph, real_track, segments = real_segments, copy_effects = True)
+            for real_track, real_segments in device.expand_display_track(display_track, glyph.get("segments"))
+        ]
+
+    return [glyph]
+
 # Core Porting Logic
 
 def convert_effect_to_ported_glyphs(
@@ -226,7 +238,19 @@ def port_glyphs(port_to: str, composition: object) -> list:
     singles, effects = composition.sorted_glyphs()
     ported_glyphs    = []
 
-    for effect in effects:
+    expanded_effects = [
+        expanded
+        for effect in effects
+        for expanded in expand_display_track_glyph(effect, composition.model)
+    ]
+
+    expanded_singles = [
+        expanded
+        for single in singles
+        for expanded in expand_display_track_glyph(single, composition.model)
+    ]
+
+    for effect in expanded_effects:
         target_tracks = get_target_track(composition.model, port_to, effect)
         
         ported_glyphs.extend(
@@ -239,7 +263,7 @@ def port_glyphs(port_to: str, composition: object) -> list:
             )
         )
 
-    for single in singles:
+    for single in expanded_singles:
         target_tracks = get_target_track(composition.model, port_to, single)
         
         ported_glyphs.extend(

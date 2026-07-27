@@ -1318,7 +1318,7 @@ class GlyphItem(Lifecycle.LoomAnimationMixin, QGraphicsObject):
         return 0
 
     @property
-    def track(self) -> int:
+    def track(self) -> str:
         data = self.data
         
         if data:
@@ -1413,7 +1413,9 @@ class GlyphItem(Lifecycle.LoomAnimationMixin, QGraphicsObject):
         )
 
         row_height = Styles.Metrics.Tracks.RowHeight + Styles.Metrics.Tracks.BoxSpacing
-        track_top  = top_margin + ((int(self.track) - 1) * row_height)
+        device     = Constants.DEVICES[self.conductor.composition.model]
+        track_row  = device.track_names.index(str(self.track))
+        track_top  = top_margin + (track_row * row_height)
         offset     = (Styles.Metrics.Tracks.RowHeight - Styles.Metrics.Tracks.BoxHeight) / 2
 
         return track_top + offset
