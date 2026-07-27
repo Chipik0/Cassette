@@ -148,49 +148,6 @@ jobs:
 
           pyinstaller --noconfirm cassette.spec
 
-      - name: Deduplicate identical files via hardlinks
-        if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          import hashlib
-          import os
-          from collections import defaultdict
-
-          root = 'dist/Cassette'
-          hash_to_paths = defaultdict(list)
-
-          for dirpath, dirnames, filenames in os.walk(root):
-              for filename in filenames:
-                  full_path = os.path.join(dirpath, filename)
-
-                  if os.path.islink(full_path):
-                      continue
-
-                  with open(full_path, 'rb') as file_handle:
-                      digest = hashlib.sha256(file_handle.read()).hexdigest()
-
-                  hash_to_paths[digest].append(full_path)
-
-          saved_bytes  = 0
-          linked_count = 0
-
-          for digest, paths in hash_to_paths.items():
-              if len(paths) < 2:
-                  continue
-
-              canonical_path = paths[0]
-              file_size      = os.path.getsize(canonical_path)
-
-              for duplicate_path in paths[1:]:
-                  os.remove(duplicate_path)
-                  os.link(canonical_path, duplicate_path)
-                  saved_bytes  += file_size
-                  linked_count += 1
-
-          print(f'Hardlinked {linked_count} duplicate files, saved {saved_bytes / (1024*1024):.1f} MB on disk')
-          PY
-
       - name: Package artifact
         shell: bash
         run: |
