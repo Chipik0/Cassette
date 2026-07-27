@@ -166,7 +166,6 @@ jobs:
         with:
           name: cassette-${{ matrix.artifact_name }}
           path: |
-            cassette-${{ matrix.artifact_name }}.tar.gz
             cassette-${{ matrix.artifact_name }}.zip
           include-hidden-files: true
 

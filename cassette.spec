@@ -123,7 +123,7 @@ if not is_darwin:
         a.binaries,
         a.zipfiles,
         a.datas,
-        strip=True,
+        strip=False,
         upx=True,
         name='Cassette',
     )
