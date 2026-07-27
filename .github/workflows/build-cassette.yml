@@ -147,19 +147,20 @@ jobs:
           fi
 
           pyinstaller --noconfirm cassette.spec
-
-      - name: Package artifact
-        shell: bash
-        run: |
-          cd dist
-          if [ "${{ runner.os }}" == "macOS" ]; then
-            zip -r -y "../cassette-${{ matrix.artifact_name }}.zip" .
-          elif [ "${{ runner.os }}" == "Windows" ]; then
-            7z a -mx=5 "../cassette-${{ matrix.artifact_name }}.zip" Cassette
-          else
-            tar czf "../cassette-${{ matrix.artifact_name }}.tar.gz" Cassette
-          fi
-          ls -lh ..
+      - name: Install zip (Linux)
+              if: runner.os == 'Linux'
+              run: sudo apt-get install -y zip
+      
+            - name: Package artifact
+              shell: bash
+              run: |
+                cd dist
+                if [ "${{ runner.os }}" == "Windows" ]; then
+                  7z a -mx=5 "../cassette-${{ matrix.artifact_name }}.zip" Cassette
+                else
+                  zip -r -y "../cassette-${{ matrix.artifact_name }}.zip" Cassette
+                fi
+                ls -lh ..
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
