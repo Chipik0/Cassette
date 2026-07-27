@@ -203,11 +203,6 @@ jobs:
             tar czf "../cassette-${{ matrix.artifact_name }}.tar.gz" Cassette
           fi
           ls -lh ..
-      
-      - name: Generate build provenance attestation
-        uses: actions/attest-build-provenance@v1
-        with:
-          subject-path: 'cassette-${{ matrix.artifact_name }}.*'
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
