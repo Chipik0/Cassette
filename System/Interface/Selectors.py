@@ -236,11 +236,14 @@ class SegmentedStrip(Lifecycle.LoomAnimationMixin, QWidget):
         button_count = len(self.buttons)
         button_index = self.group.id(watched)
         tone         = 0.8 + (button_index / (button_count - 1)) * 0.4 if button_count > 1 else 1.0
+        pan          = self.pan_ratio(button_index, button_count)
 
         Player.ui_player.play_sound(
             "Click/Selector/Hover",
             speed       = tone,
-            setting_key = "selector_sounds"
+            pan         = pan,
+            setting_key = "selector_sounds",
+            volume      = 0.8
         )
 
     def handle_hover_leave(self) -> None:
@@ -316,11 +319,14 @@ class SegmentedStrip(Lifecycle.LoomAnimationMixin, QWidget):
 
         multiplier = 1.75
         tone       = 1.0 + (index / (count - 1)) * (multiplier - 1.0) if count > 1 else 1.0
+        pan        = self.pan_ratio(index, count)
 
         Player.ui_player.play_sound(
             "Click/Selector/Confirm",
             speed       = tone,
-            setting_key = "selector_sounds"
+            pan         = pan,
+            setting_key = "selector_sounds",
+            volume      = 0.8
         )
 
         self.select_index(index, animated = True, emit = True)
@@ -443,6 +449,12 @@ class SegmentedStrip(Lifecycle.LoomAnimationMixin, QWidget):
 
     def current_data(self) -> object:
         return self.data_by_identifier.get(self.group.checkedId())
+
+    def pan_ratio(self, index: int, count: int) -> float:
+        if count <= 1:
+            return 0.0
+
+        return (index / (count - 1)) * 2.0 - 1.0
 
 @Dev.track_ram
 class Selector(QWidget):

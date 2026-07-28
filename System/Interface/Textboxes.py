@@ -111,6 +111,36 @@ class Textbox(Lifecycle.LoomAnimationMixin, QLineEdit):
             on_change  = self.on_glitch_text_changed
         )
 
+    # Pan helper
+
+    def calculate_screen_pan(self, global_pos: QPoint) -> float:
+        screen = None
+
+        if hasattr(self, 'screen'):
+            screen = self.screen()
+        
+        if not screen:
+            screen = QApplication.screenAt(global_pos) or QApplication.primaryScreen()
+    
+        if not screen:
+            return 0.0
+    
+        screen_rectangle = screen.geometry()
+    
+        if screen_rectangle.width() <= 0:
+            return 0.0
+    
+        relative_x = (global_pos.x() - screen_rectangle.x()) / screen_rectangle.width()
+        pan = relative_x * 2.0 - 1.0
+    
+        return max(-1.0, min(1.0, pan))
+
+    def get_cursor_global_pos(self) -> QPoint:
+        cursor_center = self.cursorRect().center()
+        print("cursor", cursor_center)
+
+        return self.mapToGlobal(cursor_center)
+
     # Events
 
     def showEvent(self, event: QEvent) -> None:
@@ -179,14 +209,16 @@ class Textbox(Lifecycle.LoomAnimationMixin, QLineEdit):
         can_animate = self.animations_enabled and not self.arrow_pressed and current_text
 
         if is_arrow and can_animate:
-            direction = -1 if key == Qt.Key.Key_Left else 1
-            position  = self.cursorPosition() + direction
-            tone      = 0.85 + (position / len(current_text)) * 0.4
+            direction  = -1 if key == Qt.Key.Key_Left else 1
+            position   = self.cursorPosition() + direction
+            tone       = 0.85 + (position / len(current_text)) * 0.4
+            cursor_pos = self.get_cursor_global_pos()
 
             Player.ui_player.play_sound(
                 "Textbox/ArrowTick",
                 speed       = tone,
-                setting_key = "textbox_sounds"
+                setting_key = "textbox_sounds",
+                pan         = self.calculate_screen_pan(cursor_pos)
             )
 
             self.arrow_pressed   = True
@@ -401,7 +433,18 @@ class Textbox(Lifecycle.LoomAnimationMixin, QLineEdit):
             elif remaining_characters <= 1:
                 tone = 1.2
 
-        Player.ui_player.play_sound("Textbox/Tick", speed = tone, setting_key = "textbox_sounds")
+        cursor_global_pos = self.get_cursor_global_pos()
+        current_pan       = self.calculate_screen_pan(cursor_global_pos)
+
+        print(current_pan)
+
+        Player.ui_player.play_sound(
+            "Textbox/Tick",
+            speed       = tone,
+            setting_key = "textbox_sounds",
+            volume      = 0.6,
+            pan         = current_pan
+        )
 
         if not self.animations_enabled:
             return
@@ -423,7 +466,12 @@ class Textbox(Lifecycle.LoomAnimationMixin, QLineEdit):
         self.glitchStarted.emit()
 
         if sound:
-            Player.ui_player.play_sound("Reject", setting_key = "textbox_sounds")
+            cursor_pos = self.get_cursor_global_pos()
+            Player.ui_player.play_sound(
+                "Reject",
+                setting_key = "textbox_sounds",
+                pan         = self.calculate_screen_pan(cursor_pos)
+            )
 
         if not Constants.current_settings["textbox_animations"]:
             return
@@ -527,6 +575,7 @@ class Textbox(Lifecycle.LoomAnimationMixin, QLineEdit):
             easing_function            = Easing.linear,
             multiply_duration_by_speed = False
         )
+
 @Dev.track_ram
 class SearchTextbox(Textbox):
 

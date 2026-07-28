@@ -12,6 +12,7 @@ from PyQt6.QtGui import (
     QBrush,
     QImage,
     QPixmap,
+    QCursor,
     QPainter,
     QPolygonF,
     QMouseEvent,
@@ -976,7 +977,14 @@ class ScrollableContent(QGraphicsView):
             if not clicked_glyph:
                 return
 
-            Player.ui_player.play_sound("Menu/Open", setting_key = "context_menu_sounds")
+            current_pan      = self.screen_pan(event.globalPos())
+            
+            Player.ui_player.play_sound(
+                "Menu/Open",
+                pan         = current_pan,
+                setting_key = "context_menu_sounds"
+            )
+
             self.update()
 
             effects, can_show_segments = self.resolve_effect_options(
@@ -1014,7 +1022,11 @@ class ScrollableContent(QGraphicsView):
                     )
                 )
 
-            self.menu = Menu.ContextMenu(entries, self)
+            self.menu = Menu.ContextMenu(
+                entries,
+                self,
+                pan = self.screen_pan(event.globalPos())
+            )
             self.menu.exec(event.globalPos())
             self.menu.deleteLater()
 
@@ -1026,6 +1038,24 @@ class ScrollableContent(QGraphicsView):
                 "Context Menu Error",
                 "An unexpected error occurred while opening the context menu."
             ).exec()
+
+    def screen_pan(self, global_pos: QPoint) -> float:
+        print("PIOS", global_pos)
+        screen = QGuiApplication.screenAt(global_pos)
+
+        if not screen:
+            return 0.0
+
+        screen_rectangle = screen.geometry()
+
+        if screen_rectangle.width() <= 0:
+            return 0.0
+
+        relative_x = (global_pos.x() - screen_rectangle.x()) / screen_rectangle.width()
+
+        print(relative_x * 2.0 - 1.0, ":", screen_rectangle, global_pos.x())
+
+        return relative_x * 2.0 - 1.0
 
     def resolve_effect_options(
         self,

@@ -148,27 +148,11 @@ jobs:
 
           pyinstaller --noconfirm cassette.spec
 
-      - name: Install zip (Linux)
-        if: runner.os == 'Linux'
-        run: sudo apt-get install -y zip
-
-      - name: Package artifact
-        shell: bash
-        run: |
-          cd dist
-          if [ "${{ runner.os }}" == "Windows" ]; then
-            7z a -mx=5 "../cassette-${{ matrix.artifact_name }}.zip" Cassette
-          else
-            zip -r -y "../cassette-${{ matrix.artifact_name }}.zip" Cassette
-          fi
-          ls -lh ..
-
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: cassette-${{ matrix.artifact_name }}
-          path: |
-            cassette-${{ matrix.artifact_name }}.zip
+          path: dist/Cassette
           include-hidden-files: true
 
   publish-draft-release:
@@ -195,11 +179,23 @@ jobs:
         with:
           pattern: cassette-*
           path: release-assets
-          merge-multiple: true
 
       - name: List downloaded assets
         shell: bash
-        run: ls -lh release-assets
+        run: ls -lhR release-assets
+
+      - name: Install zip
+        run: sudo apt-get update && sudo apt-get install -y zip
+
+      - name: Zip each platform build
+        shell: bash
+        run: |
+          mkdir -p release-zips
+          for dir in release-assets/*/; do
+            name=$(basename "$dir")
+            (cd "$dir" && zip -r -y "../../release-zips/${name}.zip" .)
+          done
+          ls -lh release-zips
 
       - name: Create or update draft release
         uses: softprops/action-gh-release@v2
@@ -207,4 +203,4 @@ jobs:
           tag_name: v${{ steps.version.outputs.value }}
           name: Cassette v${{ steps.version.outputs.value }}
           draft: true
-          files: release-assets/*
+          files: release-zips/*

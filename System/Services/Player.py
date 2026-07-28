@@ -1210,7 +1210,7 @@ class UISoundManager:
         self.preloaded     = {}
         self.active_sounds = {}
         self.lock          = threading.RLock()
-        self.sample_rate   = 44100
+        self.sample_rate   = 48000
         self.channels      = 2
         self.next_sound_id = 0
         self.device        = None
@@ -1272,12 +1272,23 @@ class UISoundManager:
         
         return numpy.ascontiguousarray(resampled, dtype=numpy.float32)
 
+    def pan_to_gains(self, pan: float) -> tuple[float, float]:
+        pan = max(-1.0, min(1.0, pan))
+
+        if pan <= 0.0:
+            spread = -pan
+            return 1.0 - spread * 0.3, 1.0 - spread * 0.7
+
+        spread = pan
+        return 1.0 - spread * 0.7, 1.0 - spread * 0.3
+
     def play_sound(
             self,
             name:                   str,
             loop:                   bool  = False,
             speed:                  float = 1.0, 
             volume:                 float = 1.0,
+            pan:                    float = 0.0,
             enable_tone_randomizer: bool  = True, 
             tone_spread:            float = 0.04,
             lock_tag:               str   = None,
@@ -1314,6 +1325,8 @@ class UISoundManager:
         master_volume = Constants.current_settings.get("sound_effect_volume", 100) / 100.0
         volume = float(volume) * master_volume
 
+        left_gain, right_gain = self.pan_to_gains(pan)
+
         with self.lock:
             sound_id = self.next_sound_id
             self.next_sound_id += 1
@@ -1321,11 +1334,13 @@ class UISoundManager:
             self.cleanup_old_sounds()
             
             self.active_sounds[sound_id] = {
-                "data":     audio_data,
-                "position": 0.0,
-                "speed":    float(speed),
-                "volume":   float(volume),
-                "loop":     loop
+                "data":       audio_data,
+                "position":   0.0,
+                "speed":      float(speed),
+                "volume":     float(volume),
+                "loop":       loop,
+                "left_gain":  left_gain,
+                "right_gain": right_gain
             }
 
         return UISound(sound_id, self)
@@ -1379,7 +1394,9 @@ class UISoundManager:
                         snd["position"],
                         snd["speed"],
                         snd["volume"],
-                        snd["loop"]
+                        snd["loop"],
+                        snd["left_gain"],
+                        snd["right_gain"]
                     )
                     for s_id, snd in self.active_sounds.items()
                 ]
@@ -1388,7 +1405,7 @@ class UISoundManager:
             updates      = []
             to_remove    = []
 
-            for s_id, data, pos, spd, vol, loop in snapshots:
+            for s_id, data, pos, spd, vol, loop, left_gain, right_gain in snapshots:
                 if spd == 1.0:
                     sound_block, new_pos, is_active = PlayerFunctions.process_ui_sound_fast(
                         data,
@@ -1408,6 +1425,9 @@ class UISoundManager:
                         loop
                     )
                 
+                sound_block[:, 0] *= left_gain
+                sound_block[:, 1] *= right_gain
+
                 master_block += sound_block
                 
                 if is_active:

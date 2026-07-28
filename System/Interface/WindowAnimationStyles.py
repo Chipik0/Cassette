@@ -118,8 +118,9 @@ class WindowAnimationStyle:
         resolver = ValueResolver(owner, size)
 
         for name, value in stage_data.get("bases", {}).items():
-            owner.property_handles[name].set_base(resolver.resolve(value))
-
+            handle = getattr(owner, name + "_property")
+            handle.set_base(resolver.resolve(value))
+    
         for name, schedule in stage_data.get("schedules", {}).items():
             self.play_schedule(owner, name, resolver.resolve_schedule(schedule))
 
@@ -138,7 +139,7 @@ class WindowAnimationStyle:
             schedule: list[tuple[int, object]]
         ) -> None:
 
-        handle = owner.property_handles[name]
+        handle = getattr(owner, name + "_property")
 
         for delay_ms, value in schedule:
             QTimer.singleShot(delay_ms, lambda value = value: handle.set_base(value))

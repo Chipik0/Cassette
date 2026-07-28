@@ -39,20 +39,20 @@ from System.Interface import (
 @Dev.track_ram
 class ContextMenu(QMenu):
     def __init__(
-        self,
-        entries: list,
-        parent:  QWidget | None = None
-    ) -> None:
+            self,
+            entries: list,
+            parent:  QWidget | None = None,
+            pan:     float          = 0.0
+        ) -> None:
 
         super().__init__(parent)
 
         self.entries = entries
+        self.pan     = pan
 
         self.setStyleSheet(Styles.Menus.ContextMenu)
-        
         self.apply_styling(self)
         self.populate(self, self.entries)
-        
         self.aboutToHide.connect(self.close_sound)
 
     def apply_styling(self, menu: QMenu) -> None:
@@ -114,7 +114,11 @@ class ContextMenu(QMenu):
         menu.addAction(action)
     
     def close_sound(self) -> None:
-        Player.ui_player.play_sound("Menu/Close", setting_key = "context_menu_sounds")
+        Player.ui_player.play_sound(
+            "Menu/Close",
+            pan         = self.pan,
+            setting_key = "context_menu_sounds"
+        )
 
 @Dev.track_ram
 class EffectPreviewWidget(QWidget):

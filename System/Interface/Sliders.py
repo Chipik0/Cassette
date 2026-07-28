@@ -140,7 +140,7 @@ class SliderWithLabel(Lifecycle.LoomAnimationMixin, BaseControlContainer):
             return
 
         tone = (value - self.minimum_value) / (self.maximum_value - self.minimum_value) + 0.1
-        Player.ui_player.play_sound("Click/Toggle2", speed = tone)
+        Player.ui_player.play_sound("Click/Toggle2", speed = tone, volume = 0.8)
 
     def play_show_animation(self) -> None:
         if self.slider_is_dragging:
