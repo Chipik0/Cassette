@@ -186,6 +186,19 @@ jobs:
 
       - name: Install zip
         run: sudo apt-get update && sudo apt-get install -y zip
+      
+      - name: Restore executable permissions
+        shell: bash
+        run: |
+          for dir in release-assets/*/; do
+            name=$(basename "$dir")
+            case "$name" in
+              *linux*|*macos*)
+                # исполняемый файл лежит внутри onedir-папки Cassette, без расширения
+                find "$dir" -type f ! -name "*.*" -exec chmod +x {} \;
+                ;;
+            esac
+          done
 
       - name: Zip each platform build
         shell: bash
