@@ -137,8 +137,6 @@ class Textbox(Lifecycle.LoomAnimationMixin, QLineEdit):
 
     def get_cursor_global_pos(self) -> QPoint:
         cursor_center = self.cursorRect().center()
-        print("cursor", cursor_center)
-
         return self.mapToGlobal(cursor_center)
 
     # Events
@@ -435,8 +433,6 @@ class Textbox(Lifecycle.LoomAnimationMixin, QLineEdit):
 
         cursor_global_pos = self.get_cursor_global_pos()
         current_pan       = self.calculate_screen_pan(cursor_global_pos)
-
-        print(current_pan)
 
         Player.ui_player.play_sound(
             "Textbox/Tick",

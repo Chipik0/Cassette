@@ -176,20 +176,34 @@ class KeyboardController(QObject):
     def handle_manual_playhead_move(self, delta_px: int) -> None:
         if self.playback_manager.is_playing:
             return
-        
+    
         tone = 1.0 + delta_px / 200
-
+        pan  = self.calculate_playhead_pan()
+    
         Player.ui_player.play_sound(
             "Feedback/PlayheadMove",
-            speed  = tone,
-            volume = 0.2,
+            speed       = tone,
+            volume      = 0.2,
+            pan         = pan,
             setting_key = "playhead_sounds"
         )
-
+    
         current_x = self.conductor.get_playhead_position_px()
         target_x  = max(0, min(self.conductor.total_content_width, current_x + delta_px))
-
+    
         self.conductor.set_playhead_position_px(target_x, True)
+    
+    def calculate_playhead_pan(self) -> float:
+        viewport_width = self.conductor.viewport().width()
+    
+        if viewport_width <= 0:
+            return 0.0
+    
+        scene_x = self.conductor.get_playhead_position_px()
+        view_x  = scene_x - self.conductor.horizontalScrollBar().value()
+        ratio   = view_x / viewport_width
+    
+        return max(-1.0, min(1.0, (ratio - 0.5) * 2))
 
     def open_brightness_editor(self) -> None:
         if not self.ensure_selection("warning_brightness"):

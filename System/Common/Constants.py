@@ -447,7 +447,8 @@ DEVICES: dict[str, DeviceConfig] = {
                 },
                 "4": {
                     "svg": "M4,4 C38,1 71,15 94,40",
-                    "position": (80, 90)
+                    "position": (80, 90),
+                    "segments": 16
                 },
                 "5": {
                     "svg": "M49,-4.25 C31.5,3.25 16.5,15.75 4,32",

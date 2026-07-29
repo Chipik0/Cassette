@@ -977,7 +977,7 @@ class ScrollableContent(QGraphicsView):
             if not clicked_glyph:
                 return
 
-            current_pan      = self.screen_pan(event.globalPos())
+            current_pan = self.window_pan(event.globalPos())
             
             Player.ui_player.play_sound(
                 "Menu/Open",
@@ -1025,7 +1025,7 @@ class ScrollableContent(QGraphicsView):
             self.menu = Menu.ContextMenu(
                 entries,
                 self,
-                pan = self.screen_pan(event.globalPos())
+                pan = current_pan
             )
             self.menu.exec(event.globalPos())
             self.menu.deleteLater()
@@ -1039,23 +1039,16 @@ class ScrollableContent(QGraphicsView):
                 "An unexpected error occurred while opening the context menu."
             ).exec()
 
-    def screen_pan(self, global_pos: QPoint) -> float:
-        print("PIOS", global_pos)
-        screen = QGuiApplication.screenAt(global_pos)
+    def window_pan(self, global_pos: QPoint) -> float:
+        window      = self.window()
+        window_rect = window.geometry()
 
-        if not screen:
+        if window_rect.width() <= 0:
             return 0.0
 
-        screen_rectangle = screen.geometry()
+        relative_x = (global_pos.x() - window_rect.x()) / window_rect.width()
 
-        if screen_rectangle.width() <= 0:
-            return 0.0
-
-        relative_x = (global_pos.x() - screen_rectangle.x()) / screen_rectangle.width()
-
-        print(relative_x * 2.0 - 1.0, ":", screen_rectangle, global_pos.x())
-
-        return relative_x * 2.0 - 1.0
+        return max(-1.0, min(1.0, relative_x * 2.0 - 1.0))
 
     def resolve_effect_options(
         self,

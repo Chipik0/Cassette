@@ -1271,7 +1271,7 @@ class ErrorWindow(FloatingWindowGPU):
         ok_button.clicked.connect(self.on_ok)
         copy_button.clicked.connect(self.copy_error_details)
 
-        self.content_widget.setMaximumSize(900, 800)
+        self.description_label.setMaximumSize(900, 800)
 
         self.title_label.start_glitch()
     
@@ -1654,6 +1654,7 @@ class Settings(FloatingWindowGPU):
             self.settings.setValue(key, widget.getValue())
 
 # Glyph Visualizer
+
 @Dev.track_ram
 class GlyphVisualizer(FloatingWindowGPU):
     def __init__(

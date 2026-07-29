@@ -1790,6 +1790,9 @@ class GlyphItem(Lifecycle.LoomAnimationMixin, QGraphicsObject):
         return super().itemChange(change, value)
     
     def mouseDoubleClickEvent(self, event: QGraphicsSceneMouseEvent) -> None:
+        if event.button() != Qt.MouseButton.LeftButton:
+            return
+
         if self.is_despawning:
             return
 

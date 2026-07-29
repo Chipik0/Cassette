@@ -583,7 +583,6 @@ class ApplicationWindow(QMainWindow):
     # Actions
 
     def process_new_songs_data(self, info: str) -> None:
-        print(info)
         with open("System/Assets/Songs.txt", "w", encoding = "utf-8") as file:
             file.write(info)
 
