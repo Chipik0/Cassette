@@ -1017,6 +1017,7 @@ USER_SCROLL_IDLE_TIMEOUT   = 150
 WHEEL_SCROLL_SENSITIVITY   = 1.0
 INERTIA_DECELERATION_RATE  = 0.93
 VISUAL_RESISTANCE_STRENGTH = 600.0
+PINCH_ZOOM_SENSITIVITY     = 400.0
 
 # Paths
 FFMPEG_PATH  = Utils.get_ffmpeg_path("ffmpeg")
@@ -1121,13 +1122,6 @@ void main() {
 SettingsDict = {
     "Performance": [
         {
-            "type": "checkbox",
-            "title": "CPU Antialiasing",
-            "key": "antialiasing",
-            "description": "Antialiasing on CPU rendered components.",
-            "default": True
-        },
-        {
             "type": "selector",
             "title": "OpenGL MSAA: Requires restart.",
             "key": "msaa",
@@ -1141,9 +1135,16 @@ SettingsDict = {
         },
         {
             "type": "checkbox",
+            "title": "CPU Antialiasing",
+            "key": "antialiasing",
+            "description": "Antialiasing on CPU rendered components.",
+            "default": True
+        },
+        {
+            "type": "checkbox",
             "title": "Compositor GPU Rendering",
             "key": "gpu",
-            "description": "Significantly improves smoothness. Beta feature. Requires restart.",
+            "description": "Significantly improves smoothness. Requires restart.",
             "default": True
         },
         {
@@ -1159,7 +1160,91 @@ SettingsDict = {
         }
     ],
 
+    "Scrolling and Zoom": [
+        {
+            "type": "selector",
+            "title": "Trackpad Scroll Mode",
+            "key": "trackpad_scroll_mode",
+            "description": "Classic scrolls the timeline with a vertical two finger swipe. Directional follows the swipe axis, including diagonally.",
+            "map": {
+                "Classic":     "classic",
+                "Directional": "directional"
+            },
+            "default": "Classic"
+        },
+        {
+            "type": "slider",
+            "title": "Zoom Step (on Wheel)",
+            "min": 1,
+            "max": 100,
+            "key": "zoom_step",
+            "default": 20
+        },
+        {
+            "type": "selector",
+            "title": "Horizontal Scroll Acceleration",
+            "key": "scroll_acceleration",
+            "map": {
+                "Low": "0.1",
+                "Normal": "0.3",
+                "High": "0.5",
+                "Very high": "0.8"
+            },
+            "default": "Normal"
+        },
+        {
+            "type": "checkbox",
+            "title": "Scroll Smoothing",
+            "key": "scroll_smoothing",
+            "description": "Animates timeline scrolling. Disable to have scrolling match wheel or trackpad input exactly, with no animation.",
+            "default": True
+        },
+        {
+            "type": "checkbox",
+            "title": "Scroll Inertia",
+            "key": "scroll_inertia",
+            "description": "Lets the timeline keep gliding briefly after a scroll input ends.",
+            "default": True
+        },
+        {
+            "type": "selector",
+            "title": "Menu Scroll Sensitivity",
+            "key": "wheel_scroll_sensitivity",
+            "map": {
+                "Low":    "0.5",
+                "Normal": "1.0",
+                "High":   "1.5"
+            },
+            "default": "Normal"
+        },
+        {
+            "type": "selector",
+            "title": "Menu Scroll Inertia",
+            "key": "inertia_deceleration_rate",
+            "map": {
+                "Low": 0.85,
+                "Normal": 0.93,
+                "High": 0.97
+            },
+            "default": "Normal"
+        }
+    ],
+
     "Interface": [
+        {
+            "type": "selector",
+            "title": "Animation Style",
+            "key": "animation_style",
+            "map": {
+                "Smooth":   "smooth",
+                "Bouncy":   "bouncy",
+                "Roll":     "roll",
+                "Glitch":   "glitch",
+                "Classic":  "classic",
+                "Electric": "electric"
+            },
+            "default": "Bouncy"
+        },
         {
             "type": "selector",
             "title": "Animation Multiplier",
@@ -1179,31 +1264,10 @@ SettingsDict = {
         },
         {
             "type": "checkbox",
-            "title": "Textbox Animations",
-            "key": "textbox_animations",
-            "description": "Enables textbox animations.",
-            "default": True
-        },
-        {
-            "type": "checkbox",
             "title": "Floating Window Animations",
             "key": "floating_window_animations",
             "description": "Enables popup background animations.",
             "default": True
-        },
-        {
-            "type": "selector",
-            "title": "Animation Style",
-            "key": "animation_style",
-            "map": {
-                "Smooth":   "smooth",
-                "Bouncy":   "bouncy",
-                "Roll":     "roll",
-                "Glitch":   "glitch",
-                "Classic":  "classic",
-                "Electric": "electric"
-            },
-            "default": "Bouncy"
         },
         {
             "type": "selector",
@@ -1216,34 +1280,6 @@ SettingsDict = {
                 "Very Fast": "0.8"
             },
             "default": "Normal"
-        },
-        {
-            "type": "checkbox",
-            "title": "Glyph 3D Tilt",
-            "description": "Enables 3D tilt when resizing or moving a glyph.",
-            "key": "glyph_tilt_animation",
-            "default": True
-        },
-        {
-            "type": "checkbox",
-            "title": "Playhead Animations",
-            "description": "Enables animations on the playhead.",
-            "key": "playhead_animations",
-            "default": True
-        },
-        {
-            "type": "checkbox",
-            "title": "Glyph Spawn Animation",
-            "description": "Enables animations when spawning or despawning a glyph.",
-            "key": "glyph_spawn_animation",
-            "default": True
-        },
-        {
-            "type": "checkbox",
-            "title": "Marquee Hide Animation",
-            "description": "Enables the marquee hide/damping animation.",
-            "key": "marquee_hide_animation",
-            "default": True
         },
         {
             "type": "checkbox",
@@ -1261,6 +1297,41 @@ SettingsDict = {
                 "Punch": "punch"
             },
             "default": "Pulse"
+        },
+        {
+            "type": "checkbox",
+            "title": "Glyph 3D Tilt",
+            "description": "Enables 3D tilt when resizing or moving a glyph.",
+            "key": "glyph_tilt_animation",
+            "default": True
+        },
+        {
+            "type": "checkbox",
+            "title": "Glyph Spawn Animation",
+            "description": "Enables animations when spawning or despawning a glyph.",
+            "key": "glyph_spawn_animation",
+            "default": True
+        },
+        {
+            "type": "checkbox",
+            "title": "Playhead Animations",
+            "description": "Enables animations on the playhead.",
+            "key": "playhead_animations",
+            "default": True
+        },
+        {
+            "type": "checkbox",
+            "title": "Marquee Hide Animation",
+            "description": "Enables the marquee hide/damping animation.",
+            "key": "marquee_hide_animation",
+            "default": True
+        },
+        {
+            "type": "checkbox",
+            "title": "Textbox Animations",
+            "key": "textbox_animations",
+            "description": "Enables textbox animations.",
+            "default": True
         }
     ],
 
@@ -1289,79 +1360,9 @@ SettingsDict = {
         },
         {
             "type": "checkbox",
-            "title": "Glyph Deletion Sound",
-            "description": "Enables a sound effect when a glyph is deleted.",
-            "key": "glyph_deletion_sound",
-            "default": True
-        },
-        {
-            "type": "checkbox",
-            "title": "Playhead Sound Effects",
-            "description": "Enables sound effects on playhead actions.",
-            "key": "playhead_sounds",
-            "default": True
-        },
-        {
-            "type": "checkbox",
-            "title": "Glyph Spawn Sound",
-            "description": "Enables a sound effect when a glyph is spawned.",
-            "key": "glyph_spawn_sound",
-            "default": True
-        },
-        {
-            "type": "checkbox",
             "title": "Startup Sound",
             "description": "Enables a sound effect on application startup.",
             "key": "startup_sound",
-            "default": True
-        },
-        {
-            "type": "checkbox",
-            "title": "Floating Window Sound Effects",
-            "description": "Enables sound effects on floating window actions.",
-            "key": "floating_window_sounds",
-            "default": True
-        },
-        {
-            "type": "checkbox",
-            "title": "Drag & Drop Sound Effects",
-            "description": "Enables sound effects when dragging and dropping files.",
-            "key": "drag_drop_sounds",
-            "default": True
-        },
-        {
-            "type": "checkbox",
-            "title": "Glyph Duplication Sound",
-            "description": "Enables a sound effect when a glyph is duplicated.",
-            "key": "glyph_duplication_sound",
-            "default": True
-        },
-        {
-            "type": "checkbox",
-            "title": "Rewind Sound Effect",
-            "description": "Enables a sound effect when auto scrolling.",
-            "key": "rewind_sound",
-            "default": True
-        },
-        {
-            "type": "checkbox",
-            "title": "Context Menu Sound Effects",
-            "description": "Enables sound effects on context menu actions.",
-            "key": "context_menu_sounds",
-            "default": True
-        },
-        {
-            "type": "checkbox",
-            "title": "Timeline Jump Sound Effect",
-            "description": "Enables a sound effect when jumping to the start or end of a timeline.",
-            "key": "timeline_jump_sounds",
-            "default": True
-        },
-        {
-            "type": "checkbox",
-            "title": "Textbox Sound Effects",
-            "description": "Enables sound effects on textbox actions.",
-            "key": "textbox_sounds",
             "default": True
         },
         {
@@ -1373,9 +1374,23 @@ SettingsDict = {
         },
         {
             "type": "checkbox",
-            "title": "Brightness Adjustment Sound",
-            "description": "Enables a sound effect when adjusting brightness.",
-            "key": "brightness_adjustment_sound",
+            "title": "Glyph Spawn Sound",
+            "description": "Enables a sound effect when a glyph is spawned.",
+            "key": "glyph_spawn_sound",
+            "default": True
+        },
+        {
+            "type": "checkbox",
+            "title": "Glyph Deletion Sound",
+            "description": "Enables a sound effect when a glyph is deleted.",
+            "key": "glyph_deletion_sound",
+            "default": True
+        },
+        {
+            "type": "checkbox",
+            "title": "Glyph Duplication Sound",
+            "description": "Enables a sound effect when a glyph is duplicated.",
+            "key": "glyph_duplication_sound",
             "default": True
         },
         {
@@ -1383,6 +1398,34 @@ SettingsDict = {
             "title": "Glyph Stack Sounds",
             "description": "Enables sound effects when stacking or unstacking glyphs.",
             "key": "glyph_stack_sounds",
+            "default": True
+        },
+        {
+            "type": "checkbox",
+            "title": "Brightness Adjustment Sound",
+            "description": "Enables a sound effect when adjusting brightness.",
+            "key": "brightness_adjustment_sound",
+            "default": True
+        },
+        {
+            "type": "checkbox",
+            "title": "Playhead Sound Effects",
+            "description": "Enables sound effects on playhead actions.",
+            "key": "playhead_sounds",
+            "default": True
+        },
+        {
+            "type": "checkbox",
+            "title": "Timeline Jump Sound Effect",
+            "description": "Enables a sound effect when jumping to the start or end of a timeline.",
+            "key": "timeline_jump_sounds",
+            "default": True
+        },
+        {
+            "type": "checkbox",
+            "title": "Rewind Sound Effect",
+            "description": "Enables a sound effect when auto scrolling.",
+            "key": "rewind_sound",
             "default": True
         },
         {
@@ -1398,48 +1441,38 @@ SettingsDict = {
             "description": "Enables sound effects when changing selector values.",
             "key": "selector_sounds",
             "default": True
+        },
+        {
+            "type": "checkbox",
+            "title": "Textbox Sound Effects",
+            "description": "Enables sound effects on textbox actions.",
+            "key": "textbox_sounds",
+            "default": True
+        },
+        {
+            "type": "checkbox",
+            "title": "Context Menu Sound Effects",
+            "description": "Enables sound effects on context menu actions.",
+            "key": "context_menu_sounds",
+            "default": True
+        },
+        {
+            "type": "checkbox",
+            "title": "Floating Window Sound Effects",
+            "description": "Enables sound effects on floating window actions.",
+            "key": "floating_window_sounds",
+            "default": True
+        },
+        {
+            "type": "checkbox",
+            "title": "Drag & Drop Sound Effects",
+            "description": "Enables sound effects when dragging and dropping files.",
+            "key": "drag_drop_sounds",
+            "default": True
         }
     ],
 
     "User Experience": [
-        {
-            "type": "slider",
-            "title": "Playhead Arrow Increment",
-            "min": 1,
-            "max": 10,
-            "key": "arrow_increment",
-            "default": 1
-        },
-        {
-            "type": "slider",
-            "title": "Zoom Step (on Wheel)",
-            "min": 1,
-            "max": 100,
-            "key": "zoom_step",
-            "default": 20
-        },
-        {
-            "type": "selector",
-            "title": "Horizontal Scroll Acceleration",
-            "key": "scroll_acceleration",
-            "map": {
-                "Low": "0.1",
-                "Normal": "0.2",
-                "High": "0.4"
-            },
-            "default": "Normal"
-        },
-        {
-            "type": "selector",
-            "title": "Waveform Smoothing",
-            "key": "waveform_smoothing",
-            "map": {
-                "Accuracy": 0.5,
-                "Balance": 1.7,
-                "Smooth": 3
-            },
-            "default": "Balance"
-        },
         {
             "type": "selector",
             "title": "Mouse Click Behavior",
@@ -1462,6 +1495,14 @@ SettingsDict = {
             "default": "Left"
         },
         {
+            "type": "slider",
+            "title": "Playhead Arrow Increment",
+            "min": 1,
+            "max": 10,
+            "key": "arrow_increment",
+            "default": 1
+        },
+        {
             "type": "selector",
             "title": "Default Scaling",
             "key": "default_scaling",
@@ -1476,25 +1517,14 @@ SettingsDict = {
         },
         {
             "type": "selector",
-            "title": "Menu Scroll Sensitivity",
-            "key": "wheel_scroll_sensitivity",
+            "title": "Waveform Smoothing",
+            "key": "waveform_smoothing",
             "map": {
-                "Low":    "0.5",
-                "Normal": "1.0",
-                "High":   "1.5"
+                "Accuracy": 0.5,
+                "Balance": 1.7,
+                "Smooth": 3
             },
-            "default": "Normal"
-        },
-        {
-            "type": "selector",
-            "title": "Menu Scroll Inertia",
-            "key": "inertia_deceleration_rate",
-            "map": {
-                "Low": 0.85,
-                "Normal": 0.93,
-                "High": 0.97
-            },
-            "default": "Normal"
+            "default": "Balance"
         }
     ]
 }

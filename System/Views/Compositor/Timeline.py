@@ -18,7 +18,8 @@ from PyQt6.QtGui import (
     QMouseEvent,
     QPainterPath,
     QGuiApplication,
-    QContextMenuEvent
+    QContextMenuEvent,
+    QNativeGestureEvent
 )
 
 from PyQt6.QtCore import (
@@ -38,6 +39,8 @@ from PyQt6.QtCore import (
 
 from PyQt6.QtWidgets import (
     QWidget,
+    QPinchGesture,
+    QGestureEvent,
     QGraphicsView,
     QGraphicsScene
 )
@@ -199,6 +202,8 @@ class ScrollableContent(QGraphicsView):
         self.setMouseTracking(True)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+        self.viewport().grabGesture(Qt.GestureType.PinchGesture)
 
     def init_state(self, parent: QWidget) -> None:
         self.playback_manager           = parent.playback_manager
@@ -1271,6 +1276,28 @@ class ScrollableContent(QGraphicsView):
         self.update_scene_rect()
 
     # Events
+
+    def event(self, event: QEvent) -> bool:
+        if event.type() == QEvent.Type.NativeGesture:
+            gesture_event: QNativeGestureEvent = event
+
+            if gesture_event.gestureType() == Qt.NativeGestureType.ZoomNativeGesture:
+                self.wheel_controller.process_pinch_event(gesture_event.value())
+                return True
+
+        return super().event(event)
+
+    def viewportEvent(self, event: QEvent) -> bool:
+        if event.type() == QEvent.Type.Gesture:
+            gesture_event: QGestureEvent = event
+            pinch_gesture: QPinchGesture = gesture_event.gesture(Qt.GestureType.PinchGesture)
+
+            if pinch_gesture and pinch_gesture.changeFlags() & QPinchGesture.ChangeFlag.ScaleFactorChanged:
+                self.wheel_controller.process_pinch_event(pinch_gesture.scaleFactor() - 1.0)
+
+            return True
+
+        return super().viewportEvent(event)
 
     def wheelEvent(self, event: QEvent) -> None:
         self.wheel_controller.process_wheel_event(event)

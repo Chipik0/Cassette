@@ -2303,7 +2303,7 @@ class AudioLoadingDialog(FloatingWindowGPU):
 
     def on_load_failed(self, message: str) -> None:
         window = ErrorWindow("Load Error", message)
-        window.destroyed.connect(self.reject_callback)
+        window.destroyed.connect(self.close)
         window.exec()
 
     def cleanup_threads(self, threads: list) -> None:
@@ -2533,9 +2533,11 @@ class AudioEditorBase(AudioLoadingDialog):
         self.prepare_worker = self.load_worker  = None
         self.prepare_thread = self.load_thread  = None
 
-    def reject_callback(self) -> None:
+    def closeEvent(self, event):
         self.cleanup_audio()
         super().on_cancel()
+
+        super().closeEvent(event)
 
 class BPMEditorBase(AudioEditorBase):
     def setup_bpm_section(self) -> None:
@@ -2763,7 +2765,7 @@ class AudioSetupDialog(BPMEditorBase):
         settings_layout.addWidget(self.ok_button)
 
         self.ok_button.clicked.connect(self.accept_callback)
-        self.cancel_button.clicked.connect(self.reject_callback)
+        self.cancel_button.clicked.connect(self.close)
 
         Player.bpm_informer.beat_16.connect(self.update_title_beat)
 
@@ -2864,7 +2866,7 @@ class GlyphtoneEditor(AudioEditorBase):
         bottom_layout.addWidget(self.ok_button)
 
         self.ok_button.clicked.connect(self.accept_callback)
-        self.cancel_button.clicked.connect(self.reject_callback)
+        self.cancel_button.clicked.connect(self.close)
 
         self.content_layout.addWidget(self.trim_widget)
         self.content_layout.addLayout(self.build_playback_row())
@@ -3015,7 +3017,7 @@ class ImportWindow(BPMEditorBase):
         playback_row = self.build_playback_row()
 
         self.import_button.clicked.connect(self.on_import_callback)
-        self.cancel_button.clicked.connect(self.reject_callback)
+        self.cancel_button.clicked.connect(self.close)
 
         self.audio_path_button.pressed.connect(self.ask_for_audio)
         self.save_path_button.pressed.connect(self.ask_for_savefile)

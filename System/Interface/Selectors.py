@@ -350,7 +350,7 @@ class SegmentedStrip(Lifecycle.LoomAnimationMixin, QWidget):
 
         self.indicator_handle.set_target(
             value           = target_rectangle,
-            duration_ms     = random.randint(200, 500),
+            duration_ms     = random.randint(200, 600),
             easing_function = Easing.ease_out_quint
         )
 

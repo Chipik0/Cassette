@@ -280,56 +280,104 @@ class WheelController:
     def __init__(self, conductor: Timeline.ScrollableContent) -> None:
         self.conductor = conductor
 
-        self.scroll_velocity        = 0
-        self.scroll_target_velocity = 0
+        self.horizontal_velocity        = 0.0
+        self.horizontal_target_velocity = 0.0
+        self.vertical_velocity          = 0.0
+        self.vertical_target_velocity   = 0.0
 
-        self.zoom_step           = Constants.current_settings["zoom_step"]
-        self.scroll_acceleration = Constants.current_settings["scroll_acceleration"]
+        self.zoom_step            = Constants.current_settings["zoom_step"]
+        self.scroll_acceleration  = Constants.current_settings["scroll_acceleration"]
+        self.trackpad_scroll_mode = Constants.current_settings["trackpad_scroll_mode"]
+        self.scroll_smoothing     = Constants.current_settings["scroll_smoothing"]
+        self.scroll_inertia       = Constants.current_settings["scroll_inertia"]
 
     def process_wheel_event(self, event: QEvent) -> None:
-        delta     = event.angleDelta().y()
         modifiers = event.modifiers()
 
         if modifiers & Qt.KeyboardModifier.ControlModifier:
+            delta = event.angleDelta().y()
+
             self.stop_smooth_scroll()
             self.conductor.scale_view(self.zoom_step if delta > 0 else -self.zoom_step)
 
-        elif modifiers & Qt.KeyboardModifier.ShiftModifier:
-            v_bar = self.conductor.verticalScrollBar()
-            v_bar.setValue(v_bar.value() - delta)
+            return event.accept()
+
+        if modifiers & Qt.KeyboardModifier.ShiftModifier:
+            vertical_bar = self.conductor.verticalScrollBar()
+            vertical_bar.setValue(vertical_bar.value() - event.angleDelta().y())
+
+            return event.accept()
+
+        if self.conductor.playback_manager.is_playing:
+            return event.accept()
+
+        if event.phase() == Qt.ScrollPhase.ScrollMomentum and not self.scroll_inertia:
+            return event.accept()
+
+        pixel_delta = event.pixelDelta()
+        is_trackpad = not pixel_delta.isNull()
+
+        if is_trackpad and self.trackpad_scroll_mode == "directional":
+            self.horizontal_target_velocity += -pixel_delta.x()
+            self.vertical_target_velocity   += -pixel_delta.y()
 
         else:
-            if self.conductor.playback_manager.is_playing:
-                return event.accept()
+            delta = event.angleDelta().y()
+            self.horizontal_target_velocity += -delta * self.scroll_acceleration
 
-            self.scroll_target_velocity += -delta * self.scroll_acceleration
-            self.conductor.start_scroll_tick()
+        self.conductor.start_scroll_tick()
 
         event.accept()
 
+    def process_pinch_event(self, scale_delta: float) -> None:
+        self.stop_smooth_scroll()
+        self.conductor.scale_view(scale_delta * Constants.PINCH_ZOOM_SENSITIVITY)
+
     def tick(self) -> bool:
         if self.conductor.scale_anim_active:
-            self.scroll_velocity        = 0
-            self.scroll_target_velocity = 0
+            self.stop_smooth_scroll()
             return True
 
-        self.scroll_velocity += (self.scroll_target_velocity - self.scroll_velocity) * 0.2
+        if self.scroll_smoothing:
+            self.horizontal_velocity += (self.horizontal_target_velocity - self.horizontal_velocity) * 0.2
+            self.vertical_velocity   += (self.vertical_target_velocity   - self.vertical_velocity)   * 0.2
 
-        h_bar = self.conductor.horizontalScrollBar()
-        h_bar.setValue(int(h_bar.value() + self.scroll_velocity))
+        else:
+            self.horizontal_velocity = self.horizontal_target_velocity
+            self.vertical_velocity   = self.vertical_target_velocity
 
-        self.scroll_target_velocity *= 0.9
+        horizontal_bar = self.conductor.horizontalScrollBar()
+        vertical_bar   = self.conductor.verticalScrollBar()
 
-        if abs(self.scroll_velocity) < 0.2 and abs(self.scroll_target_velocity) < 0.2:
-            self.scroll_velocity        = 0
-            self.scroll_target_velocity = 0
+        horizontal_bar.setValue(int(horizontal_bar.value() + self.horizontal_velocity))
+        vertical_bar.setValue(int(vertical_bar.value()     + self.vertical_velocity))
+
+        if self.scroll_inertia:
+            self.horizontal_target_velocity *= 0.9
+            self.vertical_target_velocity   *= 0.9
+
+        else:
+            self.horizontal_target_velocity = 0.0
+            self.vertical_target_velocity   = 0.0
+
+        is_idle = (
+            abs(self.horizontal_velocity)        < 0.2 and
+            abs(self.horizontal_target_velocity) < 0.2 and
+            abs(self.vertical_velocity)          < 0.2 and
+            abs(self.vertical_target_velocity)   < 0.2
+        )
+
+        if is_idle:
+            self.stop_smooth_scroll()
             return True
 
         return False
 
     def stop_smooth_scroll(self) -> None:
-        self.scroll_velocity        = 0
-        self.scroll_target_velocity = 0
+        self.horizontal_velocity        = 0.0
+        self.horizontal_target_velocity = 0.0
+        self.vertical_velocity          = 0.0
+        self.vertical_target_velocity   = 0.0
 
 class GlyphController(QObject):
     elements_changed       = pyqtSignal()

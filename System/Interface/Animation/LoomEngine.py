@@ -14,7 +14,10 @@ from loguru import logger
 
 from collections.abc import Callable
 
-from System.Common import Constants
+from System.Common import (
+    Dev,
+    Constants
+)
 
 # Signals
 
@@ -1597,6 +1600,7 @@ class PropertyHandle:
 
 # Engine
 
+@Dev.track_ram
 class AnimationEngine:
     def __init__(
             self,

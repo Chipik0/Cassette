@@ -74,6 +74,7 @@ from System.Services import (
     ProjectSaver
 )
 
+from System.Interface.Animation import LoomEngine
 from System.Views.ProjectMenu import MainMenu
 from System.Views.Compositor import CompositorWidget
 
@@ -836,6 +837,8 @@ class ApplicationWindow(QMainWindow):
         if application is not None:
             logger.debug("Exiting application. Bye.")
             application.quit()
+
+        os._exit(0)
 
 # Main Execution
 
