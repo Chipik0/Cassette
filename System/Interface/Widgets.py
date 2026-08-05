@@ -283,7 +283,15 @@ class MiniWaveformPreview(QWidget):
         self.update()
 
     def set_playhead_position(self, value: float) -> None:
-        self.playhead_position = float(np.clip(value, 0.0, 1.0))
+        normalized = float(np.clip(value, 0.0, 1.0))
+
+        width = max(1, self.width())
+        threshold = 1.0 / float(width)
+
+        if abs(normalized - self.playhead_position) < threshold:
+            return
+
+        self.playhead_position = normalized
 
         if not self.playhead_update_timer.isActive():
             self.apply_pending_playhead_position()
@@ -919,6 +927,7 @@ class PlayheadItem(Lifecycle.LoomAnimationMixin, QGraphicsObject):
         self.width     = 2.0
         self.height    = custom_height
         self.target_x  = 0.0
+        self._last_emitted_normalized = None
 
         self.cached_pen = QPen(QColor(255, 0, 0), 2.0)
         self.cached_pen.setCosmetic(True)
@@ -977,8 +986,18 @@ class PlayheadItem(Lifecycle.LoomAnimationMixin, QGraphicsObject):
     def update_actual_position(self, x: float) -> None:
         self.setPos(x, 0)
         
-        if self.conductor.total_content_width > 0:
-            self.conductor.playhead_moved.emit(x / self.conductor.total_content_width)
+        if self.conductor.total_content_width <= 0:
+            return
+
+        normalized = x / self.conductor.total_content_width
+        width = max(1, self.conductor.width())
+        threshold = 1.0 / float(width)
+
+        if self._last_emitted_normalized is not None and abs(normalized - self._last_emitted_normalized) < threshold:
+            return
+
+        self._last_emitted_normalized = normalized
+        self.conductor.playhead_moved.emit(normalized)
 
     def destroy(self) -> None:
         LoomEngine.ui_engine.unbind_owner(self)

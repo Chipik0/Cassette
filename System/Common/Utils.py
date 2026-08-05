@@ -276,23 +276,30 @@ def auto_cast(value: object) -> object:
 
     return text_value
 
-class SettingsController(dict):
+class SettingsController(QObject):
+    setting_changed   = pyqtSignal(str, object)
+    settings_reloaded = pyqtSignal()
+
     def __init__(
         self,
         organization: str,
-        application:  str
+        application:  str,
+        parent: QObject | None = None
     ) -> None:
         
-        super().__init__()
+        super().__init__(parent)
 
+        self._data: dict[str, object] = {}
         self.instance = QSettings(organization, application)
         self.load()
 
     def load(self) -> None:
-        self.clear()
+        self._data.clear()
 
         for key in self.instance.allKeys():
-            self[key] = auto_cast(self.instance.value(key))
+            self._data[key] = auto_cast(self.instance.value(key))
+
+        self.settings_reloaded.emit()
 
     def set_value(
         self,
@@ -300,8 +307,31 @@ class SettingsController(dict):
         value: object
     ) -> None:
         
-        self[key] = value
+        if self._data.get(key) == value:
+            return
+
+        self._data[key] = value
         self.instance.setValue(key, value)
+        
+        self.setting_changed.emit(key, value)
+
+    def get(self, key: str, default: object = None) -> object:
+        return self._data.get(key, default)
+
+    def __getitem__(self, key: str) -> object:
+        return self._data[key]
+
+    def __setitem__(self, key: str, value: object) -> None:
+        self.set_value(key, value)
+
+    def __contains__(self, key: object) -> bool:
+        return key in self._data
+
+    def __len__(self) -> int:
+        return len(self._data)
+
+    def __iter__(self):
+        return iter(self._data)
 
 def parse_svg_path_data(d_string: str) -> QPainterPath:
     path = QPainterPath()

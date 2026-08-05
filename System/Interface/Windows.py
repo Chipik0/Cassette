@@ -80,6 +80,7 @@ from System.Interface import (
     Sliders,
     Selectors,
     Textboxes,
+    Setuppers,
     Checkboxes
 )
 
@@ -193,8 +194,9 @@ class FloatingWindowGPU(Lifecycle.LoomAnimationMixin, QOpenGLWidget):
         self.center_window()
         self.is_ready = True
 
-        scale_restriction = self.maximum_scale()
-        self.scale_property.set_max_value(scale_restriction)
+        if self.animations_active:
+            scale_restriction = self.maximum_scale()
+            self.scale_property.set_max_value(scale_restriction)
 
         if self.enable_open_animation:
             self.open_window()
@@ -711,15 +713,16 @@ class FloatingWindowGPU(Lifecycle.LoomAnimationMixin, QOpenGLWidget):
         if content_width < 1 or content_height < 1:
             return
 
-        mvp_final = self.calculate_matrix()
+        mvp_final        = self.calculate_matrix()
+        background_alpha = self.opacity_background_property.value if self.animations_active else 1.0
 
-        GL.glUniform2f(self.location_size,         content_width, content_height)
+        GL.glUniform2f(self.location_size,          content_width, content_height)
         GL.glUniform1f(self.location_radius,        16.0)
         GL.glUniform1f(self.location_border_px,     2.0)
         GL.glUniform4f(self.location_rect_color,    0.17, 0.17, 0.17, 1.0)
         GL.glUniform4f(self.location_border_color,  0.25, 0.25, 0.25, 1.0)
-        GL.glUniform1f(self.location_rect_alpha,    self.opacity_background_property.value)
-        GL.glUniform1f(self.location_border_alpha,  self.opacity_background_property.value)
+        GL.glUniform1f(self.location_rect_alpha,    background_alpha)
+        GL.glUniform1f(self.location_border_alpha,  background_alpha)
         GL.glUniform1f(self.location_global_alpha,  1.0)
 
         GL.glUniformMatrix4fv(self.location_mvp, 1, GL.GL_FALSE, mvp_final.data())
@@ -1287,7 +1290,7 @@ class ErrorWindow(FloatingWindowGPU):
 
             Player.ui_player.play_sound("Packs/NOK/Death")
 
-            self.title_label.start_glitch(0.01, 18)
+            self.title_label.start_glitch(4000)
 
             self.scale_property.play_curve(
                 keyframes       = [(0.0, 1.5), (1.0, 1.0)],
@@ -1342,7 +1345,10 @@ class UpdateWindow(FloatingWindowGPU):
 
 class About(FloatingWindowGPU):
     def __init__(self, more_info: bool = False):
-        super().__init__(f"Cassette {open(Utils.get_resource_path('version')).read()} by chips047")
+        super().__init__(
+            f"Cassette {open(Utils.get_resource_path('version')).read()} by chips047",
+            enable_audioplayer_effects = False
+        )
 
         if more_info:
             text = (
@@ -1460,7 +1466,11 @@ class WalterWindow(FloatingWindowGPU):
 
 class Settings(FloatingWindowGPU):
     def __init__(self) -> None:
-        super().__init__("Settings", max_tilt_angle = 10)
+        super().__init__(
+            "Settings",
+            max_tilt_angle             = 10,
+            enable_audioplayer_effects = False
+        )
 
         self.settings          = QSettings("chips047", "Cassette")
         self.pages             = {}
@@ -1581,13 +1591,21 @@ class Settings(FloatingWindowGPU):
         if type_name == "slider":
             return self.create_slider_widget(value, config)
 
-        if type_name == "textbox":
-            return self.create_textbox_widget(value, config)
-
         if type_name == "selector":
             return self.create_selector_widget(value, config)
 
+        if type_name == "delay_setup":
+            return self.create_delay_setup_widget(value, config)
+
         return None
+
+    def create_delay_setup_widget(self, value: str, config: dict) -> QWidget:
+        value = int(value or config["default"])
+
+        return Setuppers.DelaySetupper(
+            config["description"],
+            value
+        )
 
     def create_checkbox_widget(self, value: str, config: dict) -> QWidget:
         state = str(value).lower() == "true" if value is not None else config["default"]
@@ -1606,16 +1624,6 @@ class Settings(FloatingWindowGPU):
             config["min"],
             config["max"],
             slider_value
-        )
-
-    def create_textbox_widget(self, value: str, config: dict) -> QWidget:
-        textbox_value = value or config["default"]
-
-        return Textboxes.TextboxWithLabel(
-            config["title"],
-            config["min"],
-            config["max"],
-            textbox_value
         )
 
     def create_selector_widget(self, value: str, config: dict) -> QWidget:
@@ -1649,9 +1657,9 @@ class Settings(FloatingWindowGPU):
         
         elif isinstance(widget, Selectors.SelectorWithLabel):
             self.settings.setValue(key, widget.current_data())
-        
-        elif isinstance(widget, Textboxes.TextboxWithLabel):
-            self.settings.setValue(key, widget.getValue())
+
+        elif isinstance(widget, Setuppers.DelaySetupper):
+            self.settings.setValue(key, widget.current_value())
 
 # Glyph Visualizer
 
@@ -3180,18 +3188,7 @@ class ImportWindow(BPMEditorBase):
 
 class Playground(FloatingWindowGPU):
     def __init__(self) -> None:
-        super().__init__(
-            "GPU Engine Master Tuner",
-            dialog                         = True,
-            stays_on_top                   = True,
-            max_tilt_angle                 = 20,
-            animation_style                = Constants.current_settings["animation_style"],
-            enable_audioplayer_effects     = True,
-            enable_advanced_beat_animations = False,
-            enable_tilt                    = True,
-            enable_open_animation          = True,
-            enable_close_animation         = True
-        )
+        super().__init__("Later, Bitches")
 
         self.content_widget.setMinimumWidth(720)
         self.content_widget.setMinimumHeight(480)
@@ -3257,7 +3254,6 @@ class Playground(FloatingWindowGPU):
 
         self.dialog_check                     = Checkboxes.CheckboxWithLabel("Dialog", "Use dialog window flags", True)
         self.stays_on_top_check               = Checkboxes.CheckboxWithLabel("Stays On Top", "Stay above other windows", True)
-        self.show_fps_check                   = Checkboxes.CheckboxWithLabel("Show FPS", "Display frame rate in the title", self.show_fps)
         self.enable_tilt_check                = Checkboxes.CheckboxWithLabel("Enable Tilt", "Mouse hover tilt", self.enable_tilt)
         self.enable_open_animation_check      = Checkboxes.CheckboxWithLabel("Open Animation", "Animate on open", self.enable_open_animation)
         self.enable_close_animation_check     = Checkboxes.CheckboxWithLabel("Close Animation", "Animate on close", self.enable_close_animation)
@@ -3334,7 +3330,6 @@ class Playground(FloatingWindowGPU):
                 self.start_position_y_slider,
                 self.dialog_check,
                 self.stays_on_top_check,
-                self.show_fps_check,
                 self.enable_tilt_check,
                 self.enable_open_animation_check,
                 self.enable_close_animation_check,
@@ -3549,7 +3544,6 @@ class Playground(FloatingWindowGPU):
         self.shake_deviation                 = self.shake_deviation_slider.value() / 10
         self.tilt_smoothing                  = self.tilt_smoothing_slider.value() / 100
         self.bpm_peak_scale                  = self.bpm_peak_slider.value() / 100
-        self.show_fps                        = self.show_fps_check.isChecked()
 
         if self.start_position_enabled_check.isChecked():
             self.start_position = QPoint(
@@ -3571,27 +3565,12 @@ class Playground(FloatingWindowGPU):
             self.stays_on_top_check.isChecked()
         )
 
-        self.refresh_fps_connection()
         self.refresh_bpm_connections()
 
         self.adjustSize()
 
         if self.start_position:
             self.center_window()
-
-    def refresh_fps_connection(self) -> None:
-        try:
-            self.frameSwapped.disconnect(self.on_frame_swapped)
-        
-        except Exception:
-            pass
-
-        if not self.show_fps:
-            return
-
-        self.frame_count = 0
-        self.fps_timer.start()
-        self.frameSwapped.connect(self.on_frame_swapped)
 
     def refresh_bpm_connections(self) -> None:
         if not self.player:

@@ -171,6 +171,13 @@ class KeyboardController(QObject):
             pos = 0
             self.conductor.set_playhead_position_ms(pos)
 
+        elif not self.playback_manager.is_playing:
+            delay_ms         = self.conductor.get_audio_delay_ms()
+            engine_paused_at = self.playback_manager.get_position()
+
+            if abs(engine_paused_at - delay_ms - pos) < 1.0:
+                pos = engine_paused_at
+
         self.playback_manager.toggle_playback(pos)
 
     def handle_manual_playhead_move(self, delta_px: int) -> None:

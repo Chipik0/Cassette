@@ -119,11 +119,19 @@ class BaseButton(Lifecycle.LoomAnimationMixin, QPushButton):
             duration_ms     = 100,
             easing_function = Easing.ease_out_cubic
         )
+    
+    def animate_punch(self) -> None:
+        self.press_scale_handle.play_curve(
+            [
+                (0.0, 1.2),
+                (1.0, 1.0)
+            ], 100, Easing.ease_out_cubic
+        )
 
     def on_glitch_frame_changed(self, frame: tuple) -> None:
         text, position_offset, size_offset = frame
 
-        self.setText(text)
+        super().setText(text)
         self.move(self.original_position + position_offset)
 
         self.resize(
@@ -177,7 +185,7 @@ class BaseButton(Lifecycle.LoomAnimationMixin, QPushButton):
     def finish_glitch(self) -> None:
         self.move(self.original_position)
         self.resize(self.original_size)
-        self.setText(self.original_button_text)
+        super().setText(self.original_button_text)
 
         self.is_glitching = False
 
@@ -260,6 +268,10 @@ class BaseButton(Lifecycle.LoomAnimationMixin, QPushButton):
         self.start_glitch()
 
         return True
+
+    def setText(self, text):
+        self.original_button_text = text
+        super().setText(text)
 
     def random_ass_text(self, length: int) -> str:
         characters = string.ascii_letters + string.digits

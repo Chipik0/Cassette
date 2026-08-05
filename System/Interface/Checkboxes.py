@@ -94,7 +94,7 @@ class Checkbox(QCheckBox):
     def nextCheckState(self) -> None:
         super().nextCheckState()
 
-        tone = 1.0 if self.isChecked() else 0.82
+        tone = 1.1 if self.isChecked() else 0.82
         Player.ui_player.play_sound("Click/Checkbox", setting_key = "checkbox_sounds", speed = tone)
 
         self.indicator_scale.set_base(1.5)

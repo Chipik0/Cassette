@@ -191,6 +191,11 @@ class DeviceConfig:
             return self.master_track_segments
 
         if self.is_segment_track(track):
+            if self.base_tracks == 1:
+                logger.critical(f"THAtS a 4a or 4b: returning {self.master_track_segments}")
+                return self.master_track_segments
+
+            logger.critical("returning nothin")
             return None
 
         return self.segments_map.get(track)
@@ -1263,6 +1268,24 @@ SettingsDict = {
             "default": "1.0x"
         },
         {
+            "type": "selector",
+            "title": "Target FPS",
+            "key": "target_fps",
+            "map": {
+                "30":  30,
+                "60":  60,
+                "75":  75,
+                "90":  90,
+                "120": 120,
+                "144": 144,
+                "165": 165,
+                "240": 240,
+                "360": 360,
+                "480": 480
+            },
+            "default": "60"
+        },
+        {
             "type": "checkbox",
             "title": "Floating Window Animations",
             "key": "floating_window_animations",
@@ -1336,6 +1359,28 @@ SettingsDict = {
     ],
 
     "Audio": [
+        {
+            "type": "delay_setup",
+            "description": "Audio Latency.\nPress Space to the beat.",
+            "key": "audio_delay_ms",
+            "default": 0
+        },
+        {
+            "type": "selector",
+            "title": "Audio Blocksize",
+            "key": "audio_blocksize",
+            "map": {
+                "32": "32",
+                "64": "64",
+                "128": "128",
+                "256": "256",
+                "512": "512",
+                "1024": "1024",
+                "2048": "2048",
+                "4096": "4096"
+            },
+            "default": "128"
+        },
         {
             "type": "checkbox",
             "title": "Disable Sounds",

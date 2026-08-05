@@ -852,7 +852,7 @@ def main() -> None:
     surface_format.setProfile(QSurfaceFormat.OpenGLContextProfile.CoreProfile)
     surface_format.setOption(QSurfaceFormat.FormatOption.DeprecatedFunctions, False)
     surface_format.setSwapBehavior(QSurfaceFormat.SwapBehavior.TripleBuffer)
-    surface_format.setSwapInterval(1)
+    surface_format.setSwapInterval(0)
 
     logger.debug("Configuring application settings")
 

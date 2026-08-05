@@ -49,6 +49,7 @@ def thread_excepthook(arguments: object) -> None:
 
 threading.excepthook = thread_excepthook
 
+
 class PlaybackManager(QObject):
     playback_state_changed = pyqtSignal(bool)
     audio_loaded           = pyqtSignal(numpy.ndarray, int, float)
@@ -72,7 +73,7 @@ class PlaybackManager(QObject):
         self.onset_detector           = None
 
         self.data                     = None
-        self.fs                       = 44100
+        self.sample_rate              = 44100
         self.position                 = 0.0
         self.duration_ms              = 0.0
         self.is_playing               = False
@@ -81,27 +82,29 @@ class PlaybackManager(QObject):
         self.playback_start_audio_ms  = 0.0
         self.playback_start_wall_time = 0.0
 
-        self.eq_low_states            = None
-        self.eq_mid_states            = None
-        self.eq_high_states           = None
-        self.pass_states              = None
-        self.echo_states              = None
+        self.eq_low_states  = None
+        self.eq_mid_states  = None
+        self.eq_high_states = None
+        self.pass_states    = None
+        self.echo_states    = None
 
-        self.pass_frequencies         = []
-        self.pass_q                   = 1.0
-        self.pass_mix                 = 0.0
-        self.pass_gain                = 1.0
+        self.pass_frequencies = []
+        self.pass_q           = 1.0
+        self.pass_mix         = 0.0
+        self.pass_gain        = 1.0
 
-        self.radio_noise_active       = False
-        self.radio_noise_color        = "brown"
-        self.radio_noise_permanent    = False
+        self.radio_noise_active    = False
+        self.radio_noise_color     = "brown"
+        self.radio_noise_permanent = False
 
-        self.echo_mode                = "constant"
-        self.echo_focus               = "all"
+        self.echo_mode  = "constant"
+        self.echo_focus = "all"
 
-        self.stream_sample_rate       = 0
-        self.stream_channels          = 0
-        self.stream_needs_reopen      = False
+        self.stream_sample_rate  = 0
+        self.stream_block_size   = 0
+        self.stream_channels     = 0
+        self.stream_needs_reopen = False
+        self.block_size_ms       = 15
 
         self.setup_effect_properties()
         self.reset_playback_state()
@@ -152,10 +155,10 @@ class PlaybackManager(QObject):
             base_value = item[1]
             callback   = item[2] if len(item) > 2 else None
 
-            prop = ui_engine.bind(self, name, base_value, on_change=callback)
+            property_handle = ui_engine.bind(self, name, base_value, on_change = callback)
 
-            setattr(self, f"{name}_property", prop)
-    
+            setattr(self, f"{name}_property", property_handle)
+
     def set_property(
             self,
             property_name:     str,
@@ -166,17 +169,17 @@ class PlaybackManager(QObject):
             multiply_duration: bool            = True
         ) -> None:
 
-        prop_handle = getattr(self, f"{property_name}_property")
+        property_handle = getattr(self, f"{property_name}_property")
 
         if duration_ms <= 0:
-            prop_handle.set_base(value)
+            property_handle.set_base(value)
 
             if on_finish:
                 on_finish()
 
             return
 
-        prop_handle.set_target(
+        property_handle.set_target(
             value,
             duration_ms,
             easing,
@@ -189,49 +192,45 @@ class PlaybackManager(QObject):
     def apply_properties(
             self,
             properties:  dict[str, float],
-            duration_ms: int             = 0,
-            easing:      Easing          = Easing.smooth
+            duration_ms: int    = 0,
+            easing:      Easing = Easing.smooth
         ) -> None:
 
         for name, value in properties.items():
             self.set_property(name, value, duration_ms, easing)
 
     def reset_playback_state(self) -> None:
-        if hasattr(self, 'defaults'):
-            for property_config in self.defaults:
-                name  = property_config[0]
-                value = property_config[1]
+        for name, value, *rest in self.defaults if hasattr(self, "defaults") else []:
+            getattr(self, f"{name}_property").set_base(value)
 
-                if hasattr(self, f"{name}_property"):
-                    getattr(self, f"{name}_property").set_base(value)
+        self.pass_frequencies = []
+        self.position         = 0.0
+        self.echo_mode        = "constant"
+        self.echo_focus       = "all"
+        self.is_playing       = False
+        self.duration_ms      = 0.0
 
-        self.pass_frequencies                = []
-        self.position                        = 0.0
-        self.echo_mode                       = "constant"
-        self.echo_focus                      = "all"
-        self.is_playing                      = False
-        self.duration_ms                     = 0.0
-        self.track_peak_level                = 1.0
-        self.current_audio_level             = 0.0
-        self.eq_low_states                   = None
-        self.eq_mid_states                   = None
-        self.eq_high_states                  = None
-        self.pass_states                     = None
-        self.echo_states                     = None
-        
-        self.radio_noise_active              = False
-        self.radio_noise_frames_remaining    = 0
-        self.radio_noise_total_frames        = 0
-        self.radio_noise_elapsed_frames      = 0
-        self.radio_noise_color               = "brown"
-        self.radio_noise_randomize_duration  = True
-        self.radio_noise_permanent           = False
-        self.radio_noise_min_duration_ms     = 160.0
-        self.radio_noise_max_duration_ms     = 900.0
-        
-        self.echo_random_delay_spread_ms    = 70.0
-        self.echo_random_feedback_spread    = 0.08
-        self.echo_random_mix_spread         = 0.05
+        self.track_peak_level    = 1.0
+        self.current_audio_level = 0.0
+        self.eq_low_states       = None
+        self.eq_mid_states       = None
+        self.eq_high_states      = None
+        self.pass_states         = None
+        self.echo_states         = None
+
+        self.radio_noise_active             = False
+        self.radio_noise_frames_remaining   = 0
+        self.radio_noise_total_frames       = 0
+        self.radio_noise_elapsed_frames     = 0
+        self.radio_noise_color              = "brown"
+        self.radio_noise_randomize_duration = True
+        self.radio_noise_permanent          = False
+        self.radio_noise_min_duration_ms    = 160.0
+        self.radio_noise_max_duration_ms    = 900.0
+
+        self.echo_random_delay_spread_ms = 70.0
+        self.echo_random_feedback_spread = 0.08
+        self.echo_random_mix_spread      = 0.05
 
     def setup_beat_detection(self) -> None:
         self.window_size         = 2048
@@ -240,14 +239,7 @@ class PlaybackManager(QObject):
         self.heavy_cooldown      = 0.3
         self.heavy_rms_threshold = 0.2
 
-        self.onset_detector = aubio.onset(
-            "mkl",
-            self.window_size,
-            self.hop_size,
-            self.fs
-        )
-
-        self.onset_detector.set_threshold(0.345)
+        self.rebuild_onset_detector()
 
         self.beat_queue = queue.Queue(maxsize = 100)
 
@@ -258,7 +250,26 @@ class PlaybackManager(QObject):
 
         self.beat_thread.start()
 
+    def rebuild_onset_detector(self) -> None:
+        self.onset_detector = aubio.onset(
+            "mkl",
+            self.window_size,
+            self.hop_size,
+            self.sample_rate
+        )
+
+        self.onset_detector.set_threshold(0.345)
+
     # Beat Detection
+
+    def set_analysis_window_size(self, window_size: int) -> None:
+        if window_size == self.window_size:
+            return
+
+        self.window_size = window_size
+        self.hop_size     = max(1, window_size // 4)
+
+        self.rebuild_onset_detector()
 
     def beat_emitter_worker(self) -> None:
         while True:
@@ -277,13 +288,13 @@ class PlaybackManager(QObject):
     # Loading
 
     def load_audio(self, path: str) -> None:
-        data, fs = soundfile.read(path, dtype = "float32")
-        self.load_audio_from_data(data, fs)
+        data, sample_rate = soundfile.read(path, dtype = "float32")
+        self.load_audio_from_data(data, sample_rate)
 
     def load_audio_from_data(
             self,
-            data: numpy.ndarray,
-            fs:   int
+            data:        numpy.ndarray,
+            sample_rate: int
         ) -> None:
 
         if data.ndim == 1:
@@ -291,61 +302,69 @@ class PlaybackManager(QObject):
 
         data = numpy.ascontiguousarray(data, dtype = numpy.float32)
 
+        channels = data.shape[1]
+
         with self.lock:
             self.reset_playback_state()
 
-            self.fs          = fs
+            self.sample_rate = sample_rate
             self.data        = data
-            self.duration_ms = (len(data) / fs) * 1000.0
+            self.duration_ms = (len(data) / sample_rate) * 1000.0
 
-            channels = data.shape[1]
+            self.eq_low_states  = numpy.zeros((channels, 4), dtype = numpy.float64)
+            self.eq_mid_states  = numpy.zeros((channels, 4), dtype = numpy.float64)
+            self.eq_high_states = numpy.zeros((channels, 4), dtype = numpy.float64)
+            self.echo_states    = numpy.zeros((channels, 4), dtype = numpy.float64)
+            self.pass_states    = numpy.zeros((len(self.pass_frequencies), channels, 4), dtype = numpy.float64)
 
-            self.eq_low_states    = numpy.zeros((channels, 4), dtype = numpy.float64)
-            self.eq_mid_states    = numpy.zeros((channels, 4), dtype = numpy.float64)
-            self.eq_high_states   = numpy.zeros((channels, 4), dtype = numpy.float64)
-            self.pass_states      = numpy.zeros((len(self.pass_frequencies), channels, 4), dtype = numpy.float64)
-            self.echo_states      = numpy.zeros((channels, 4), dtype = numpy.float64)
-
-            peak_level            = float(numpy.max(numpy.abs(data)))
-            self.track_peak_level = max(peak_level, 1e-6)
+            peak_level             = float(numpy.max(numpy.abs(data)))
+            self.track_peak_level  = max(peak_level, 1e-6)
 
         self.stream_needs_reopen = (
-            self.stream is None                or
-            self.stream_sample_rate != self.fs or
-            self.stream_channels != channels
+            self.stream is None                         or
+            self.stream_sample_rate != self.sample_rate or
+            self.stream_channels != channels            or
+            self.stream_block_size != self.block_size_ms
         )
 
         self.audio_loaded.emit(
             self.data,
-            self.fs,
-            len(self.data) / self.fs
+            self.sample_rate,
+            len(self.data) / self.sample_rate
         )
+
+        self.ensure_stream_opened()
 
     def open_stream(self) -> None:
         self.close_stream()
-
+    
         with self.lock:
             if self.data is None:
                 return
-
+    
             channels = self.data.shape[1]
 
         self.stream = miniaudio.PlaybackDevice(
             output_format    = miniaudio.SampleFormat.SIGNED16,
             nchannels        = channels,
-            sample_rate      = self.fs,
-            buffersize_msec  = 15,
+            sample_rate      = self.sample_rate,
+            buffersize_msec  = self.block_size_ms,
             callback_periods = 4,
             thread_prio      = miniaudio.ThreadPriority.HIGHEST
         )
-
-        self.stream_sample_rate = self.fs
+    
+        self.stream_sample_rate = self.sample_rate
         self.stream_channels    = channels
-
+        self.stream_block_size  = self.block_size_ms
+    
         self.mix_generator = self.create_playback_generator()
-
+    
         next(self.mix_generator)
         self.stream.start(self.mix_generator)
+
+        self.stream_needs_reopen = False
+    
+        logger.success(f"Stream opened. {channels} channels | {self.sample_rate} sampling rate | {self.block_size_ms} ms")
 
     def close_stream(self) -> None:
         try:
@@ -359,8 +378,9 @@ class PlaybackManager(QObject):
             logger.error("Failed to close the stream: {}", error)
 
         finally:
-            self.stream        = None
-            self.mix_generator = None
+            self.stream            = None
+            self.mix_generator     = None
+            self.stream_block_size = 0
 
     # Playback
 
@@ -386,29 +406,54 @@ class PlaybackManager(QObject):
     def stop(self) -> None:
         with self.lock:
             if self.is_playing:
-                self.playback_start_audio_ms = self.get_position()
+                self.playback_start_audio_ms  = self.get_position()
                 self.playback_start_wall_time = time.time()
 
             self.is_playing = False
 
         self.playback_state_changed.emit(False)
 
+    def set_block_size(self, block_size_ms: int) -> None:
+        if block_size_ms == self.block_size_ms:
+            return
+
+        self.block_size_ms       = block_size_ms
+        self.stream_needs_reopen = True
+
+        if self.is_playing:
+            self.ensure_stream_opened()
+
+    def blocksize_to_ms(self, blocksize: int) -> int:
+        if not self.sample_rate:
+            return 0
+
+        return int(round((blocksize / self.sample_rate) * 1000.0))
+
     def ensure_stream_opened(self) -> None:
+        target_block_size_frames = Constants.current_settings.get("audio_blocksize", 128)
+        target_block_size_ms     = self.blocksize_to_ms(target_block_size_frames)
+
+        if target_block_size_ms != self.block_size_ms:
+            self.block_size_ms = target_block_size_ms
+            self.stream_needs_reopen = True
+
         if not self.stream_needs_reopen:
             return
-        
-        self.stream_needs_reopen = False
+
+        if self.data is None:
+            return
+
         self.open_stream()
 
     def play(self, start_position_ms: float = 0.0) -> None:
         self.ensure_stream_opened()
-        
+
         with self.lock:
             if self.data is None:
                 return
 
             start_position_ms = 0.0 if start_position_ms is None else float(start_position_ms)
-            self.position      = (start_position_ms * self.fs) / 1000.0
+            self.position      = (start_position_ms * self.sample_rate) / 1000.0
             self.is_playing    = True
 
         self.playback_state_changed.emit(True)
@@ -427,20 +472,20 @@ class PlaybackManager(QObject):
             PlayerFunctions.calculate_lowshelf_coefficients(
                 250.0,
                 self.eq_low_property.value,
-                float(self.fs)
+                float(self.sample_rate)
             ),
 
             PlayerFunctions.calculate_peaking_coefficients(
                 1000.0,
                 self.eq_mid_property.value,
                 1.0,
-                float(self.fs)
+                float(self.sample_rate)
             ),
 
             PlayerFunctions.calculate_highshelf_coefficients(
                 4000.0,
                 self.eq_high_property.value,
-                float(self.fs)
+                float(self.sample_rate)
             )
         )
 
@@ -451,17 +496,21 @@ class PlaybackManager(QObject):
             self.pass_states = numpy.zeros((0, channels, 4), dtype = numpy.float64)
             return
 
-        if self.pass_states is None or self.pass_states.shape != (band_count, channels, 4):
-            self.pass_states = numpy.zeros((band_count, channels, 4), dtype = numpy.float64)
+        if self.pass_states is not None and self.pass_states.shape == (band_count, channels, 4):
+            return
+
+        self.pass_states = numpy.zeros((band_count, channels, 4), dtype = numpy.float64)
 
     def ensure_echo_states(self, channels: int) -> None:
-        if self.echo_states is None or self.echo_states.shape != (channels, 4):
-            self.echo_states = numpy.zeros((channels, 4), dtype = numpy.float64)
+        if self.echo_states is not None and self.echo_states.shape == (channels, 4):
+            return
+
+        self.echo_states = numpy.zeros((channels, 4), dtype = numpy.float64)
 
     def generate_resampled_block(
             self,
             frames:  int,
-            context: dict
+            context: dict[str, object]
         ) -> numpy.ndarray:
 
         return PlayerFunctions.resample_block(
@@ -475,14 +524,16 @@ class PlaybackManager(QObject):
     def apply_eq(
             self,
             block:   numpy.ndarray,
-            context: dict
+            context: dict[str, object]
         ) -> numpy.ndarray:
 
         low  = context["eq_low"]
         mid  = context["eq_mid"]
         high = context["eq_high"]
 
-        if abs(low - 1.0) < 0.01 and abs(mid - 1.0) < 0.01 and abs(high - 1.0) < 0.01:
+        is_neutral = abs(low - 1.0) < 0.01 and abs(mid - 1.0) < 0.01 and abs(high - 1.0) < 0.01
+
+        if is_neutral:
             return block
 
         low_coefficients, mid_coefficients, high_coefficients = self.compute_eq_coefficients()
@@ -504,7 +555,7 @@ class PlaybackManager(QObject):
     def apply_reverb_and_noise(
             self,
             block:   numpy.ndarray,
-            context: dict
+            context: dict[str, object]
         ) -> numpy.ndarray:
 
         reverb_mix = context["reverb_mix"]
@@ -526,11 +577,11 @@ class PlaybackManager(QObject):
     def apply_reverb(
             self,
             block:   numpy.ndarray,
-            context: dict
+            context: dict[str, object]
         ) -> numpy.ndarray:
 
-        delay_one   = int(self.fs * 0.04)
-        delay_two   = int(self.fs * 0.08)
+        delay_one   = int(self.sample_rate * 0.04)
+        delay_two   = int(self.sample_rate * 0.08)
         zero_delays = numpy.zeros(2, dtype = numpy.float64)
 
         tap_one = PlayerFunctions.resample_block(
@@ -554,7 +605,7 @@ class PlaybackManager(QObject):
     def apply_passes(
             self,
             block:   numpy.ndarray,
-            context: dict
+            context: dict[str, object]
         ) -> numpy.ndarray:
 
         pass_mix = context["pass_mix"]
@@ -567,21 +618,14 @@ class PlaybackManager(QObject):
         if self.pass_states is None or self.pass_states.shape[0] <= 0:
             return block
 
-        coefficients = numpy.zeros((len(self.pass_frequencies), 5), dtype = numpy.float64)
         pass_q       = max(0.1, float(context["pass_q"]))
-
-        for band_index, frequency in enumerate(self.pass_frequencies):
-            band_coefficients = PlayerFunctions.calculate_bandpass_coefficients(
-                float(frequency),
-                pass_q,
-                float(self.fs)
-            )
-
-            coefficients[band_index, 0] = band_coefficients[0]
-            coefficients[band_index, 1] = band_coefficients[1]
-            coefficients[band_index, 2] = band_coefficients[2]
-            coefficients[band_index, 3] = band_coefficients[3]
-            coefficients[band_index, 4] = band_coefficients[4]
+        coefficients = numpy.array(
+            [
+                PlayerFunctions.calculate_bandpass_coefficients(float(frequency), pass_q, float(self.sample_rate))
+                for frequency in self.pass_frequencies
+            ],
+            dtype = numpy.float64
+        )
 
         filtered = PlayerFunctions.apply_bandpass_stack(block, coefficients, self.pass_states)
         filtered = filtered * float(context["pass_gain"])
@@ -592,7 +636,7 @@ class PlaybackManager(QObject):
     def apply_bitcrush(
             self,
             block:   numpy.ndarray,
-            context: dict
+            context: dict[str, object]
         ) -> numpy.ndarray:
 
         return PlayerFunctions.apply_bitcrush_block(
@@ -602,10 +646,19 @@ class PlaybackManager(QObject):
             int(context["bitcrush_downsample"])
         )
 
+    def compute_echo_focus_coefficients(self) -> tuple[float, float, float, float, float] | None:
+        if self.echo_focus == "voice":
+            return PlayerFunctions.calculate_bandpass_coefficients(1250.0, 0.9, float(self.sample_rate))
+
+        if self.echo_focus == "bass":
+            return PlayerFunctions.calculate_bandpass_coefficients(140.0, 0.75, float(self.sample_rate))
+
+        return None
+
     def apply_echo(
             self,
             block:   numpy.ndarray,
-            context: dict
+            context: dict[str, object]
         ) -> numpy.ndarray:
 
         echo_mix = context["echo_mix"]
@@ -622,31 +675,24 @@ class PlaybackManager(QObject):
             feedback += random.uniform(-self.echo_random_feedback_spread, self.echo_random_feedback_spread)
             mix      += random.uniform(-self.echo_random_mix_spread, self.echo_random_mix_spread)
 
-        delay_ms  = max(1.0, delay_ms)
-        feedback  = max(0.0, min(0.98, feedback))
-        mix       = max(0.0, min(1.0, mix))
+        delay_ms = max(1.0, delay_ms)
+        feedback = max(0.0, min(0.98, feedback))
+        mix      = max(0.0, min(1.0, mix))
 
-        delay_frames  = max(1, int((self.fs * delay_ms) / 1000.0))
+        delay_frames  = max(1, int((self.sample_rate * delay_ms) / 1000.0))
         echo_position = max(0.0, context["position"] - delay_frames)
 
         echo_context = {
             **context,
             "position": echo_position,
-            "delays": numpy.zeros(2, dtype = numpy.float64)
+            "delays":   numpy.zeros(2, dtype = numpy.float64)
         }
 
-        echo_block = self.generate_resampled_block(len(block), echo_context)
+        echo_block   = self.generate_resampled_block(len(block), echo_context)
+        coefficients = self.compute_echo_focus_coefficients()
 
-        focus = self.echo_focus
-        
-        if focus in {"voice", "bass"}:
+        if coefficients is not None:
             self.ensure_echo_states(block.shape[1])
-
-            if focus == "voice":
-                coefficients = PlayerFunctions.calculate_bandpass_coefficients(1250.0, 0.9, float(self.fs))
-            
-            else:
-                coefficients = PlayerFunctions.calculate_bandpass_coefficients(140.0, 0.75, float(self.fs))
 
             echo_block = PlayerFunctions.apply_biquad_block(
                 echo_block,
@@ -665,7 +711,7 @@ class PlaybackManager(QObject):
     def apply_radio_noise_effect(
             self,
             block:   numpy.ndarray,
-            context: dict
+            context: dict[str, object]
         ) -> numpy.ndarray:
 
         if not self.radio_noise_active:
@@ -674,21 +720,21 @@ class PlaybackManager(QObject):
         noise_mix = float(context["radio_noise_mix"])
 
         if noise_mix <= 0.0:
-            self.radio_noise_active = False
+            self.radio_noise_active           = False
             self.radio_noise_frames_remaining = 0
             return block
 
         if self.radio_noise_permanent:
             envelope = numpy.ones(len(block), dtype = numpy.float32)
-        
+
         else:
             if self.radio_noise_frames_remaining <= 0:
                 self.radio_noise_active = False
                 return block
 
-            attack_frames  = int((self.fs * float(context["radio_noise_attack_ms"])) / 1000.0)
-            peak_frames    = int((self.fs * float(context["radio_noise_peak_ms"])) / 1000.0)
-            release_frames = int((self.fs * float(context["radio_noise_release_ms"])) / 1000.0)
+            attack_frames  = int((self.sample_rate * float(context["radio_noise_attack_ms"])) / 1000.0)
+            peak_frames    = int((self.sample_rate * float(context["radio_noise_peak_ms"])) / 1000.0)
+            release_frames = int((self.sample_rate * float(context["radio_noise_release_ms"])) / 1000.0)
 
             envelope = PlayerFunctions.generate_three_stage_envelope(
                 len(block),
@@ -707,12 +753,14 @@ class PlaybackManager(QObject):
             float(context["radio_noise_mute"])
         )
 
-        if not self.radio_noise_permanent:
-            self.radio_noise_elapsed_frames   += len(block)
-            self.radio_noise_frames_remaining -= len(block)
+        if self.radio_noise_permanent:
+            return result
 
-            if self.radio_noise_frames_remaining <= 0:
-                self.radio_noise_active = False
+        self.radio_noise_elapsed_frames   += len(block)
+        self.radio_noise_frames_remaining -= len(block)
+
+        if self.radio_noise_frames_remaining <= 0:
+            self.radio_noise_active = False
 
         return result
 
@@ -720,31 +768,17 @@ class PlaybackManager(QObject):
         min_ms = max(0.0, float(self.radio_noise_min_duration_ms))
         max_ms = max(min_ms, float(self.radio_noise_max_duration_ms))
 
-        if self.radio_noise_randomize_duration:
-            duration_ms = random.uniform(min_ms, max_ms)
-        
-        else:
-            duration_ms = max_ms
+        duration_ms = random.uniform(min_ms, max_ms) if self.radio_noise_randomize_duration else max_ms
 
-        duration_ms = max(
-            duration_ms,
-            (
-                float(self.radio_noise_attack_ms_property.value) +
-                float(self.radio_noise_peak_ms_property.value) +
-                float(self.radio_noise_release_ms_property.value)
-            )
+        minimum_envelope_ms = (
+            float(self.radio_noise_attack_ms_property.value)  +
+            float(self.radio_noise_peak_ms_property.value)    +
+            float(self.radio_noise_release_ms_property.value)
         )
 
-        return max(1, int((self.fs * duration_ms) / 1000.0))
+        duration_ms = max(duration_ms, minimum_envelope_ms)
 
-    def generate_noise_block(
-            self,
-            frames:      int,
-            channels:    int,
-            noise_color: str
-        ) -> numpy.ndarray:
-
-        return PlayerFunctions.generate_colored_noise(frames, channels, noise_color)
+        return max(1, int((self.sample_rate * duration_ms) / 1000.0))
 
     def process_beat_detection(self, block: numpy.ndarray) -> None:
         if self.onset_detector is None:
@@ -763,10 +797,9 @@ class PlaybackManager(QObject):
 
             rms          = float(numpy.sqrt(numpy.mean(segment ** 2)))
             current_time = time.time()
-            is_heavy     = False
+            is_heavy     = (current_time - self.last_heavy_time) > self.heavy_cooldown and rms > self.heavy_rms_threshold
 
-            if (current_time - self.last_heavy_time) > self.heavy_cooldown and rms > self.heavy_rms_threshold:
-                is_heavy             = True
+            if is_heavy:
                 self.last_heavy_time = current_time
 
             try:
@@ -775,41 +808,44 @@ class PlaybackManager(QObject):
             except queue.Full:
                 pass
 
-    def process_audio_chunk(self, frames: int) -> numpy.ndarray:
-        context = {
-            "position":                self.position,
-            "speed":                   self.speed,
-            "volume":                  self.volume,
-            "fs":                      self.fs,
-            "max_index":               len(self.data) - 1,
-            "delays":                  numpy.array(
-                                           [
-                                               self.channel_delay_left_property.value,
-                                               self.channel_delay_right_property.value
-                                           ],
-                                           dtype = numpy.float32
-                                       ),
-            "eq_low":                  self.eq_low_property.value,
-            "eq_mid":                  self.eq_mid_property.value,
-            "eq_high":                 self.eq_high_property.value,
-            "bitcrush_mix":            self.bitcrush_mix_property.value,
-            "bitcrush_bits":           self.bitcrush_bits_property.value,
-            "bitcrush_downsample":     self.bitcrush_downsample_property.value,
-            "reverb_mix":              self.reverb_mix_property.value,
-            "noise_mix":               self.noise_mix_property.value,
-            "pass_mix":                self.pass_mix_property.value,
-            "pass_q":                  self.pass_q_property.value,
-            "pass_gain":               self.pass_gain_property.value,
-            "radio_noise_intensity":   self.radio_noise_intensity_property.value,
-            "radio_noise_mix":         self.radio_noise_mix_property.value,
-            "radio_noise_attack_ms":   self.radio_noise_attack_ms_property.value,
-            "radio_noise_peak_ms":     self.radio_noise_peak_ms_property.value,
-            "radio_noise_release_ms":  self.radio_noise_release_ms_property.value,
-            "radio_noise_mute":        self.radio_noise_mute_mix_property.value,
-            "echo_mix":                self.echo_mix_property.value,
-            "echo_delay_ms":           self.echo_delay_ms_property.value,
-            "echo_feedback":           self.echo_feedback_property.value,
+    def build_processing_context(self) -> dict[str, object]:
+        return {
+            "position":               self.position,
+            "speed":                  self.speed,
+            "volume":                 self.volume,
+            "sample_rate":            self.sample_rate,
+            "max_index":              len(self.data) - 1,
+            "delays":                 numpy.array(
+                                          [
+                                              self.channel_delay_left_property.value,
+                                              self.channel_delay_right_property.value
+                                          ],
+                                          dtype = numpy.float32
+                                      ),
+            "eq_low":                 self.eq_low_property.value,
+            "eq_mid":                 self.eq_mid_property.value,
+            "eq_high":                self.eq_high_property.value,
+            "bitcrush_mix":           self.bitcrush_mix_property.value,
+            "bitcrush_bits":          self.bitcrush_bits_property.value,
+            "bitcrush_downsample":    self.bitcrush_downsample_property.value,
+            "reverb_mix":             self.reverb_mix_property.value,
+            "noise_mix":              self.noise_mix_property.value,
+            "pass_mix":               self.pass_mix_property.value,
+            "pass_q":                 self.pass_q_property.value,
+            "pass_gain":              self.pass_gain_property.value,
+            "radio_noise_intensity":  self.radio_noise_intensity_property.value,
+            "radio_noise_mix":        self.radio_noise_mix_property.value,
+            "radio_noise_attack_ms":  self.radio_noise_attack_ms_property.value,
+            "radio_noise_peak_ms":    self.radio_noise_peak_ms_property.value,
+            "radio_noise_release_ms": self.radio_noise_release_ms_property.value,
+            "radio_noise_mute":       self.radio_noise_mute_mix_property.value,
+            "echo_mix":               self.echo_mix_property.value,
+            "echo_delay_ms":          self.echo_delay_ms_property.value,
+            "echo_feedback":          self.echo_feedback_property.value
         }
+
+    def process_audio_chunk(self, frames: int) -> numpy.ndarray:
+        context = self.build_processing_context()
 
         self.check_start_radio_noise(context["radio_noise_intensity"])
 
@@ -824,28 +860,29 @@ class PlaybackManager(QObject):
         block = self.apply_bitcrush(block, context)
         block = self.apply_radio_noise_effect(block, context)
 
-        block                   *= context["volume"]
+        block *= context["volume"]
+
         self.current_audio_level = float(numpy.max(numpy.abs(block)) / self.track_peak_level)
 
-        if self.data is not None and self.position >= len(self.data):
+        if self.position >= len(self.data):
             self.stop()
 
         return block
 
     def check_start_radio_noise(self, intensity: float) -> None:
         if self.radio_noise_mix_property.value <= 0.0:
-            self.radio_noise_active = False
+            self.radio_noise_active           = False
             self.radio_noise_frames_remaining = 0
-            
             return
 
         if self.radio_noise_permanent:
-            if not self.radio_noise_active:
-                self.radio_noise_active           = True
-                self.radio_noise_frames_remaining = 1
-                self.radio_noise_total_frames     = 1
-                self.radio_noise_elapsed_frames   = 0
-            
+            if self.radio_noise_active:
+                return
+
+            self.radio_noise_active           = True
+            self.radio_noise_frames_remaining = 1
+            self.radio_noise_total_frames     = 1
+            self.radio_noise_elapsed_frames   = 0
             return
 
         if intensity <= 0.0 or self.radio_noise_active:
@@ -854,15 +891,15 @@ class PlaybackManager(QObject):
         if random.random() >= 0.005 * intensity:
             return
 
-        self.radio_noise_active            = True
-        self.radio_noise_frames_remaining  = self.generate_radio_noise_duration_frames()
-        self.radio_noise_total_frames      = self.radio_noise_frames_remaining
-        self.radio_noise_elapsed_frames    = 0
+        self.radio_noise_active           = True
+        self.radio_noise_frames_remaining = self.generate_radio_noise_duration_frames()
+        self.radio_noise_total_frames     = self.radio_noise_frames_remaining
+        self.radio_noise_elapsed_frames   = 0
 
     def generate_audio_block(
             self,
             frames:  int,
-            context: dict
+            context: dict[str, object]
         ) -> numpy.ndarray:
 
         block = PlayerFunctions.resample_block(
@@ -882,15 +919,15 @@ class PlaybackManager(QObject):
 
         while True:
             with self.lock:
-                if not self.is_playing or self.data is None:
-                    block = self.create_silence_block(frames)
-
-                else:
+                if self.is_playing and self.data is not None:
                     block = self.process_audio_chunk(frames)
 
-            block  = numpy.clip(block, -1.0, 1.0)
-            block  = numpy.nan_to_num(block, nan=0.0, posinf=1.0, neginf=-1.0)
-            pcm    = (block * 32767.0).astype(numpy.int16)
+                else:
+                    block = self.create_silence_block(frames)
+
+            block = numpy.clip(block, -1.0, 1.0)
+            block = numpy.nan_to_num(block, nan = 0.0, posinf = 1.0, neginf = -1.0)
+            pcm   = (block * 32767.0).astype(numpy.int16)
 
             frames = yield pcm.tobytes()
 
@@ -928,36 +965,8 @@ class PlaybackManager(QObject):
             self.channel_delay_right_property.set_base(right_to_ms)
             return
 
-        self.channel_delay_left_property.set_target(left_to_ms,  duration_ms, easing)
+        self.channel_delay_left_property.set_target(left_to_ms, duration_ms, easing)
         self.channel_delay_right_property.set_target(right_to_ms, duration_ms, easing)
-
-    def set_speed(
-            self,
-            new_speed:             float,
-            duration_ms:           int             = 0,
-            easing:                Easing          = Easing.smooth,
-            on_finish:             callable | None = None,
-            use_engine_multiplier: bool            = True,
-            cleanup_on_finish:     bool            = False,
-            shutdown_on_finish:    bool            = False
-        ) -> None:
-
-        self.update_playback_start(new_speed)
-        
-        internal_callback = self.get_speed_callback(cleanup_on_finish, shutdown_on_finish)
-        
-        def combined_callback():
-            if internal_callback: internal_callback()
-            if on_finish: on_finish()
-
-        self.set_property(
-            "speed",
-            new_speed,
-            duration_ms,
-            easing,
-            combined_callback,
-            use_engine_multiplier
-        )
 
     def get_speed_callback(
             self,
@@ -972,6 +981,37 @@ class PlaybackManager(QObject):
             return self.full_shutdown
 
         return None
+
+    def set_speed(
+            self,
+            new_speed:             float,
+            duration_ms:           int             = 0,
+            easing:                Easing          = Easing.smooth,
+            on_finish:             callable | None = None,
+            use_engine_multiplier: bool            = True,
+            cleanup_on_finish:     bool            = False,
+            shutdown_on_finish:    bool            = False
+        ) -> None:
+
+        self.update_playback_start(new_speed)
+
+        internal_callback = self.get_speed_callback(cleanup_on_finish, shutdown_on_finish)
+
+        def combined_callback() -> None:
+            if internal_callback:
+                internal_callback()
+
+            if on_finish:
+                on_finish()
+
+        self.set_property(
+            "speed",
+            new_speed,
+            duration_ms,
+            easing,
+            combined_callback,
+            use_engine_multiplier
+        )
 
     def set_volume(
             self,
@@ -1043,19 +1083,6 @@ class PlaybackManager(QObject):
         mix = max(0.0, min(1.0, mix))
         self.set_property("reverb_mix", mix, duration_ms, easing)
 
-    def set_car_radio(
-            self,
-            active:      bool,
-            duration_ms: int    = 0,
-            easing:      Easing = Easing.smooth
-        ) -> None:
-
-        if active:
-            self.set_car_radio_active(duration_ms, easing)
-            return
-
-        self.set_car_radio_inactive(duration_ms, easing)
-
     def set_car_radio_active(
             self,
             duration_ms: int,
@@ -1076,33 +1103,52 @@ class PlaybackManager(QObject):
         self.set_reverb(mix = 0.0, duration_ms = duration_ms, easing = easing)
         self.set_background_noise(mix = 0.0, duration_ms = duration_ms, easing = easing)
 
-    def set_passes(
+    def set_car_radio(
             self,
-            frequencies: list[float] | tuple[float, ...] = (),
-            q:           float                           = 1.0,
-            mix:         float                           = 1.0,
-            gain:        float                           = 1.0,
-            duration_ms: int                             = 0,
-            easing:      Easing                          = Easing.smooth
+            active:      bool,
+            duration_ms: int    = 0,
+            easing:      Easing = Easing.smooth
         ) -> None:
 
+        if active:
+            self.set_car_radio_active(duration_ms, easing)
+            return
+
+        self.set_car_radio_inactive(duration_ms, easing)
+
+    def clean_pass_frequencies(self, frequencies: list[float] | tuple[float, ...]) -> list[float]:
         cleaned_frequencies = []
 
         for frequency in frequencies:
             try:
                 value = float(frequency)
+
             except Exception:
                 continue
 
             if value > 0.0:
                 cleaned_frequencies.append(value)
 
+        return cleaned_frequencies
+
+    def set_passes(
+            self,
+            frequencies: list[float] | tuple[float, ...] = (),
+            q:           float                           = 1.0,
+            mix:         float                           = 1.0,
+            gain:        float                           = 1.0,
+            duration_ms: int                              = 0,
+            easing:      Easing                          = Easing.smooth
+        ) -> None:
+
+        cleaned_frequencies = self.clean_pass_frequencies(frequencies)
+
         with self.lock:
             self.pass_frequencies = cleaned_frequencies
             self.pass_q           = max(0.1, float(q))
 
             if duration_ms <= 0 and self.data is not None:
-                    self.ensure_pass_states(self.data.shape[1])
+                self.ensure_pass_states(self.data.shape[1])
 
         self.apply_properties(
             {
@@ -1115,22 +1161,22 @@ class PlaybackManager(QObject):
 
     def set_noise(
             self,
-            intensity:             float  = 0.3,
-            mix:                   float  = 0.3,
-            permanent:             bool   = False,
-            color:                 str    = "brown",
-            attack_ms:             float  = 100.0,
-            peak_ms:               float  = 180.0,
-            release_ms:            float  = 250.0,
-            mute_audio:            float  = 0.45,
-            min_duration_ms:       float  = 160.0,
-            max_duration_ms:       float  = 900.0,
-            randomize_duration:    bool   = True,
-            duration_ms:           int    = 0,
-            easing:                Easing = Easing.smooth
+            intensity:          float  = 0.3,
+            mix:                float  = 0.3,
+            permanent:          bool   = False,
+            color:              str    = "brown",
+            attack_ms:          float  = 100.0,
+            peak_ms:            float  = 180.0,
+            release_ms:         float  = 250.0,
+            mute_audio:         float  = 0.45,
+            min_duration_ms:    float  = 160.0,
+            max_duration_ms:    float  = 900.0,
+            randomize_duration: bool   = True,
+            duration_ms:        int    = 0,
+            easing:             Easing = Easing.smooth
         ) -> None:
 
-        self.radio_noise_color = color if color in {"white", "pink", "brown"} else "brown"
+        self.radio_noise_color              = color if color in {"white", "pink", "brown"} else "brown"
         self.radio_noise_randomize_duration = bool(randomize_duration)
         self.radio_noise_min_duration_ms    = max(0.0, float(min_duration_ms))
         self.radio_noise_max_duration_ms    = max(self.radio_noise_min_duration_ms, float(max_duration_ms))
@@ -1150,13 +1196,13 @@ class PlaybackManager(QObject):
 
     def set_echo(
             self,
-            mix:                 float  = 1.0,
-            delay_ms:            float  = 180.0,
-            feedback:            float  = 0.25,
-            mode:                str    = "constant",
-            focus:               str    = "all",
-            duration_ms:         int    = 0,
-            easing:              Easing = Easing.smooth
+            mix:         float  = 1.0,
+            delay_ms:    float  = 180.0,
+            feedback:    float  = 0.25,
+            mode:        str    = "constant",
+            focus:       str    = "all",
+            duration_ms: int    = 0,
+            easing:      Easing = Easing.smooth
         ) -> None:
 
         self.echo_mode  = mode if mode in {"constant", "random"} else "constant"
@@ -1168,8 +1214,7 @@ class PlaybackManager(QObject):
                 "echo_delay_ms": max(1.0, float(delay_ms)),
                 "echo_feedback": max(0.0, min(0.98, float(feedback)))
             },
-            duration_ms,
-            easing
+            duration_ms, easing
         )
 
     # Shutdown

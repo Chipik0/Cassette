@@ -51,6 +51,12 @@ class CompositorWidget(QWidget):
         self.playback_manager = Player.player
 
         self.is_ejecting = False
+        self.pending_mini_preview_position = None
+
+        self.mini_preview_update_timer = QTimer(self)
+        self.mini_preview_update_timer.setInterval(40)
+        self.mini_preview_update_timer.setTimerType(Qt.TimerType.PreciseTimer)
+        self.mini_preview_update_timer.timeout.connect(self.apply_mini_preview_position)
 
         self.overall_layout = QVBoxLayout(self)
         self.overall_layout.setContentsMargins(8, 8, 8, 8)
@@ -127,6 +133,7 @@ class CompositorWidget(QWidget):
 
         self.playspeed_button.state_changed.connect      (lambda _, speed:  self.playback_manager.set_speed(speed, 700))
         self.default_effect.state_changed.connect        (lambda _, effect: self.content_widget.composition.set_default_effect(effect))
+        self.content_widget.playhead_moved.connect       (self.on_playhead_position_changed)
         self.mini_preview_widget.preview_clicked.connect (                  self.content_widget.scroll_to_normalized_position)
         self.glyph_dur_control.valueChanged.connect      (lambda ms:        self.content_widget.composition.set_duration(ms))
         self.brightness_control.valueChanged.connect     (lambda percent:   self.content_widget.composition.set_brightness(percent))
@@ -177,7 +184,6 @@ class CompositorWidget(QWidget):
         
         self.content_widget.load_composition(composition)
 
-        self.content_widget.playhead_moved.connect(self.mini_preview_widget.set_playhead_position) # LAGS!!!
         self.mini_preview_widget.set_audio_data(self.playback_manager.data)
 
         self.on_elements_changed()
@@ -214,7 +220,9 @@ class CompositorWidget(QWidget):
 
         self.content_widget.composition.syncer.stop()
 
-        self.content_widget.playhead_moved.disconnect(self.mini_preview_widget.set_playhead_position)
+        self.content_widget.playhead_moved.disconnect(self.on_playhead_position_changed)
+        self.mini_preview_update_timer.stop()
+        self.pending_mini_preview_position = None
 
         self.mini_preview_widget.audio = None
         self.mini_preview_widget.set_playhead_position(0.0)
@@ -226,6 +234,32 @@ class CompositorWidget(QWidget):
 
     def clear_ejecting_flag(self) -> None:
         self.is_ejecting = False
+
+    def on_playhead_position_changed(self, normalized_position: float) -> None:
+        current = self.pending_mini_preview_position
+
+        if current is None:
+            current = self.mini_preview_widget.playhead_position
+
+        width = max(1, self.mini_preview_widget.width())
+        threshold = 1.0 / float(width)
+
+        if abs(normalized_position - current) < threshold:
+            return
+
+        self.pending_mini_preview_position = normalized_position
+
+        if not self.mini_preview_update_timer.isActive():
+            self.mini_preview_update_timer.start()
+
+    def apply_mini_preview_position(self) -> None:
+        if self.pending_mini_preview_position is None:
+            self.mini_preview_update_timer.stop()
+            return
+
+        position = self.pending_mini_preview_position
+        self.pending_mini_preview_position = None
+        self.mini_preview_widget.set_playhead_position(position)
 
     # Misc
 

@@ -1180,7 +1180,6 @@ class PropertyTrack:
 
         self.updated = EventSignal()
 
-        logger.debug(f"Choosing interpolator for {scheduler}, {base_value}")
         self.interpolator = self.choose_interpolator(base_value)
 
     def choose_interpolator(self, value: object) -> Callable[[object, object, float], object]:
@@ -1622,6 +1621,11 @@ class AnimationEngine:
         self.active_users      = 0
         self.updated           = EventSignal()
 
+        Constants.current_settings.setting_changed.connect(self.on_setting_changed)
+        Constants.current_settings.settings_reloaded.connect(self.apply_settings)
+
+        self.apply_settings()
+
     def ensure_ticker(self) -> None:
         if self.ticker is not None:
             return
@@ -1630,6 +1634,25 @@ class AnimationEngine:
             callback    = self.tick,
             interval_ms = self.interval_ms
         )
+
+    def on_setting_changed(self, key: str, value: object) -> None:
+        if key != "target_fps":
+            return
+
+        self.apply_settings()
+
+    def resolve_frames_per_second(self) -> int:
+        target = Constants.current_settings.instance.value("target_fps", 0, type = int)
+        return target
+
+    def apply_settings(self) -> None:
+        requested_fps = self.resolve_frames_per_second()
+
+        if requested_fps == self.frames_per_second:
+            return
+
+        logger.debug(f"Animation engine applying FPS from settings: {requested_fps}")
+        self.set_frames_per_second(requested_fps)
 
     def set_frames_per_second(self, frames_per_second: int) -> None:
         self.frames_per_second = frames_per_second
@@ -1724,7 +1747,6 @@ class AnimationEngine:
         key = self.namespace.key_for(owner, name)
 
         if key not in self.tracks:
-            logger.debug(f"Binding {name} for {owner.__class__}")
             self.tracks[key] = PropertyTrack(
                 scheduler         = self.backend.defer,
                 base_value        = base_value,
