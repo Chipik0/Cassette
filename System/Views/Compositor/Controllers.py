@@ -22,8 +22,7 @@ from PyQt6.QtCore import (
     QPointF,
     QObject,
     pyqtSignal,
-    QEasingCurve,
-    QPropertyAnimation
+    QEasingCurve
 )
 
 from PyQt6.QtWidgets import (
@@ -44,6 +43,8 @@ from System.Interface import (
     Widgets,
     Timing
 )
+
+from System.Interface.Animation import LoomEngine
 
 from . import (
     Widget,
@@ -400,19 +401,19 @@ class GlyphController(QObject):
         self.conductor   = conductor
         self.composition = conductor.composition
 
-        self.copied_data:             list[dict]                    = []
-        self.glyph_items:             dict[int, Widgets.GlyphItem]  = {}
-        self.drag_session:            dict[Widgets.GlyphItem, dict] = {}
+        self.copied_data:             list[dict]                      = []
+        self.glyph_items:             dict[int, Widgets.GlyphItem]    = {}
+        self.drag_session:            dict[Widgets.GlyphItem, dict]   = {}
 
-        self.expanded_stack:          frozenset[int] | None         = None
+        self.expanded_stack:          frozenset[int] | None           = None
 
-        self.expand_animations:       list[QPropertyAnimation]      = []
-        self.collapse_animations:     list[QPropertyAnimation]      = []
-        self.collapse_refresh_timer:  QTimer | None                 = None
+        self.expand_animations:       list[LoomEngine.PropertyHandle] = []
+        self.collapse_animations:     list[LoomEngine.PropertyHandle] = []
+        self.collapse_refresh_timer:  QTimer | None                   = None
 
-        self.hovered_item:            Widgets.GlyphItem | None      = None
+        self.hovered_item:            Widgets.GlyphItem | None        = None
 
-        self.hover_timer:             Timing.Timer                   = Timing.Timer(
+        self.hover_timer:             Timing.Timer                    = Timing.Timer(
             1000,
             self.on_hover_timeout,
             single_shot = True,
@@ -659,7 +660,7 @@ class GlyphController(QObject):
 
         self.glyph_deleted.emit()
         self.elements_changed.emit()
-        self.refresh_stack_indicators()
+        self.refresh_stack_indicators(force = True)
 
     def spawn_glyph_on_track(self, track_index: str) -> None:
         if track_index not in self.composition.track_names:
@@ -755,7 +756,39 @@ class GlyphController(QObject):
             item.setSelected(set_selected)
             item.update()
         
-        QTimer.singleShot(0, self.refresh_stack_indicators)
+        QTimer.singleShot(0, lambda: self.refresh_stack_indicators(force = True))
+
+        if self.expanded_stack:
+            new_ids = list(glyphs_id)
+            QTimer.singleShot(0, lambda: self.handle_spawned_while_expanded(new_ids))
+
+    def handle_spawned_while_expanded(self, new_ids: list[int]) -> None:
+        if not self.expanded_stack:
+            return
+
+        try:
+            rep = next(iter(self.expanded_stack))
+        
+        except StopIteration:
+            return
+
+        group = self.get_overlapping_group(rep)
+
+        if len(group) > 1:
+            self.stop_running_stack_animations()
+            self.sort_stack_group(group)
+            self.expanded_stack = frozenset(group)
+
+            first_item = self.glyph_items.get(group[0])
+
+            if first_item is None:
+                return
+
+            base_y = float(first_item.fixed_y)
+            box_h = float(Styles.Metrics.Tracks.BoxHeight)
+
+            direction, step = self.calculate_expansion_params(len(group), base_y, box_h)
+            self.animate_stack_items(group, step, direction, len(group))
 
     def start_drag(self) -> None:
         self.drag_session      = {}
@@ -843,7 +876,7 @@ class GlyphController(QObject):
         self.drag_session      = {}
         self.temp_before_state = {}
 
-        self.refresh_stack_indicators()
+        self.refresh_stack_indicators(force = True)
 
         self.glyph_moved_or_resized.emit()
 
@@ -907,8 +940,8 @@ class GlyphController(QObject):
     
         return group
     
-    def refresh_stack_indicators(self) -> None:
-        if self.expanded_stack:
+    def refresh_stack_indicators(self, force: bool = False) -> None:
+        if self.expanded_stack and not force:
             return
 
         by_track: dict[int, list[tuple[int, int, int]]] = {}
@@ -945,16 +978,22 @@ class GlyphController(QObject):
             item.set_stack_depth(depth)
     
     def stop_running_stack_animations(self) -> None:
-        for animation in self.expand_animations:
-            animation.stop()
-            animation.deleteLater()
-        
+        for anim in self.expand_animations:
+            try:
+                anim.stop_targeting()
+
+            except Exception:
+                pass
+
         self.expand_animations = []
 
-        for animation in self.collapse_animations:
-            animation.stop()
-            animation.deleteLater()
-        
+        for anim in self.collapse_animations:
+            try:
+                anim.stop_targeting()
+
+            except Exception:
+                pass
+
         self.collapse_animations = []
 
         if self.collapse_refresh_timer:
@@ -1027,16 +1066,15 @@ class GlyphController(QObject):
 
             item.setZValue(float(group_size - index))
 
-            animation = QPropertyAnimation(item, b"stackYOffset")
-            animation.setDuration(duration)
-            animation.setStartValue(current_offset)
-            animation.setEndValue(target_offset)
-            animation.setEasingCurve(QEasingCurve.Type.OutExpo)
-            animation.setParent(item)
-
-            self.expand_animations.append(animation)
-            animation.start()
-
+            handle = item.stack_y_offset_handle
+            handle.set_target(
+                value           = target_offset,
+                duration_ms     = duration,
+                easing_function = LoomEngine.Easing.ease_out_expo,
+                multiply_duration_by_speed = False
+            )
+            self.expand_animations.append(handle)
+    
     def expand_stack(self, glyph_id: int) -> None:
         group = self.get_overlapping_group(glyph_id)
 
@@ -1076,14 +1114,14 @@ class GlyphController(QObject):
             if not item:
                 continue
 
-            animation = QPropertyAnimation(item, b"stackYOffset")
-            animation.setDuration(COLLAPSE_DURATION)
-            animation.setEndValue(0.0)
-            animation.setEasingCurve(QEasingCurve.Type.InOutCubic)
-            animation.setParent(item)
-
-            self.collapse_animations.append(animation)
-            animation.start()
+            handle = item.stack_y_offset_handle
+            handle.set_target(
+                value           = 0.0,
+                duration_ms     = COLLAPSE_DURATION,
+                easing_function = LoomEngine.Easing.ease_out_cubic,
+                multiply_duration_by_speed = False
+            )
+            self.collapse_animations.append(handle)
 
             item.setZValue(0.0)
 

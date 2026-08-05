@@ -472,14 +472,20 @@ class ScrollableContent(QGraphicsView):
 
         self.glyph_controller.clear_glyphs()
 
+        syncer = self.composition.syncer if self.composition else None
+
         if self.composition:
             self.composition.syncer.cleanup()
             self.composition.syncer.set_speed(1.0)
             self.composition.syncer.error_occurred.disconnect(self.show_error_dialog)
             self.composition = None
 
-        self.playback_manager.playback_state_changed.disconnect()
-        self.playback_manager.speed_changed.disconnect()
+        self.playback_manager.playback_state_changed.disconnect(self.on_playback_state_changed)
+
+        if syncer is not None:
+            self.playback_manager.speed_changed.disconnect(syncer.set_speed)
+
+        self.playback_manager.speed_changed.disconnect(self.on_playback_speed_changed)
 
         logger.warning("Syncer stopped")
 

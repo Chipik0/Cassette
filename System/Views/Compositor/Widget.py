@@ -53,11 +53,6 @@ class CompositorWidget(QWidget):
         self.is_ejecting = False
         self.pending_mini_preview_position = None
 
-        self.mini_preview_update_timer = QTimer(self)
-        self.mini_preview_update_timer.setInterval(40)
-        self.mini_preview_update_timer.setTimerType(Qt.TimerType.PreciseTimer)
-        self.mini_preview_update_timer.timeout.connect(self.apply_mini_preview_position)
-
         self.overall_layout = QVBoxLayout(self)
         self.overall_layout.setContentsMargins(8, 8, 8, 8)
         self.overall_layout.setSpacing(8)
@@ -138,6 +133,8 @@ class CompositorWidget(QWidget):
         self.glyph_dur_control.valueChanged.connect      (lambda ms:        self.content_widget.composition.set_duration(ms))
         self.brightness_control.valueChanged.connect     (lambda percent:   self.content_widget.composition.set_brightness(percent))
 
+        Player.bpm_informer.beat_4.connect(self.apply_mini_preview_position)
+
     def configure_focus(self) -> None:
         for child in self.findChildren(QWidget):
             if child is self.content_widget:
@@ -185,6 +182,7 @@ class CompositorWidget(QWidget):
         self.content_widget.load_composition(composition)
 
         self.mini_preview_widget.set_audio_data(self.playback_manager.data)
+        self.content_widget.playhead_moved.connect(self.on_playhead_position_changed)
 
         self.on_elements_changed()
 
@@ -221,7 +219,6 @@ class CompositorWidget(QWidget):
         self.content_widget.composition.syncer.stop()
 
         self.content_widget.playhead_moved.disconnect(self.on_playhead_position_changed)
-        self.mini_preview_update_timer.stop()
         self.pending_mini_preview_position = None
 
         self.mini_preview_widget.audio = None
@@ -249,12 +246,8 @@ class CompositorWidget(QWidget):
 
         self.pending_mini_preview_position = normalized_position
 
-        if not self.mini_preview_update_timer.isActive():
-            self.mini_preview_update_timer.start()
-
     def apply_mini_preview_position(self) -> None:
         if self.pending_mini_preview_position is None:
-            self.mini_preview_update_timer.stop()
             return
 
         position = self.pending_mini_preview_position

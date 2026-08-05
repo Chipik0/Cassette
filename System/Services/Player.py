@@ -228,9 +228,9 @@ class PlaybackManager(QObject):
         self.radio_noise_min_duration_ms    = 160.0
         self.radio_noise_max_duration_ms    = 900.0
 
-        self.echo_random_delay_spread_ms = 70.0
-        self.echo_random_feedback_spread = 0.08
-        self.echo_random_mix_spread      = 0.05
+        self.echo_random_delay_spread_ms    = 70.0
+        self.echo_random_feedback_spread    = 0.08
+        self.echo_random_mix_spread         = 0.05
 
     def setup_beat_detection(self) -> None:
         self.window_size         = 2048
@@ -1717,19 +1717,10 @@ class BPMAnimator(QObject):
         self.counter = (self.counter + 1) % 16
 
     def set_bpm(self, bpm: int) -> None:
-        self.current_bpm = bpm
-       
         if not bpm:
             return
 
-        if bpm >= 200:
-            self.current_bpm = int(bpm / 2)
-
-        elif bpm <= 80:
-            self.current_bpm = int(bpm * 2)
-
-        else:
-            self.current_bpm = int(bpm)
+        self.current_bpm = int(bpm)
 
         if not self.timer.isActive():
             self.timer.start()

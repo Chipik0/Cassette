@@ -15,6 +15,7 @@ from PyQt6.QtCore import (
     QTimer,
     QPointF,
     pyqtSignal,
+    pyqtProperty,
     QElapsedTimer
 )
 
@@ -927,7 +928,7 @@ class PlayheadItem(Lifecycle.LoomAnimationMixin, QGraphicsObject):
         self.width     = 2.0
         self.height    = custom_height
         self.target_x  = 0.0
-        self._last_emitted_normalized = None
+        self.last_emitted_normalized = None
 
         self.cached_pen = QPen(QColor(255, 0, 0), 2.0)
         self.cached_pen.setCosmetic(True)
@@ -993,10 +994,10 @@ class PlayheadItem(Lifecycle.LoomAnimationMixin, QGraphicsObject):
         width = max(1, self.conductor.width())
         threshold = 1.0 / float(width)
 
-        if self._last_emitted_normalized is not None and abs(normalized - self._last_emitted_normalized) < threshold:
+        if self.last_emitted_normalized is not None and abs(normalized - self.last_emitted_normalized) < threshold:
             return
 
-        self._last_emitted_normalized = normalized
+        self.last_emitted_normalized = normalized
         self.conductor.playhead_moved.emit(normalized)
 
     def destroy(self) -> None:
