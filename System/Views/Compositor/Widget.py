@@ -126,12 +126,13 @@ class CompositorWidget(QWidget):
         self.export_button.clicked.connect(self.export_ringtone)
         self.eject_button.clicked.connect(self.unload_composition)
 
-        self.playspeed_button.state_changed.connect      (lambda _, speed:  self.playback_manager.set_speed(speed, 700))
-        self.default_effect.state_changed.connect        (lambda _, effect: self.content_widget.composition.set_default_effect(effect))
-        self.content_widget.playhead_moved.connect       (self.on_playhead_position_changed)
-        self.mini_preview_widget.preview_clicked.connect (                  self.content_widget.scroll_to_normalized_position)
-        self.glyph_dur_control.valueChanged.connect      (lambda ms:        self.content_widget.composition.set_duration(ms))
-        self.brightness_control.valueChanged.connect     (lambda percent:   self.content_widget.composition.set_brightness(percent))
+        self.playspeed_button.state_changed.connect          (lambda _, speed:  self.playback_manager.set_speed(speed, 700))
+        self.playspeed_button.state_changed.connect          (lambda *_:        self.content_widget.speed_control_used.emit())
+        self.default_effect.state_changed.connect            (lambda _, effect: self.content_widget.composition.set_default_effect(effect))
+        self.content_widget.playhead_moved_normalized.connect(self.on_playhead_position_changed)
+        self.mini_preview_widget.preview_clicked.connect     (                  self.content_widget.scroll_to_normalized_position)
+        self.glyph_dur_control.valueChanged.connect          (lambda ms:        self.content_widget.composition.set_duration(ms))
+        self.brightness_control.valueChanged.connect         (lambda percent:   self.content_widget.composition.set_brightness(percent))
 
         Player.bpm_informer.beat_4.connect(self.apply_mini_preview_position)
 
@@ -176,13 +177,14 @@ class CompositorWidget(QWidget):
         self.is_ejecting = False
 
         path = composition.get_playback_audio_path()
+        print("PAHHHHH", path)
         Player.bpm_informer.set_bpm(composition.bpm)
         self.playback_manager.load_audio(path)
         
         self.content_widget.load_composition(composition)
 
         self.mini_preview_widget.set_audio_data(self.playback_manager.data)
-        self.content_widget.playhead_moved.connect(self.on_playhead_position_changed)
+        self.content_widget.playhead_moved_normalized.connect(self.on_playhead_position_changed)
 
         self.on_elements_changed()
 
@@ -195,6 +197,8 @@ class CompositorWidget(QWidget):
 
     def unload_composition(self) -> None:
         logger.warning("Unloading composition from compositor widget and clearing state")
+
+        self.close_active_tutorial()
 
         self.setEnabled(False)
 
@@ -218,7 +222,7 @@ class CompositorWidget(QWidget):
 
         self.content_widget.composition.syncer.stop()
 
-        self.content_widget.playhead_moved.disconnect(self.on_playhead_position_changed)
+        self.content_widget.playhead_moved_normalized.disconnect(self.on_playhead_position_changed)
         self.pending_mini_preview_position = None
 
         self.mini_preview_widget.audio = None
@@ -231,6 +235,15 @@ class CompositorWidget(QWidget):
 
     def clear_ejecting_flag(self) -> None:
         self.is_ejecting = False
+
+    def close_active_tutorial(self) -> None:
+        tutorial = getattr(self.content_widget, "tutorial_window", None)
+
+        if tutorial is None:
+            return
+
+        tutorial.eject_close()
+        self.content_widget.tutorial_window = None
 
     def on_playhead_position_changed(self, normalized_position: float) -> None:
         current = self.pending_mini_preview_position

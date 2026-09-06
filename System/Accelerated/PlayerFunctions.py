@@ -493,7 +493,16 @@ def apply_radio_noise_block(
 
 # UI Engine
 
-def process_ui_sound_fast(data, position, volume, frames, loop):
+import numpy
+
+def process_ui_sound_fast(
+    data:     numpy.ndarray, 
+    position: float, 
+    volume:   float, 
+    frames:   int, 
+    loop:     bool
+) -> tuple[numpy.ndarray, float, bool]:
+    
     data_len    = data.shape[0]
     channels    = data.shape[1]
     out_block   = numpy.zeros((frames, channels), dtype = numpy.float32)
@@ -529,7 +538,15 @@ def process_ui_sound_fast(data, position, volume, frames, loop):
 
     return out_block, float(current_pos), active
 
-def process_ui_sound_interp(data, position, speed, volume, frames, loop):
+def process_ui_sound_interp(
+    data:     numpy.ndarray, 
+    position: float, 
+    speed:    float, 
+    volume:   float, 
+    frames:   int, 
+    loop:     bool
+) -> tuple[numpy.ndarray, float, bool]:
+    
     data_len    = data.shape[0]
     channels    = data.shape[1]
     out_block   = numpy.zeros((frames, channels), dtype = numpy.float32)
@@ -559,6 +576,7 @@ def process_ui_sound_interp(data, position, speed, volume, frames, loop):
             
             if idx2 < data_len:
                 v2 = data[idx2, c]
+
             else:
                 v2 = 0.0
 
@@ -608,7 +626,6 @@ def resample_positions_block(
 
     return result
 
-
 def generate_three_stage_envelope(
         frames:         int,
         total_frames:   int,
@@ -650,7 +667,6 @@ def generate_three_stage_envelope(
         envelope[frame_index] = max(0.0, 1.0 - release_progress)
 
     return envelope
-
 
 def generate_tape_chew_offsets(
         frames:         int,

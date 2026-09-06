@@ -4,14 +4,14 @@
 **Cross - platform. Smooth. Precise. Optimized. Designed.**
 
 <div>
-  <a href="https://github.com/Chipik0/Cassette/releases">
-    <img src="https://img.shields.io/github/v/release/Chipik0/Cassette?include_prereleases&style=flat-square&color=white&labelColor=black" alt="Latest Alpha Version">
+  <a href="https://github.com/chips047/Cassette/releases">
+    <img src="https://img.shields.io/github/v/release/cbips047/Cassette?include_prereleases&style=flat-square&color=white&labelColor=black" alt="Latest Alpha Version">
   </a>
-  <img src="https://img.shields.io/github/languages/top/Chipik0/Cassette?style=flat-square&color=white&labelColor=black" alt="Top Language">
-  <a href="https://github.com/Chipik0/Cassette/releases">
-    <img src="https://img.shields.io/github/downloads/Chipik0/Cassette/total?style=flat-square&color=white&labelColor=black" alt="Total Downloads">
+  <img src="https://img.shields.io/github/languages/top/chips047/Cassette?style=flat-square&color=white&labelColor=black" alt="Top Language">
+  <a href="https://github.com/chips047/Cassette/releases">
+    <img src="https://img.shields.io/github/downloads/chips047/Cassette/total?style=flat-square&color=white&labelColor=black" alt="Total Downloads">
   </a>
-  <img src="https://img.shields.io/github/created-at/Chipik0/Cassette?style=flat-square&color=white&labelColor=black" alt="Created At">
+  <img src="https://img.shields.io/github/created-at/chips047/Cassette?style=flat-square&color=white&labelColor=black" alt="Created At">
 </div>
 
 <div>

@@ -1,12 +1,15 @@
+import re
 import random
 import string
 
 from PyQt6.QtGui import (
+    QPen,
     QIcon,
+    QColor,
     QPainter,
+    QMouseEvent,
     QPaintEvent,
-    QFontMetrics,
-    QMouseEvent
+    QFontMetrics
 )
 
 from PyQt6.QtCore import (
@@ -14,8 +17,11 @@ from PyQt6.QtCore import (
     QSize,
     QEvent,
     QPoint,
+    QRectF,
+    QTimer,
     QObject,
-    pyqtSignal
+    pyqtSignal,
+    QElapsedTimer
 )
 
 from PyQt6.QtWidgets import (
@@ -25,7 +31,6 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QStyleOptionButton
 )
-from loguru import logger
 
 from System.Common import (
     Dev,
@@ -34,7 +39,10 @@ from System.Common import (
     Constants
 )
 
-from System.Services import Player
+from System.Services.Player import (
+    ui_player,
+    bpm_informer
+)
 
 from System.Interface.Animation import Lifecycle
 
@@ -57,10 +65,10 @@ class BaseButton(Lifecycle.LoomAnimationMixin, QPushButton):
 
     def __init__(
             self,
-            text:                  str     = None,
-            icon:                  QIcon   = None,
-            parent:                QWidget = None,
-            enable_glitch_effect:  bool    = False
+            text:                 str | None     = None,
+            icon:                 QIcon | None   = None,
+            parent:               QWidget | None = None,
+            enable_glitch_effect: bool           = False
         ) -> None:
 
         if icon:
@@ -119,16 +127,18 @@ class BaseButton(Lifecycle.LoomAnimationMixin, QPushButton):
             duration_ms     = 100,
             easing_function = Easing.ease_out_cubic
         )
-    
+
     def animate_punch(self) -> None:
         self.press_scale_handle.play_curve(
             [
                 (0.0, 1.2),
                 (1.0, 1.0)
-            ], 100, Easing.ease_out_cubic
+            ],
+            100,
+            Easing.ease_out_cubic
         )
 
-    def on_glitch_frame_changed(self, frame: tuple) -> None:
+    def on_glitch_frame_changed(self, frame: tuple[str, QPoint, QSize]) -> None:
         text, position_offset, size_offset = frame
 
         super().setText(text)
@@ -136,24 +146,23 @@ class BaseButton(Lifecycle.LoomAnimationMixin, QPushButton):
 
         self.resize(
             QSize(
-                max(10, self.original_size.width()  + size_offset.width()),
+                max(10, self.original_size.width() + size_offset.width()),
                 max(10, self.original_size.height() + size_offset.height())
             )
         )
 
-    def build_glitch_frames(self) -> list[tuple[int, tuple]]:
+    def build_glitch_frames(self) -> list[tuple[int, tuple[str, QPoint, QSize]]]:
         font_metrics     = QFontMetrics(self.font())
         average_width    = font_metrics.averageCharWidth()
         estimated_length = max(1, min(200, self.width() // average_width))
-
-        frames = []
+        frames           = []
 
         for _ in range(self.glitch_step_count):
             frames.append(
                 (
                     self.glitch_step_ms,
                     (
-                        self.random_ass_text(estimated_length),
+                        self.generate_random_text(estimated_length),
                         QPoint(random.randint(-3, 3), random.randint(-4, 4)),
                         QSize(random.randint(-4, 4), random.randint(-2, 2))
                     )
@@ -164,7 +173,7 @@ class BaseButton(Lifecycle.LoomAnimationMixin, QPushButton):
 
     def start_glitch(self) -> None:
         if not self.glitch_sound_locked:
-            Player.ui_player.play_sound("Reject")
+            ui_player.play_sound("Reject")
 
         self.glitch_started.emit()
 
@@ -185,6 +194,7 @@ class BaseButton(Lifecycle.LoomAnimationMixin, QPushButton):
     def finish_glitch(self) -> None:
         self.move(self.original_position)
         self.resize(self.original_size)
+
         super().setText(self.original_button_text)
 
         self.is_glitching = False
@@ -196,10 +206,10 @@ class BaseButton(Lifecycle.LoomAnimationMixin, QPushButton):
         self.glitch_sound_locked = False
 
     def paintEvent(self, event: QPaintEvent) -> None:
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-
+        painter     = QPainter(self)
         press_scale = self.press_scale_handle.value
+
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         painter.translate(self.width() / 2, self.height() / 2)
         painter.scale(press_scale, press_scale)
@@ -215,33 +225,31 @@ class BaseButton(Lifecycle.LoomAnimationMixin, QPushButton):
     def mousePressEvent(self, event: QMouseEvent) -> None:
         if event.button() == Qt.MouseButton.RightButton:
             self.right_clicked.emit()
+            super().mousePressEvent(event)
+            return
 
         elif event.button() == Qt.MouseButton.MiddleButton:
             self.middle_clicked.emit()
+            super().mousePressEvent(event)
+            return
 
-        if event.button() == Qt.MouseButton.LeftButton:
-            if Constants.current_settings["mouse_click_behavior"] == "fast":
-                self.setDown(True)
-                self.pressed.emit()
-                self.clicked.emit()
+        if event.button() == Qt.MouseButton.LeftButton and Constants.current_settings["mouse_click_behavior"] == "fast":
+            self.setDown(True)
+            self.pressed.emit()
+            self.clicked.emit()
+            self.fast_clicked = True
+            return
 
-                self.fast_clicked = True
-
-                return
-
-            self.fast_clicked = False
-
+        self.fast_clicked = False
         super().mousePressEvent(event)
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
         if event.button() == Qt.MouseButton.LeftButton and self.fast_clicked:
             self.setDown(False)
             self.released.emit()
-
             self.fast_clicked = False
-
             return
-        
+
         super().mouseReleaseEvent(event)
 
     def mouseDoubleClickEvent(self, event: QMouseEvent) -> None:
@@ -269,96 +277,297 @@ class BaseButton(Lifecycle.LoomAnimationMixin, QPushButton):
 
         return True
 
-    def setText(self, text):
+    def setText(self, text: str) -> None:
         self.original_button_text = text
         super().setText(text)
 
-    def random_ass_text(self, length: int) -> str:
+    def generate_random_text(self, length: int) -> str:
         characters = string.ascii_letters + string.digits
         return "".join(random.choices(characters, k = length))
 
+    random_ass_text = generate_random_text
+
 class RectangularButton(BaseButton):
+    default_style_sheet: str | None   = None
+    default_height:      int          = 40
+    border_radius:       float | None = None
+    border_width:        float | None = None
+
     def __init__(
             self,
-            text:                  str     = None,
-            icon:                  QIcon   = None,
-            parent:                QWidget = None,
-            enable_glitch_effect:  bool    = True
+            text:                 str | None     = None,
+            icon:                 QIcon | None   = None,
+            parent:               QWidget | None = None,
+            enable_glitch_effect: bool           = True,
+            style_sheet:          str | None     = None,
+            height:               int | None     = None
         ) -> None:
 
         super().__init__(text, icon, parent, enable_glitch_effect)
 
+        resolved_height      = height if height is not None else self.default_height
+        resolved_style_sheet = style_sheet if style_sheet is not None else self.default_style_sheet
+
         self.setFont(Utils.NType(10))
-        self.setFixedHeight(40)
+        self.setFixedHeight(resolved_height)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        if resolved_style_sheet:
+            self.setStyleSheet(resolved_style_sheet)
 
 @Dev.track_ram
 class NothingButton(RectangularButton):
-    def __init__(
-            self,
-            text:                  str     = None,
-            icon:                  QIcon   = None,
-            parent:                QWidget = None,
-            enable_glitch_effect:  bool    = True
-        ) -> None:
-
-        super().__init__(text, icon, parent, enable_glitch_effect)
-        self.setStyleSheet(Styles.Buttons.NothingStyledButton)
+    default_style_sheet = Styles.Buttons.NothingStyledButton
 
 @Dev.track_ram
 class Button(RectangularButton):
-    def __init__(
-            self,
-            text:                  str     = None,
-            icon:                  QIcon   = None,
-            parent:                QWidget = None,
-            enable_glitch_effect:  bool    = True
-        ) -> None:
-
-        super().__init__(text, icon, parent, enable_glitch_effect)
-        self.setStyleSheet(Styles.Buttons.NormalButton)
+    default_style_sheet = Styles.Buttons.NormalButton
 
 @Dev.track_ram
 class ButtonWithOutline(RectangularButton):
-    def __init__(
-            self,
-            text:                  str     = None,
-            icon:                  QIcon   = None,
-            parent:                QWidget = None,
-            enable_glitch_effect:  bool    = True
-        ) -> None:
-
-        super().__init__(text, icon, parent, enable_glitch_effect)
-        self.setStyleSheet(Styles.Buttons.NormalButtonWithBorder)
+    default_style_sheet = Styles.Buttons.NormalButtonWithBorder
 
 @Dev.track_ram
 class ButtonWithOutlineSlim(RectangularButton):
-    def __init__(
-            self,
-            text:                  str     = None,
-            icon:                  QIcon   = None,
-            parent:                QWidget = None,
-            enable_glitch_effect: bool    = True
-        ) -> None:
-
-        super().__init__(text, icon, parent, enable_glitch_effect)
-        self.setStyleSheet(Styles.Buttons.NormalButtonWithBorderSlim)
-        self.setFixedHeight(28)
+    default_style_sheet = Styles.Buttons.NormalButtonWithBorderSlim
+    default_height      = 28
 
 @Dev.track_ram
 class IconButtonSmall(RectangularButton):
+    default_style_sheet = Styles.Buttons.MainMenu.SmallButton
+    default_height      = 28
+
     def __init__(
             self,
-            icon:                  QIcon   = None,
-            parent:                QWidget = None,
-            enable_glitch_effect:  bool    = True
+            icon:                 QIcon   | None = None,
+            parent:               QWidget | None = None,
+            enable_glitch_effect: bool           = True
         ) -> None:
 
-        super().__init__(icon = icon, parent = parent, enable_glitch_effect = enable_glitch_effect)
+        super().__init__(
+            icon                 = icon,
+            parent               = parent,
+            enable_glitch_effect = enable_glitch_effect
+        )
 
-        self.setFixedSize(53, 28)
-        self.setIconSize(QSize(22, 22))
-        self.setStyleSheet(Styles.Buttons.MainMenu.SmallButton)
+        self.setFixedWidth(53)
+        self.setIconSize(QSize(26, 26))
+
+@Dev.track_ram
+class ConfirmButton(ButtonWithOutline):
+    confirmed = pyqtSignal()
+
+    confirm_timeout_ms = 2000
+
+    def __init__(
+            self,
+            text:                 str,
+            confirm_text:         str,
+            parent:               QWidget | None = None,
+            enable_glitch_effect: bool           = True
+        ) -> None:
+
+        super().__init__(
+            text                 = text,
+            parent               = parent,
+            enable_glitch_effect = enable_glitch_effect
+        )
+
+        self.idle_text             = text
+        self.confirm_text          = confirm_text
+        self.awaiting_confirm      = False
+        self.is_connected_to_beat  = False
+        self.cached_border_radius  = self.resolve_border_radius()
+
+        self.border_pulse_handle = ui_engine.bind(
+            owner      = self,
+            name       = "borderPulse",
+            base_value = 0.0,
+            mix_mode   = MixMode.REPLACE,
+            on_change  = self.on_border_pulse_changed
+        )
+
+        self.confirmation_timer = QTimer(self)
+        self.confirmation_timer.setSingleShot(True)
+        self.confirmation_timer.setInterval(self.confirm_timeout_ms)
+        self.confirmation_timer.timeout.connect(self.reset_confirmation)
+
+        self.elapsed_timer = QElapsedTimer()
+
+        self.clicked.connect(self.handle_click)
+
+    def resolve_border_radius(self) -> float:
+        if self.border_radius is not None:
+            return float(self.border_radius)
+
+        style_sheet = self.styleSheet() or self.default_style_sheet or ""
+        match       = re.search(r"border-radius\s*:\s*([0-9]+(?:\.[0-9]+)?)\s*px", style_sheet)
+
+        if match:
+            return float(match.group(1))
+
+        return 0.0
+
+    def setStyleSheet(self, style_sheet: str) -> None:
+        super().setStyleSheet(style_sheet)
+        self.cached_border_radius = self.resolve_border_radius()
+
+    def on_border_pulse_changed(self, value: float) -> None:
+        self.update()
+
+    def handle_click(self) -> None:
+        if not self.awaiting_confirm:
+            self.arm_confirmation()
+            return
+
+        self.awaiting_confirm = False
+
+        self.confirmation_timer.stop()
+        self.stop_confirmation_pulse()
+        self.confirmed.emit()
+
+    def arm_confirmation(self) -> None:
+        self.confirmation_timer.start()
+        self.elapsed_timer.start()
+
+        self.awaiting_confirm = True
+
+        self.setText(self.confirm_text)
+
+        if not self.is_connected_to_beat:
+            bpm_informer.beat_4.connect(self.pulse_border)
+            self.is_connected_to_beat = True
+
+    def reset_confirmation(self) -> None:
+        if not self.awaiting_confirm:
+            return
+
+        self.awaiting_confirm = False
+
+        self.stop_confirmation_pulse()
+        self.setText(self.idle_text)
+
+        ui_player.play_sound("Feedback/ConfirmTick", speed = 0.7)
+
+    def stop_confirmation_pulse(self) -> None:
+        if self.is_connected_to_beat:
+            bpm_informer.beat_4.disconnect(self.pulse_border)
+            self.is_connected_to_beat = False
+
+        self.border_pulse_handle.set_target(
+            value           = 0.0,
+            duration_ms     = 50,
+            easing_function = Easing.ease_out_cubic
+        )
+
+    def pulse_border(self) -> None:
+        duration_ms = bpm_informer.get_interval(4)
+
+        self.border_pulse_handle.play_curve(
+            [
+                (0.0, 1.0),
+                (1.0, 0.0)
+            ],
+            duration_ms,
+            Easing.ease_out_cubic
+        )
+
+        print(self.elapsed_timer.elapsed(), self.confirmation_timer.interval(), "fuck")
+        tone = self.elapsed_timer.elapsed() / self.confirmation_timer.interval() + 0.7
+        print(tone)
+        ui_player.play_sound("Feedback/ConfirmTick", speed = tone)
+
+    def paintEvent(self, event: QPaintEvent) -> None:
+        super().paintEvent(event)
+
+        pulse_value = self.border_pulse_handle.value
+
+        if pulse_value <= 0.0:
+            return
+
+        painter     = QPainter(self)
+        press_scale = self.press_scale_handle.value
+
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        painter.translate(self.width() / 2, self.height() / 2)
+        painter.scale(press_scale, press_scale)
+        painter.translate(-self.width() / 2, -self.height() / 2)
+
+        border_color = QColor(Styles.Colors.NothingAccent)
+        border_color.setAlphaF(max(0.0, min(1.0, pulse_value)))
+
+        pen = QPen(border_color, 2.0)
+        painter.setPen(pen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+
+        half_stroke      = 1.0
+        border_rectangle = QRectF(self.rect()).adjusted(
+            half_stroke,
+            half_stroke,
+            -half_stroke,
+            -half_stroke
+        )
+
+        painter.drawRoundedRect(
+            border_rectangle,
+            self.cached_border_radius,
+            self.cached_border_radius
+        )
+
+        painter.end()
+
+@Dev.track_ram
+class NavButton(BaseButton):
+    def __init__(
+            self,
+            text:   str,
+            parent: QWidget | None = None
+        ) -> None:
+
+        super().__init__(text = text, parent = parent)
+
+        self.setText(text)
+        self.setFont(Utils.NType(10))
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setCheckable(True)
+        self.setFixedHeight(32)
+
+        self.active_style   = Styles.Buttons.Settings.CategoryActiveButton
+        self.inactive_style = Styles.Buttons.Settings.CategoryInactiveButton
+
+        self.set_active(False)
+
+    def set_active(self, is_active: bool) -> None:
+        self.setChecked(is_active)
+
+        style = self.active_style if is_active else self.inactive_style
+        self.setStyleSheet(style)
+
+    setActive = set_active
+
+@Dev.track_ram
+class OptionButton(BaseButton):
+    def __init__(
+            self,
+            text:     str,
+            accent:   bool          = False,
+            callback: object | None = None
+        ) -> None:
+
+        super().__init__(text = text)
+
+        style = Styles.Buttons.MainMenu.AccentButton if accent else Styles.Buttons.MainMenu.NormalButton
+        self.setStyleSheet(style)
+
+        self.setFixedHeight(40)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setFont(Utils.NType(10))
+
+        if callback:
+            self.clicked.connect(callback)
+
+# ButtonContainers
 
 @Dev.track_ram
 class ButtonRow(QHBoxLayout):
@@ -375,15 +584,14 @@ class ButtonRow(QHBoxLayout):
         self.buttons: dict[str, RectangularButton] = {}
 
         for item in buttons:
-            class_name, text, callback, glitch = self.unpack_button_item(item)
+            button_class, text, callback, enable_glitch_effect = self.unpack_button_item(item)
 
-            button = class_name(
-                text                  = text,
-                enable_glitch_effect = glitch
+            button = self.create_row_button(
+                button_class         = button_class,
+                text                 = text,
+                callback             = callback,
+                enable_glitch_effect = enable_glitch_effect
             )
-
-            button.setMinimumWidth(120)
-            button.clicked.connect(callback)
 
             self.addWidget(button)
 
@@ -393,62 +601,30 @@ class ButtonRow(QHBoxLayout):
         if len(item) == 4:
             return item
 
-        class_name, text, callback = item
+        button_class, text, callback = item
 
-        return class_name, text, callback, True
+        return button_class, text, callback, True
+
+    def create_row_button(
+            self,
+            button_class:         type[RectangularButton],
+            text:                 str,
+            callback:             object,
+            enable_glitch_effect: bool
+        ) -> RectangularButton:
+
+        button = button_class(
+            text                 = text,
+            enable_glitch_effect = enable_glitch_effect
+        )
+
+        button.setMinimumWidth(120)
+        button.clicked.connect(callback)
+
+        return button
 
     def get_button(self, text: str) -> RectangularButton | None:
         return self.buttons.get(text)
-    
+
     def get_button_by_number(self, index: int) -> RectangularButton | None:
         return list(self.buttons.values())[index]
-
-@Dev.track_ram
-class NavButton(BaseButton):
-    def __init__(
-            self,
-            text:   str,
-            parent: QWidget = None
-        ) -> None:
-
-        super().__init__(text = text, parent = parent)
-
-        self.setText(text)
-        self.setFont(Utils.NType(10))
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setCheckable(True)
-        self.setFixedHeight(32)
-
-        self.active_style   = Styles.Buttons.Settings.CategoryActiveButton
-        self.inactive_style = Styles.Buttons.Settings.CategoryInactiveButton
-
-        self.setActive(False)
-
-    def setActive(self, is_active: bool) -> None:
-        self.setChecked(is_active)
-
-        style = self.active_style if is_active else self.inactive_style
-        self.setStyleSheet(style)
-
-@Dev.track_ram
-class OptionButton(BaseButton):
-    def __init__(
-            self,
-            text:     str,
-            accent:   bool   = False,
-            callback: object = None
-        ) -> None:
-
-        super().__init__(text = text)
-
-        self.setStyleSheet(
-            Styles.Buttons.MainMenu.AccentButton if accent
-            else Styles.Buttons.MainMenu.NormalButton
-        )
-
-        self.setFixedHeight(40)
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setFont(Utils.NType(10))
-
-        if callback:
-            self.clicked.connect(callback)

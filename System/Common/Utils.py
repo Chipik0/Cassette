@@ -6,8 +6,8 @@ import time
 import numpy
 import psutil
 import random
-import platform
 import datetime
+import platform
 import subprocess
 
 from urllib.request import urlopen
@@ -62,7 +62,6 @@ def medfilt_np(data: numpy.ndarray, kernel_size: int) -> numpy.ndarray:
     windows = numpy.lib.stride_tricks.as_strided(padded, shape=shape, strides=strides)
     
     return numpy.median(windows, axis = 1)
-
 
 def get_processes() -> list[str]:
     try:
@@ -160,7 +159,8 @@ def get_ee_string() -> str:
         [
             "Turn it up to eleven.",
             "Video killed the radio star.",
-            "May the Music be with you."
+            "May the Music be with you.",
+            "Cat."
         ]
     )
 
@@ -240,6 +240,62 @@ def get_user_path(relative_path: str, folder: str) -> str:
 
     return full_path
 
+class StreamToLogger:
+    def __init__(self, level: str = "ERROR") -> None:
+        self.level = level
+
+    def write(self, buffer: str) -> None:
+        for line in buffer.rstrip().splitlines():
+            if line.strip():
+                logger.opt(depth = 1).log(self.level, line)
+
+    def flush(self) -> None:
+        pass
+
+# Utils.py
+
+def setup_exe_logging(folder_name: str = "Logs", file_name: str = "app.log") -> str:
+    if getattr(sys, "frozen", False):
+        base_dir = os.path.dirname(sys.executable)
+
+    else:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+
+    log_dir = os.path.join(base_dir, folder_name)
+
+    try:
+        os.makedirs(log_dir, exist_ok = True)
+
+    except PermissionError:
+        user_home = os.path.expanduser("~")
+        log_dir = os.path.join(user_home, f".{folder_name.lower()}_fallback")
+        os.makedirs(log_dir, exist_ok = True)
+
+    log_file_path = os.path.join(log_dir, file_name)
+
+    logger.remove()
+
+    if sys.__stderr__ is not None:
+        logger.add(sys.__stderr__, level = "DEBUG")
+
+    logger.add(
+        log_file_path,
+        encoding  = "utf-8",
+        rotation  = "10 MB",
+        enqueue   = True,
+        catch     = True,
+        backtrace = True,
+        diagnose  = True
+    )
+
+    if sys.stderr is not None:
+        sys.stderr = StreamToLogger("ERROR")
+
+    if sys.stdout is not None:
+        sys.stdout = StreamToLogger("INFO")
+
+    return log_file_path
+
 def run(*args, **kwargs) -> subprocess.CompletedProcess:
     if os.name == "nt":
         kwargs.setdefault("creationflags", subprocess.CREATE_NO_WINDOW)
@@ -284,7 +340,7 @@ class SettingsController(QObject):
         self,
         organization: str,
         application:  str,
-        parent: QObject | None = None
+        parent:       QObject | None = None
     ) -> None:
         
         super().__init__(parent)
@@ -455,28 +511,30 @@ class UpdateChecker(QObject):
 
     error_occurred        = pyqtSignal(str)
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.manager = QNetworkAccessManager(self)
         self.manager.finished.connect(self.on_request_finished)
 
-    def fetch_latest_release(self):
-        url = QUrl("https://api.github.com/repos/chips047/Cassette/releases")
+    def fetch_latest_release(self) -> None:
+        url     = QUrl("https://api.github.com/repos/chips047/Cassette/releases")
         request = QNetworkRequest(url)
         
         request.setAttribute(QNetworkRequest.Attribute.User, "get_release")
         request.setRawHeader(b"User-Agent", b"Cassette-Updater-Script")
+
         self.manager.get(request)
 
-    def fetch_latest_songs_strings(self):
-        url = QUrl("https://raw.githubusercontent.com/chips047/Cassette/main/System/Assets/Songs.txt")
+    def fetch_latest_songs_strings(self) -> None:
+        url     = QUrl("https://raw.githubusercontent.com/chips047/Cassette/main/System/Assets/Songs.txt")
         request = QNetworkRequest(url)
         
         request.setAttribute(QNetworkRequest.Attribute.User, "get_source_file")
         request.setRawHeader(b"User-Agent", b"Cassette-Updater-Script")
+
         self.manager.get(request)
 
-    def on_request_finished(self, reply):
+    def on_request_finished(self, reply) -> None:
         reply.deleteLater()
         
         request_type = reply.request().attribute(QNetworkRequest.Attribute.User)
@@ -484,6 +542,7 @@ class UpdateChecker(QObject):
         if reply.error() != reply.NetworkError.NoError:
             logger.error(f"Network error [{request_type}]: {reply.errorString()}")
             self.error_occurred.emit(request_type)
+
             return
 
         try:
@@ -492,6 +551,7 @@ class UpdateChecker(QObject):
             if not raw_bytes:
                 logger.error(f"Empty data received for {request_type}")
                 self.error_occurred.emit(request_type)
+
                 return
 
             if request_type == "get_release":
@@ -505,7 +565,7 @@ class UpdateChecker(QObject):
             logger.exception(f"Failed to parse data for {request_type}")
             self.error_occurred.emit(request_type)
 
-def check_dynamic_library(module: object):
+def check_dynamic_library(module: object) -> None:
     file = module.__file__
     is_dynamic_library = file.endswith(".so") or file.endswith(".pyd")
 

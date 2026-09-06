@@ -1,5 +1,4 @@
 import time
-import numpy
 import random
 
 from PyQt6.QtCore import (
@@ -25,7 +24,6 @@ from System.Interface import (
 )
 
 from System.Services import Player
-
 from System.Interface.Controls import BaseControlContainer
 
 @Dev.track_ram
@@ -93,6 +91,7 @@ class DelaySetupper(BaseControlContainer):
         if self.is_calibrating:
             self.stop_calibration()
             self.calibrate_button.setText("Calibrate")
+            
             return
 
         self.start_calibration()

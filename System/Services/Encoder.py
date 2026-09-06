@@ -3,10 +3,9 @@ import math
 import zlib
 import base64
 import shutil
+import subprocess
 
 from loguru import logger
-
-from mutagen.oggopus import OggOpus
 
 from System.Common import (
     Utils,
@@ -77,8 +76,35 @@ def convert_to_glyphs(
     raise UnknownFileFormatError(f"Unknown file format for: {path}")
 
 def get_audio_duration(path_to_audio: str) -> float:
-    audio = OggOpus(path_to_audio)
-    return audio.info.length
+    ffprobe_path = getattr(Constants, 'FFPROBE_PATH', 'ffprobe')
+    
+    cmd = [
+        ffprobe_path,
+        "-v", "error",
+        "-show_entries", "format=duration",
+        "-of", "default=noprint_wrappers=1:nokey=1",
+        path_to_audio
+    ]
+    
+    result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    return float(result.stdout.strip())
+
+def get_ogg_metadata(path: str) -> dict:
+    ffprobe_path = getattr(Constants, 'FFPROBE_PATH', 'ffprobe')
+    
+    cmd = [
+        ffprobe_path,
+        "-v", "error",
+        "-show_entries", "format_tags",
+        "-of", "json",
+        path
+    ]
+    
+    result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    data = json.loads(result.stdout)
+    tags = data.get("format", {}).get("tags", {})
+    
+    return {k.upper(): v for k, v in tags.items()}
 
 def parse_glyphs(glyphs: dict, device: Constants.DeviceConfig) -> list[dict]:
     parsed = []
@@ -288,7 +314,7 @@ def prepare_metadata(
         "AUTHOR":   author_base64,
         "COMPOSER": f"v1-{device.composer_code_name} Glyph Composer",
         "CUSTOM1":  custom1_base64,
-        "CUSTOM2":  device.custom2_str,
+        "CUSTOM2":  device.custom_two_string,
     }
 
 def run_ffmpeg(
@@ -296,16 +322,27 @@ def run_ffmpeg(
         destination:   str,
         metadata:      dict
     ) -> None:
+    
+    is_inplace  = (path_to_audio == destination)
+    output_path = destination + ".tmp.ogg" if is_inplace else destination
 
-    if path_to_audio != destination:
-        shutil.copy2(path_to_audio, destination)
-
-    audio = OggOpus(destination)
-
+    cmd = [
+        Constants.FFMPEG_PATH,
+        "-y",
+        "-v", "error",
+        "-i", path_to_audio,
+        "-c:a", "copy"
+    ]
+    
     for key, value in metadata.items():
-        audio[key] = str(value)
-
-    audio.save()
+        cmd.extend(["-metadata", f"{key}={value}"])
+        
+    cmd.append(output_path)
+    
+    Utils.run_hidden(cmd)
+    
+    if is_inplace:
+        shutil.move(output_path, destination)
 
 def is_increasing(values: list[int]) -> bool:
     return all(left <= right for left, right in zip(values, values[1:]))
@@ -613,10 +650,10 @@ def trim_glyphs_ogg(
         fade_out_ms:  int = 0
     ) -> None:
 
-    source_audio    = OggOpus(path)
+    metadata = get_ogg_metadata(path)
 
-    author_b64  = source_audio.get("AUTHOR",  [None])[0]
-    custom1_b64 = source_audio.get("CUSTOM1", [None])[0]
+    author_b64  = metadata.get("AUTHOR")
+    custom1_b64 = metadata.get("CUSTOM1")
 
     if not author_b64:
         raise ValueError(f"No AUTHOR glyph data found in: {path}")
@@ -669,20 +706,18 @@ def trim_glyphs_ogg(
         "-map_metadata", "0"
     ]
 
+    cmd.extend(["-metadata", f"AUTHOR={author_b64_new}"])
+    if custom1_b64_new:
+        cmd.extend(["-metadata", f"CUSTOM1={custom1_b64_new}"])
+
     if fade_filters:
         cmd += ["-af", fade_filters, "-c:a", audio_codec or "libopus"]
-    
     else:
         cmd += ["-c:a", "copy"]
 
     cmd.append(output)
 
     Utils.run_hidden(cmd)
-
-    trimmed_audio = OggOpus(output)
-    trimmed_audio["AUTHOR"] = author_b64_new
-    trimmed_audio["CUSTOM1"] = custom1_b64_new
-    trimmed_audio.save()
 
 class LabelsNoModelError(Exception):
     pass

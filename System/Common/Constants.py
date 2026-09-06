@@ -1,38 +1,44 @@
-from loguru import logger
+import json
+
+from enum    import Enum
+from pathlib import Path
+from loguru  import logger
 
 from System.Common import Utils
+
+from PyQt6.QtGui import QGuiApplication
 
 from dataclasses import (
     field,
     dataclass
 )
 
-from enum import Enum
+# Settings Controller
 
 current_settings = Utils.SettingsController("chips047", "Cassette")
 
 def load_settings() -> None:
-    logger.debug(f"Loaded settings from chips047/Cassette")
+    logger.debug("Loaded settings from chips047/Cassette")
     current_settings.load()
 
 def get_default_value(parameters: dict[str, object]) -> int | str | bool | None:
     element_type = parameters.get("type", "")
-    
+
     if element_type == "checkbox":
         return parameters.get("default", False)
-    
+
     if element_type == "slider":
         return parameters.get("default", parameters.get("min", 0))
-    
+
     if element_type.startswith("selector"):
         return parameters["map"][parameters["default"]]
-    
+
     return None
 
 def prepare_default_settings(setting_components: dict[str, list]) -> None:
-    settings       = current_settings.instance
-    existing_keys  = set(settings.allKeys())
-    new_keys       = set()
+    settings      = current_settings.instance
+    existing_keys = set(settings.allKeys())
+    new_keys      = set()
 
     for components in setting_components.values():
         for parameters in components:
@@ -42,9 +48,10 @@ def prepare_default_settings(setting_components: dict[str, list]) -> None:
             if key in existing_keys:
                 continue
 
-            default_val = get_default_value(parameters)
-            if default_val is not None:
-                settings.setValue(key, default_val)
+            default_value = get_default_value(parameters)
+
+            if default_value is not None:
+                settings.setValue(key, default_value)
 
     for key in (existing_keys - new_keys):
         if key.startswith("_"):
@@ -56,9 +63,9 @@ def prepare_default_settings(setting_components: dict[str, list]) -> None:
 
     logger.success("Default settings prepared and synced.")
 
-# Models and Related
+# Device Models
 
-MASTER_TRACK_ID = "A"
+MASTER_TRACK_IDENTIFIER = "A"
 
 class MasterTrackMode(Enum):
     ALL_LIT      = "all_lit"
@@ -67,36 +74,32 @@ class MasterTrackMode(Enum):
 
 @dataclass
 class DeviceConfig:
-    code_name:          str
-    short_name:         str
-    full_name:          str
-    hardware_codes:     list[str]
-    composer_code_name: str
-    
-    glyph_indexes:      list[list[int]]
-    zone_indexes:       list[list[int]]
-    segments_map:       dict[str, int]   = field(default_factory = dict)
+    code_name:             str
+    short_name:            str
+    full_name:             str
+    hardware_codes:        list[str]
+    composer_code_name:    str
 
-    visualization_map:  dict             = field(default_factory = dict)
-    port_variants:      list[str]        = field(default_factory = list)
-    
-    columns:            int              = field(init = False)
-    base_tracks:        int              = field(init = False)
-    custom2_str:        str              = field(init = False)
+    glyph_indexes:         list[list[int]]
+    zone_indexes:          list[list[int]]
+    segments_map:          dict[str, int]  = field(default_factory = dict)
+
+    visualization_map:     dict            = field(default_factory = dict)
+    port_variants:         list[str]       = field(default_factory = list)
+
+    columns:               int             = field(init = False)
+    base_tracks:           int             = field(init = False)
+    custom_two_string:     str             = field(init = False)
 
     master_track_mode:     MasterTrackMode = field(init = False)
     master_track_segments: int | None      = field(init = False)
 
-    # to support phone (1) 5 cols mode (for import function)
-    legacy_tracks: dict[int, dict[str, list[str]]] = field(default_factory=dict)
-    
-    def __post_init__(self) -> None:
-        self.columns     = sum(len(group) for group in self.glyph_indexes)
-        self.base_tracks = len(self.glyph_indexes)
-        self.custom2_str = f"{self.columns}cols"
-        
-        self.setup_offset_calc()
+    legacy_tracks: dict[int, dict[str, list[str]]] = field(default_factory = dict)
 
+    def __post_init__(self) -> None:
+        self.columns               = sum(len(group) for group in self.glyph_indexes)
+        self.base_tracks           = len(self.glyph_indexes)
+        self.custom_two_string     = f"{self.columns}cols"
         self.master_track_mode     = self.compute_master_track_mode()
         self.master_track_segments = self.compute_master_track_segments()
 
@@ -108,25 +111,23 @@ class DeviceConfig:
         logger.debug(f"Zone Indexes: {self.zone_indexes}")
         logger.debug(f"Master Track Mode: {self.master_track_mode} ({self.master_track_segments} zones)")
 
-    def setup_offset_calc(self) -> None:
-        if not self.segments_map:
-            self.zone_offset_calc = lambda g: 0
-            return
+    def calculate_zone_offset(
+            self,
+            glyph_index: int
+        ) -> int:
 
-        sorted_segments = sorted([(k, v) for k, v in self.segments_map.items()])
-        
-        def calc(g_idx: int) -> int:
-            offset = 0
-            
-            for glyph_pos, val in sorted_segments:
-                if g_idx < int(glyph_pos):
-                    continue
-                
-                offset += (val - 1)
-            
-            return offset
-        
-        self.zone_offset_calc = calc
+        if not self.segments_map:
+            return 0
+
+        offset = 0
+
+        for position_string, segment_count in sorted(self.segments_map.items()):
+            if glyph_index < int(position_string):
+                continue
+
+            offset += (segment_count - 1)
+
+        return offset
 
     @property
     def total_tracks(self) -> int:
@@ -134,27 +135,25 @@ class DeviceConfig:
 
     @property
     def total_tracks_with_segments(self) -> int:
-        total = 0
-        
-        for i in range(1, self.base_tracks + 1):
-            total += self.segments_map.get(str(i), 1)
-        
-        return total
+        return sum(
+            self.segments_map.get(str(track_number), 1)
+            for track_number in range(1, self.base_tracks + 1)
+        )
 
     @property
     def track_names(self) -> list[str]:
         if self.master_track_mode is MasterTrackMode.MIRROR_ZONES:
-            return [MASTER_TRACK_ID] + [str(i) for i in range(1, self.master_track_segments + 1)]
+            return [MASTER_TRACK_IDENTIFIER] + [str(index) for index in range(1, self.master_track_segments + 1)]
 
-        return [MASTER_TRACK_ID] + [str(i) for i in range(1, self.base_tracks + 1)]
+        return [MASTER_TRACK_IDENTIFIER] + [str(index) for index in range(1, self.base_tracks + 1)]
 
     def compute_master_track_mode(self) -> MasterTrackMode:
         if self.base_tracks == 1 and "1" in self.segments_map:
             return MasterTrackMode.MIRROR_ZONES
 
         all_base_tracks_segmented = all(
-            str(i) in self.segments_map
-            for i in range(1, self.base_tracks + 1)
+            str(index) in self.segments_map
+            for index in range(1, self.base_tracks + 1)
         )
 
         if self.base_tracks > 1 and all_base_tracks_segmented:
@@ -172,7 +171,7 @@ class DeviceConfig:
         return None
 
     def is_master_track(self, track: str) -> bool:
-        return track == MASTER_TRACK_ID
+        return track == MASTER_TRACK_IDENTIFIER
 
     def is_segment_track(self, track: str) -> bool:
         return (
@@ -204,32 +203,37 @@ class DeviceConfig:
         if self.master_track_mode is MasterTrackMode.MIRROR_ZONES:
             return "1", zone_index
 
-        if self.master_track_mode is MasterTrackMode.MERGED_ZONES:
-            offset = 0
+        if self.master_track_mode is not MasterTrackMode.MERGED_ZONES:
+            raise ValueError(f"{self.full_name} has no zone-mapped master track (mode is {self.master_track_mode})")
 
-            for i in range(1, self.base_tracks + 1):
-                track          = str(i)
-                track_segments = self.segments_map[track]
+        offset = 0
 
-                if zone_index < offset + track_segments:
-                    return track, zone_index - offset
+        for index in range(1, self.base_tracks + 1):
+            track          = str(index)
+            track_segments = self.segments_map[track]
 
-                offset += track_segments
+            if zone_index < offset + track_segments:
+                return track, zone_index - offset
 
-            raise IndexError(f"Master zone index {zone_index} is out of range for {self.full_name}")
+            offset += track_segments
 
-        raise ValueError(f"{self.full_name} has no zone-mapped master track (mode is {self.master_track_mode})")
+        raise IndexError(f"Master zone index {zone_index} is out of range for {self.full_name}")
 
     def resolve_master_track(self) -> list[tuple[str, int | None]]:
         if self.master_track_mode is MasterTrackMode.ALL_LIT:
-            return [(str(i), None) for i in range(1, self.base_tracks + 1)]
+            return [(str(index), None) for index in range(1, self.base_tracks + 1)]
 
         return [
             self.resolve_master_zone(zone_index)
             for zone_index in range(self.master_track_segments)
         ]
 
-    def is_full_track_segments(self, track: str, segments: list[int]) -> bool:
+    def is_full_track_segments(
+            self,
+            track:    str,
+            segments: list[int]
+        ) -> bool:
+
         total = self.segments_map.get(track)
 
         if not total:
@@ -274,8 +278,8 @@ class DeviceConfig:
         if self.master_track_mode is MasterTrackMode.ALL_LIT:
             indexes: list[int] = []
 
-            for i in range(1, self.base_tracks + 1):
-                indexes.extend(self.get_array_indexes(i, 0))
+            for index in range(1, self.base_tracks + 1):
+                indexes.extend(self.get_array_indexes(index, 0))
 
             return indexes
 
@@ -315,60 +319,64 @@ class DeviceConfig:
             self,
             glyph_index: int,
             zone_index:  int
-        ) -> list | int:
+        ) -> list[int] | int:
 
         glyph_index -= 1
         zone_index  -= 1
-        
+
         if zone_index == -1:
             return self.glyph_indexes[glyph_index]
-        
-        offset = self.zone_offset_calc(glyph_index)
-        
+
+        offset = self.calculate_zone_offset(glyph_index)
+
         return self.zone_indexes[glyph_index + zone_index + offset]
-    
+
     def resolve_tracks(
             self,
             input_track:  str,
             total_tracks: int
         ) -> list[tuple[str, int | None]]:
-        
+
         if self.is_master_track(input_track):
             return self.resolve_master_track()
 
         if total_tracks in self.legacy_tracks:
             mapping = self.legacy_tracks[total_tracks]
-            
+
             if input_track in mapping:
-                return [(t, None) for t in mapping[input_track]]
+                return [(track, None) for track in mapping[input_track]]
 
         if input_track in self.segments_map:
             count = self.segments_map[input_track]
-            return [(input_track, i) for i in range(count)]
+            return [(input_track, index) for index in range(count)]
 
         return [(input_track, None)]
 
-def make_ranges(*args: int | list[int]) -> list[list[int]]:
-    result = []
+# Range Generation
+
+def make_ranges(*ranges: int | list[int]) -> list[list[int]]:
+    result  = []
     current = 0
 
-    for arg in args:
-        if isinstance(arg, int):
-            result.append(list(range(current, current + arg)))
-            current += arg
-        
+    for entry in ranges:
+        if isinstance(entry, int):
+            result.append(list(range(current, current + entry)))
+            current += entry
+
         else:
-            result.append(arg)
-            current = max(arg) + 1 if arg else current
-    
+            result.append(entry)
+            current = max(entry) + 1 if entry else current
+
     return result
+
+# Device Configurations
 
 DEVICES: dict[str, DeviceConfig] = {
     "PHONE1": DeviceConfig(
         "PHONE1", "1", "Phone (1)", ["A063"], "Spacewar",
         glyph_indexes = [[0], [1], [4], [5], [2], [3], list(range(7, 15)), [6]],
-        zone_indexes = [[0], [1], [4], [5], [2], [3], [14], [13], [12], [11], [10], [9], [8], [7], [6]],
-        segments_map = {"7": 8},
+        zone_indexes  = [[0], [1], [4], [5], [2], [3], [14], [13], [12], [11], [10], [9], [8], [7], [6]],
+        segments_map  = {"7": 8},
         legacy_tracks = {
             5: {
                 "1": ["1"],
@@ -433,8 +441,8 @@ DEVICES: dict[str, DeviceConfig] = {
     "PHONE2": DeviceConfig(
         "PHONE2", "2", "Phone (2)", ["A065", "AIN065"], "Pong",
         glyph_indexes = [[0], [1], [2], list(range(3, 19)), [19], [20], [21], [22], [23], list(range(25, 33)), [24]],
-        zone_indexes = [[i] for i in range(24)] + [[32], [31], [30], [29], [28], [27], [26], [25], [24]],
-        segments_map = {"4": 16, "10": 8},
+        zone_indexes  = [[i] for i in range(24)] + [[32], [31], [30], [29], [28], [27], [26], [25], [24]],
+        segments_map  = {"4": 16, "10": 8},
 
         visualization_map = {
             "glyphs": {
@@ -496,8 +504,8 @@ DEVICES: dict[str, DeviceConfig] = {
     "PHONE2A": DeviceConfig(
         "PHONE2A", "2a", "Phone (2a)", ["A142", "A142P"], "Pacman",
         glyph_indexes = make_ranges(24, 1, 1),
-        zone_indexes = [[i] for i in range(26)],
-        segments_map = {"1": 24},
+        zone_indexes  = [[i] for i in range(26)],
+        segments_map  = {"1": 24},
 
         visualization_map = {
             "glyphs": {
@@ -528,8 +536,8 @@ DEVICES: dict[str, DeviceConfig] = {
     "PHONE3A": DeviceConfig(
         "PHONE3A", "3a", "Phone (3a)", ["A059", "A059P"], "Asteroids",
         glyph_indexes = make_ranges(20, 11, 5),
-        zone_indexes = [[i] for i in range(36)],
-        segments_map = {"1": 20, "2": 11, "3": 5},
+        zone_indexes  = [[i] for i in range(36)],
+        segments_map  = {"1": 20, "2": 11, "3": 5},
 
         visualization_map = {
             "glyphs": {
@@ -562,8 +570,8 @@ DEVICES: dict[str, DeviceConfig] = {
     "PHONE4A": DeviceConfig(
         "PHONE4A", "4a", "Phone (4a)", ["A069"], "Frogger",
         glyph_indexes = make_ranges(7),
-        zone_indexes = [[i] for i in range(7)],
-        segments_map = {"1": 7},
+        zone_indexes  = [[i] for i in range(7)],
+        segments_map  = {"1": 7},
 
         visualization_map = {
             "glyphs": {
@@ -604,9 +612,9 @@ DEVICES: dict[str, DeviceConfig] = {
 
 NUMBER_TO_CODE = {config.short_name: code for code, config in DEVICES.items()}
 
-# Maps
+# Port Mappings
 
-PortMaps = {
+PORT_MAPS = {
     "PHONE2A": {
         "to": {
             "PHONE4A": {
@@ -644,7 +652,7 @@ PortMaps = {
                     }
                 }
             },
-            
+
             "PHONE2": {
                 "effects": {
                     "segments": {
@@ -684,7 +692,7 @@ PortMaps = {
                     "randomize": 1
                 }
             },
-            
+
             "PHONE1": {
                 "effects": {
                     "segments": {
@@ -712,7 +720,7 @@ PortMaps = {
                     ],
                     "randomize": 1
                 },
-                
+
                 "3": {
                     "mode": "random",
                     "variants": [
@@ -731,7 +739,7 @@ PortMaps = {
                 "1": ["1"],
                 "2": ["2"],
                 "3": ["3"],
-                
+
                 "effects": {
                     "segments": {
                         "1": ["1"],
@@ -754,7 +762,7 @@ PortMaps = {
                     }
                 },
             },
-            
+
             "PHONE1": {
                 "1": {
                     "mode": "random",
@@ -791,7 +799,7 @@ PortMaps = {
                     }
                 },
             },
-            
+
             "PHONE2": {
                 "1": {
                     "mode": "random",
@@ -972,7 +980,7 @@ PortMaps = {
                 "6": ["8", "9"],
                 "7": ["10"],
                 "8": ["11"],
-                
+
                 "effects": {
                     "segments": {
                         "7": ["10"]
@@ -985,17 +993,17 @@ PortMaps = {
     "PHONE2": {
         "to": {
             "PHONE1": {
-                "1": ["1"],
-                "2": ["1"],
-                "3": ["2"],
-                "4": ["3"],
-                "5": ["4"],
-                "6": ["4"],
-                "7": ["5"],
-                "8": ["6"],
-                "9": ["6"],
+                "1":  ["1"],
+                "2":  ["1"],
+                "3":  ["2"],
+                "4":  ["3"],
+                "5":  ["4"],
+                "6":  ["4"],
+                "7":  ["5"],
+                "8":  ["6"],
+                "9":  ["6"],
                 "10": ["7"],
-                "11": ["8"],    
+                "11": ["8"],
 
                 "effects": {
                     "segments": {
@@ -1008,7 +1016,8 @@ PortMaps = {
     }
 }
 
-# Defaults
+# DefaultSettings
+
 STATUS_BAR_DEFAULT = f"Cassette {open(Utils.get_resource_path('version')).read()}"
 
 DEFAULT_DURATION   = 100
@@ -1017,26 +1026,25 @@ DEFAULT_BRIGHTNESS = 100
 SPRING_STIFFNESS           = 0.04
 FADE_OVERLAY_SIZE          = 60
 SPRING_DAMPING_FACTOR      = 0.4
+PINCH_ZOOM_SENSITIVITY     = 400.0
 ANIMATION_TICK_INTERVAL    = 8
 USER_SCROLL_IDLE_TIMEOUT   = 150
 WHEEL_SCROLL_SENSITIVITY   = 1.0
 INERTIA_DECELERATION_RATE  = 0.93
 VISUAL_RESISTANCE_STRENGTH = 600.0
-PINCH_ZOOM_SENSITIVITY     = 400.0
 
-# Paths
 FFMPEG_PATH  = Utils.get_ffmpeg_path("ffmpeg")
 FFPROBE_PATH = Utils.get_ffmpeg_path("ffprobe")
 
-# Qt Timer Presets
 FPS_60  = 16
 FPS_120 = 8
 FPS_30  = 33
 
-GITHUB_LINK = "https://www.github.com/Chipik0/Cassette/releases/latest"
+GITHUB_LINK = "https://www.github.com/chips047/Cassette/releases/latest"
 
-# Shaders
-GLYPH_VS = """#version 330 core
+# ShaderPrograms
+
+GLYPH_VERTEX_SHADER = """#version 330 core
 layout (location = 0) in vec2 aPos;
 layout (location = 1) in vec2 aNormal;
 layout (location = 2) in float aGlobalIdx;
@@ -1052,7 +1060,7 @@ void main() {
 }
 """
 
-GLYPH_FS = """#version 330 core
+GLYPH_FRAGMENT_SHADER = """#version 330 core
 
 flat in float vGlobalIdx;
 out vec4 FragColor;
@@ -1071,7 +1079,7 @@ void main() {
 }
 """
 
-FLOATING_WINDOW_VS = """#version 410 core
+FLOATING_WINDOW_VERTEX_SHADER = """#version 410 core
 layout (location = 0) in vec3 position;
 layout (location = 1) in vec2 texCoord;
 
@@ -1085,7 +1093,7 @@ void main() {
 }
 """
 
-FLOATING_WINDOW_FS = """#version 410 core
+FLOATING_WINDOW_FRAGMENT_SHADER = """#version 410 core
 in vec2 UV;
 out vec4 color;
 
@@ -1124,455 +1132,581 @@ void main() {
 }
 """
 
-SettingsDict = {
-    "Performance": [
-        {
-            "type": "selector",
-            "title": "OpenGL MSAA: Requires restart.",
-            "key": "msaa",
-            "map": {
-                "No MSAA": 0,
-                "2x": 2,
-                "4x": 4,
-                "8x": 8
-            },
-            "default": "4x"
-        },
-        {
-            "type": "checkbox",
-            "title": "CPU Antialiasing",
-            "key": "antialiasing",
-            "description": "Antialiasing on CPU rendered components.",
-            "default": True
-        },
-        {
-            "type": "checkbox",
-            "title": "Compositor GPU Rendering",
-            "key": "gpu",
-            "description": "Significantly improves smoothness. Requires restart.",
-            "default": True
-        },
-        {
-            "type": "selector",
-            "title": "Waveform Tile Width",
-            "key": "tile_width",
-            "map": {
-                "256": 256,
-                "512": 512,
-                "1024": 1024
-            },
-            "default": "512"
-        }
-    ],
+# SettingsSchema
 
-    "Scrolling and Zoom": [
-        {
-            "type": "selector",
-            "title": "Trackpad Scroll Mode",
-            "key": "trackpad_scroll_mode",
-            "description": "Classic scrolls the timeline with a vertical two finger swipe. Directional follows the swipe axis, including diagonally.",
-            "map": {
-                "Classic":     "classic",
-                "Directional": "directional"
-            },
-            "default": "Classic"
-        },
-        {
-            "type": "slider",
-            "title": "Zoom Step (on Wheel)",
-            "min": 1,
-            "max": 100,
-            "key": "zoom_step",
-            "default": 20
-        },
-        {
-            "type": "selector",
-            "title": "Horizontal Scroll Acceleration",
-            "key": "scroll_acceleration",
-            "map": {
-                "Low": "0.1",
-                "Normal": "0.3",
-                "High": "0.5",
-                "Very high": "0.8"
-            },
-            "default": "Normal"
-        },
-        {
-            "type": "checkbox",
-            "title": "Scroll Smoothing",
-            "key": "scroll_smoothing",
-            "description": "Animates timeline scrolling. Disable to have scrolling match wheel or trackpad input exactly, with no animation.",
-            "default": True
-        },
-        {
-            "type": "checkbox",
-            "title": "Scroll Inertia",
-            "key": "scroll_inertia",
-            "description": "Lets the timeline keep gliding briefly after a scroll input ends.",
-            "default": True
-        },
-        {
-            "type": "selector",
-            "title": "Menu Scroll Sensitivity",
-            "key": "wheel_scroll_sensitivity",
-            "map": {
-                "Low":    "0.5",
-                "Normal": "1.0",
-                "High":   "1.5"
-            },
-            "default": "Normal"
-        },
-        {
-            "type": "selector",
-            "title": "Menu Scroll Inertia",
-            "key": "inertia_deceleration_rate",
-            "map": {
-                "Low": 0.85,
-                "Normal": 0.93,
-                "High": 0.97
-            },
-            "default": "Normal"
-        }
-    ],
+class SettingsDictionaryMeta(type):
+    def __getitem__(
+            cls,
+            item: str
+        ) -> list:
+        return cls()[item]
 
-    "Interface": [
-        {
-            "type": "selector",
-            "title": "Animation Style",
-            "key": "animation_style",
-            "map": {
+    def items(cls) -> object:
+        return cls().items()
+
+    def values(cls) -> object:
+        return cls().values()
+
+    def keys(cls) -> object:
+        return cls().keys()
+
+    def get(
+            cls,
+            key:     str,
+            default: object = None
+        ) -> object:
+        return cls().get(key, default)
+
+    def __iter__(cls) -> object:
+        return iter(cls())
+
+class SettingsDict(dict, metaclass = SettingsDictionaryMeta):
+    candidate_refresh_rates = [30, 60, 75, 90, 120, 144, 165, 240, 360, 480]
+
+    def __init__(self) -> None:
+        super().__init__(self.build())
+
+    @staticmethod
+    def get_maximum_screen_refresh_rate() -> int:
+        application = QGuiApplication.instance()
+
+        if not application:
+            return 60
+
+        screens = application.screens()
+
+        if not screens and application.primaryScreen():
+            screens = [application.primaryScreen()]
+
+        refresh_rates = [
+            round(screen.refreshRate())
+            for screen in screens
+            if screen and screen.refreshRate() > 0
+        ]
+
+        if not refresh_rates:
+            return 60
+
+        return max(refresh_rates)
+
+    @classmethod
+    def get_frames_per_second_options(cls) -> tuple[dict[str, int], str]:
+        maximum_rate = cls.get_maximum_screen_refresh_rate()
+        valid_rates  = [rate for rate in cls.candidate_refresh_rates if rate <= maximum_rate]
+
+        if maximum_rate > 30 and maximum_rate not in valid_rates:
+            valid_rates.append(maximum_rate)
+            valid_rates.sort()
+
+        if not valid_rates:
+            valid_rates = [30, 60]
+
+        frames_per_second_map = {str(rate): rate for rate in valid_rates}
+        default_selection     = "60" if "60" in frames_per_second_map else str(valid_rates[-1])
+
+        return frames_per_second_map, default_selection
+
+    @staticmethod
+    def get_animation_styles() -> tuple[dict[str, str], str]:
+        styles_map: dict[str, str] = {}
+
+        from System.Interface.Windows.WindowAnimationStyles import WindowAnimationStyle
+        styles_map = WindowAnimationStyle.get_available_styles()
+
+        if not styles_map:
+            candidate_paths = [
+                Path(__file__).parent.parent / "Interface" / "Animation" / "Styles",
+                Path(__file__).parent / "Animation" / "Styles",
+                Path(Utils.get_resource_path("Animation/Styles"))
+            ]
+
+            for styles_directory in candidate_paths:
+                if not styles_directory.is_dir():
+                    continue
+
+                for file_path in sorted(styles_directory.glob("*.json")):
+                    try:
+                        with file_path.open("r", encoding = "utf-8") as file:
+                            data = json.load(file)
+
+                        display_name             = data.get("title") or data.get("name") or file_path.stem.capitalize()
+                        styles_map[display_name] = file_path.stem
+
+                    except Exception:
+                        continue
+
+                if styles_map:
+                    break
+
+        if not styles_map:
+            styles_map = {
                 "Smooth":   "smooth",
                 "Bouncy":   "bouncy",
                 "Roll":     "roll",
                 "Glitch":   "glitch",
                 "Classic":  "classic",
                 "Electric": "electric"
-            },
-            "default": "Bouncy"
-        },
-        {
-            "type": "selector",
-            "title": "Animation Multiplier",
-            "key": "animation_multiplier",
-            "map": {
-                "0.75x": "0.75",
-                "1.0x": "1.0",
-                "1.15x": "1.15",
-                "1.25x": "1.25",
-                "1.5x": "1.5",
-                "3.0x": "3.0",
-                "5.0x": "5.0",
-                "10.0x": "10.0",
-                "20.0x": "20.0"
-            },
-            "default": "1.0x"
-        },
-        {
-            "type": "selector",
-            "title": "Target FPS",
-            "key": "target_fps",
-            "map": {
-                "30":  30,
-                "60":  60,
-                "75":  75,
-                "90":  90,
-                "120": 120,
-                "144": 144,
-                "165": 165,
-                "240": 240,
-                "360": 360,
-                "480": 480
-            },
-            "default": "60"
-        },
-        {
-            "type": "checkbox",
-            "title": "Floating Window Animations",
-            "key": "floating_window_animations",
-            "description": "Enables popup background animations.",
-            "default": True
-        },
-        {
-            "type": "selector",
-            "title": "Window Hover Smoothing",
-            "key": "window_hover_smoothing",
-            "map": {
-                "No Tilt": "0.0",
-                "Slow": "0.07",
-                "Normal": "0.2",
-                "Very Fast": "0.8"
-            },
-            "default": "Normal"
-        },
-        {
-            "type": "checkbox",
-            "title": "BPM Animations",
-            "description": "Enables beat - synced animations.",
-            "key": "bpm_animations",
-            "default": True
-        },
-        {
-            "type": "selector",
-            "title": "Window BPM Animation Style",
-            "key": "window_bpm_animation_style",
-            "map": {
-                "Pulse": "pulse",
-                "Punch": "punch"
-            },
-            "default": "Pulse"
-        },
-        {
-            "type": "checkbox",
-            "title": "Glyph 3D Tilt",
-            "description": "Enables 3D tilt when resizing or moving a glyph.",
-            "key": "glyph_tilt_animation",
-            "default": True
-        },
-        {
-            "type": "checkbox",
-            "title": "Glyph Spawn Animation",
-            "description": "Enables animations when spawning or despawning a glyph.",
-            "key": "glyph_spawn_animation",
-            "default": True
-        },
-        {
-            "type": "checkbox",
-            "title": "Playhead Animations",
-            "description": "Enables animations on the playhead.",
-            "key": "playhead_animations",
-            "default": True
-        },
-        {
-            "type": "checkbox",
-            "title": "Marquee Hide Animation",
-            "description": "Enables the marquee hide/damping animation.",
-            "key": "marquee_hide_animation",
-            "default": True
-        },
-        {
-            "type": "checkbox",
-            "title": "Textbox Animations",
-            "key": "textbox_animations",
-            "description": "Enables textbox animations.",
-            "default": True
-        }
-    ],
+            }
 
-    "Audio": [
-        {
-            "type": "delay_setup",
-            "description": "Audio Latency.\nPress Space to the beat.",
-            "key": "audio_delay_ms",
-            "default": 0
-        },
-        {
-            "type": "selector",
-            "title": "Audio Blocksize",
-            "key": "audio_blocksize",
-            "map": {
-                "32": "32",
-                "64": "64",
-                "128": "128",
-                "256": "256",
-                "512": "512",
-                "1024": "1024",
-                "2048": "2048",
-                "4096": "4096"
-            },
-            "default": "128"
-        },
-        {
-            "type": "checkbox",
-            "title": "Disable Sounds",
-            "key": "disable_sounds",
-            "description": "Disables all UI sounds.",
-            "default": False
-        },
-        {
-            "type": "slider",
-            "title": "Sound Effect Volume",
-            "key": "sound_effect_volume",
-            "min": 0,
-            "max": 100,
-            "default": 100
-        },
-        {
-            "type": "checkbox",
-            "title": "Sound Tone Effects",
-            "description": "Enables dynamic tonal variation for UI sounds.",
-            "key": "sound_tone_effects",
-            "default": True
-        },
-        {
-            "type": "checkbox",
-            "title": "Startup Sound",
-            "description": "Enables a sound effect on application startup.",
-            "key": "startup_sound",
-            "default": True
-        },
-        {
-            "type": "checkbox",
-            "title": "Shutdown Sound",
-            "description": "Enables a sound effect on application shutdown.",
-            "key": "shutdown_sound",
-            "default": True
-        },
-        {
-            "type": "checkbox",
-            "title": "Glyph Spawn Sound",
-            "description": "Enables a sound effect when a glyph is spawned.",
-            "key": "glyph_spawn_sound",
-            "default": True
-        },
-        {
-            "type": "checkbox",
-            "title": "Glyph Deletion Sound",
-            "description": "Enables a sound effect when a glyph is deleted.",
-            "key": "glyph_deletion_sound",
-            "default": True
-        },
-        {
-            "type": "checkbox",
-            "title": "Glyph Duplication Sound",
-            "description": "Enables a sound effect when a glyph is duplicated.",
-            "key": "glyph_duplication_sound",
-            "default": True
-        },
-        {
-            "type": "checkbox",
-            "title": "Glyph Stack Sounds",
-            "description": "Enables sound effects when stacking or unstacking glyphs.",
-            "key": "glyph_stack_sounds",
-            "default": True
-        },
-        {
-            "type": "checkbox",
-            "title": "Brightness Adjustment Sound",
-            "description": "Enables a sound effect when adjusting brightness.",
-            "key": "brightness_adjustment_sound",
-            "default": True
-        },
-        {
-            "type": "checkbox",
-            "title": "Playhead Sound Effects",
-            "description": "Enables sound effects on playhead actions.",
-            "key": "playhead_sounds",
-            "default": True
-        },
-        {
-            "type": "checkbox",
-            "title": "Timeline Jump Sound Effect",
-            "description": "Enables a sound effect when jumping to the start or end of a timeline.",
-            "key": "timeline_jump_sounds",
-            "default": True
-        },
-        {
-            "type": "checkbox",
-            "title": "Rewind Sound Effect",
-            "description": "Enables a sound effect when auto scrolling.",
-            "key": "rewind_sound",
-            "default": True
-        },
-        {
-            "type": "checkbox",
-            "title": "Checkbox Sounds",
-            "description": "Enables sound effects when toggling checkboxes.",
-            "key": "checkbox_sounds",
-            "default": True
-        },
-        {
-            "type": "checkbox",
-            "title": "Selector Sounds",
-            "description": "Enables sound effects when changing selector values.",
-            "key": "selector_sounds",
-            "default": True
-        },
-        {
-            "type": "checkbox",
-            "title": "Textbox Sound Effects",
-            "description": "Enables sound effects on textbox actions.",
-            "key": "textbox_sounds",
-            "default": True
-        },
-        {
-            "type": "checkbox",
-            "title": "Context Menu Sound Effects",
-            "description": "Enables sound effects on context menu actions.",
-            "key": "context_menu_sounds",
-            "default": True
-        },
-        {
-            "type": "checkbox",
-            "title": "Floating Window Sound Effects",
-            "description": "Enables sound effects on floating window actions.",
-            "key": "floating_window_sounds",
-            "default": True
-        },
-        {
-            "type": "checkbox",
-            "title": "Drag & Drop Sound Effects",
-            "description": "Enables sound effects when dragging and dropping files.",
-            "key": "drag_drop_sounds",
-            "default": True
-        }
-    ],
+        default_style = "Bouncy" if "Bouncy" in styles_map else next(iter(styles_map.keys()))
 
-    "User Experience": [
-        {
-            "type": "selector",
-            "title": "Mouse Click Behavior",
-            "key": "mouse_click_behavior",
-            "map": {
-                "Normal": "normal",
-                "Fast (On Press)": "fast"
-            },
-            "default": "Normal"
-        },
-        {
-            "type": "selector",
-            "title": "Playhead Position",
-            "key": "playhead_position",
-            "map": {
-                "Left": 0.25,
-                "Center": 0.5,
-                "Right": 0.75
-            },
-            "default": "Left"
-        },
-        {
-            "type": "slider",
-            "title": "Playhead Arrow Increment",
-            "min": 1,
-            "max": 10,
-            "key": "arrow_increment",
-            "default": 1
-        },
-        {
-            "type": "selector",
-            "title": "Default Scaling",
-            "key": "default_scaling",
-            "map": {
-                "Very small": 100,
-                "Small": 200,
-                "Medium": 300,
-                "Big": 400,
-                "Very big": 500
-            },
-            "default": "Very big"
-        },
-        {
-            "type": "selector",
-            "title": "Waveform Smoothing",
-            "key": "waveform_smoothing",
-            "map": {
-                "Accuracy": 0.5,
-                "Balance": 1.7,
-                "Smooth": 3
-            },
-            "default": "Balance"
+        return styles_map, default_style
+
+    @classmethod
+    def build(cls) -> dict[str, list]:
+        frames_per_second_map, default_frames_per_second = cls.get_frames_per_second_options()
+        styles_map, default_style                        = cls.get_animation_styles()
+
+        return {
+            "Performance": [
+                {
+                    "type": "selector",
+                    "title": "OpenGL MSAA: Requires restart.",
+                    "key": "msaa",
+                    "map": {
+                        "No MSAA": 0,
+                        "2x": 2,
+                        "4x": 4,
+                        "8x": 8
+                    },
+                    "default": "4x"
+                },
+                {
+                    "type": "checkbox",
+                    "title": "CPU Antialiasing",
+                    "key": "antialiasing",
+                    "description": "Antialiasing on CPU rendered components.",
+                    "default": True
+                },
+                {
+                    "type": "checkbox",
+                    "title": "Compositor GPU Rendering",
+                    "key": "gpu",
+                    "description": "Significantly improves smoothness. Requires restart.",
+                    "default": True
+                },
+                {
+                    "type": "selector",
+                    "title": "Waveform Tile Width",
+                    "key": "tile_width",
+                    "map": {
+                        "256": 256,
+                        "512": 512,
+                        "1024": 1024
+                    },
+                    "default": "512"
+                },
+                {
+                    "type": "checkbox",
+                    "title": "Rounded Glyph Corners",
+                    "description": "Disable to draw glyphs with square corners, which is slightly cheaper to render.",
+                    "key": "glyph_rounded_corners",
+                    "default": True
+                }
+            ],
+
+            "Scrolling and Zoom": [
+                {
+                    "type": "selector",
+                    "title": "Trackpad Scroll Mode",
+                    "key": "trackpad_scroll_mode",
+                    "description": "Classic scrolls the timeline with a vertical two finger swipe. Directional follows the swipe axis, including diagonally.",
+                    "map": {
+                        "Classic":     "classic",
+                        "Directional": "directional"
+                    },
+                    "default": "Classic"
+                },
+                {
+                    "type": "slider",
+                    "title": "Zoom Step (on Wheel)",
+                    "min": 1,
+                    "max": 100,
+                    "key": "zoom_step",
+                    "default": 20
+                },
+                {
+                    "type": "selector",
+                    "title": "Horizontal Scroll Acceleration",
+                    "key": "scroll_acceleration",
+                    "map": {
+                        "Low": "0.1",
+                        "Normal": "0.3",
+                        "High": "0.5",
+                        "Very high": "0.8"
+                    },
+                    "default": "Normal"
+                },
+                {
+                    "type": "checkbox",
+                    "title": "Scroll Smoothing",
+                    "key": "scroll_smoothing",
+                    "description": "Animates timeline scrolling. Disable to have scrolling match wheel or trackpad input exactly, with no animation.",
+                    "default": True
+                },
+                {
+                    "type": "checkbox",
+                    "title": "Scroll Inertia",
+                    "key": "scroll_inertia",
+                    "description": "Lets the timeline keep gliding briefly after a scroll input ends.",
+                    "default": True
+                },
+                {
+                    "type": "selector",
+                    "title": "Menu Scroll Sensitivity",
+                    "key": "wheel_scroll_sensitivity",
+                    "map": {
+                        "Low":    "0.5",
+                        "Normal": "1.0",
+                        "High":   "1.5"
+                    },
+                    "default": "Normal"
+                },
+                {
+                    "type": "selector",
+                    "title": "Menu Scroll Inertia",
+                    "key": "inertia_deceleration_rate",
+                    "map": {
+                        "Low": 0.85,
+                        "Normal": 0.93,
+                        "High": 0.97
+                    },
+                    "default": "Normal"
+                }
+            ],
+
+            "Interface": [
+                {
+                    "type": "selector",
+                    "title": "Animation Style",
+                    "key": "animation_style",
+                    "map": styles_map,
+                    "default": default_style
+                },
+                {
+                    "type": "selector",
+                    "title": "Animation Multiplier",
+                    "key": "animation_multiplier",
+                    "map": {
+                        "0.75x": "0.75",
+                        "1.0x": "1.0",
+                        "1.15x": "1.15",
+                        "1.25x": "1.25",
+                        "1.5x": "1.5",
+                        "3.0x": "3.0",
+                        "5.0x": "5.0",
+                        "10.0x": "10.0",
+                        "20.0x": "20.0"
+                    },
+                    "default": "1.0x"
+                },
+                {
+                    "type": "selector",
+                    "title": "Target FPS",
+                    "key": "target_fps",
+                    "map": frames_per_second_map,
+                    "default": default_frames_per_second
+                },
+                {
+                    "type": "checkbox",
+                    "title": "Floating Window Animations",
+                    "key": "floating_window_animations",
+                    "description": "Enables popup background animations.",
+                    "default": True
+                },
+                {
+                    "type": "selector",
+                    "title": "Window Hover Smoothing",
+                    "key": "window_hover_smoothing",
+                    "map": {
+                        "No Tilt": "0.0",
+                        "Slow": "0.07",
+                        "Normal": "0.2",
+                        "Very Fast": "0.8"
+                    },
+                    "default": "Normal"
+                },
+                {
+                    "type": "checkbox",
+                    "title": "BPM Animations",
+                    "description": "Enables beat - synced animations.",
+                    "key": "bpm_animations",
+                    "default": True
+                },
+                {
+                    "type": "selector",
+                    "title": "Window BPM Animation Style",
+                    "key": "window_bpm_animation_style",
+                    "map": {
+                        "Pulse": "pulse",
+                        "Punch": "punch"
+                    },
+                    "default": "Pulse"
+                },
+                {
+                    "type": "checkbox",
+                    "title": "Glyph 3D Tilt",
+                    "description": "Enables 3D tilt when resizing or moving a glyph.",
+                    "key": "glyph_tilt_animation",
+                    "default": True
+                },
+                {
+                    "type": "checkbox",
+                    "title": "Glyph Spawn Animation",
+                    "description": "Enables animations when spawning or despawning a glyph.",
+                    "key": "glyph_spawn_animation",
+                    "default": True
+                },
+                {
+                    "type": "checkbox",
+                    "title": "Playhead Animations",
+                    "description": "Enables animations on the playhead.",
+                    "key": "playhead_animations",
+                    "default": True
+                },
+                {
+                    "type": "checkbox",
+                    "title": "Marquee Hide Animation",
+                    "description": "Enables the marquee hide/damping animation.",
+                    "key": "marquee_hide_animation",
+                    "default": True
+                },
+                {
+                    "type": "checkbox",
+                    "title": "Textbox Animations",
+                    "key": "textbox_animations",
+                    "description": "Enables textbox animations.",
+                    "default": True
+                }
+            ],
+
+            "Audio": [
+                {
+                    "type": "delay_setup",
+                    "description": "Audio Latency.\nPress Space to the beat.",
+                    "key": "audio_delay_ms",
+                    "default": 0
+                },
+                {
+                    "type": "selector",
+                    "title": "Audio Blocksize",
+                    "key": "audio_blocksize",
+                    "map": {
+                        "32": "32",
+                        "64": "64",
+                        "128": "128",
+                        "256": "256",
+                        "512": "512",
+                        "1024": "1024",
+                        "2048": "2048",
+                        "4096": "4096"
+                    },
+                    "default": "128"
+                },
+                {
+                    "type": "checkbox",
+                    "title": "Disable Sounds",
+                    "key": "disable_sounds",
+                    "description": "Disables all UI sounds.",
+                    "default": False
+                },
+                {
+                    "type": "slider",
+                    "title": "Sound Effect Volume",
+                    "key": "sound_effect_volume",
+                    "min": 0,
+                    "max": 100,
+                    "default": 100
+                },
+                {
+                    "type": "checkbox",
+                    "title": "Sound Tone Effects",
+                    "description": "Enables dynamic tonal variation for UI sounds.",
+                    "key": "sound_tone_effects",
+                    "default": True
+                },
+                {
+                    "type": "checkbox",
+                    "title": "Startup Sound",
+                    "description": "Enables a sound effect on application startup.",
+                    "key": "startup_sound",
+                    "default": True
+                },
+                {
+                    "type": "checkbox",
+                    "title": "Shutdown Sound",
+                    "description": "Enables a sound effect on application shutdown.",
+                    "key": "shutdown_sound",
+                    "default": True
+                },
+                {
+                    "type": "checkbox",
+                    "title": "Glyph Spawn Sound",
+                    "description": "Enables a sound effect when a glyph is spawned.",
+                    "key": "glyph_spawn_sound",
+                    "default": True
+                },
+                {
+                    "type": "checkbox",
+                    "title": "Glyph Deletion Sound",
+                    "description": "Enables a sound effect when a glyph is deleted.",
+                    "key": "glyph_deletion_sound",
+                    "default": True
+                },
+                {
+                    "type": "checkbox",
+                    "title": "Glyph Duplication Sound",
+                    "description": "Enables a sound effect when a glyph is duplicated.",
+                    "key": "glyph_duplication_sound",
+                    "default": True
+                },
+                {
+                    "type": "checkbox",
+                    "title": "Glyph Stack Sounds",
+                    "description": "Enables sound effects when stacking or unstacking glyphs.",
+                    "key": "glyph_stack_sounds",
+                    "default": True
+                },
+                {
+                    "type": "checkbox",
+                    "title": "Brightness Adjustment Sound",
+                    "description": "Enables a sound effect when adjusting brightness.",
+                    "key": "brightness_adjustment_sound",
+                    "default": True
+                },
+                {
+                    "type": "checkbox",
+                    "title": "Playhead Sound Effects",
+                    "description": "Enables sound effects on playhead actions.",
+                    "key": "playhead_sounds",
+                    "default": True
+                },
+                {
+                    "type": "checkbox",
+                    "title": "Timeline Jump Sound Effect",
+                    "description": "Enables a sound effect when jumping to the start or end of a timeline.",
+                    "key": "timeline_jump_sounds",
+                    "default": True
+                },
+                {
+                    "type": "checkbox",
+                    "title": "Rewind Sound Effect",
+                    "description": "Enables a sound effect when auto scrolling.",
+                    "key": "rewind_sound",
+                    "default": True
+                },
+                {
+                    "type": "checkbox",
+                    "title": "Checkbox Sounds",
+                    "description": "Enables sound effects when toggling checkboxes.",
+                    "key": "checkbox_sounds",
+                    "default": True
+                },
+                {
+                    "type": "checkbox",
+                    "title": "Selector Sounds",
+                    "description": "Enables sound effects when changing selector values.",
+                    "key": "selector_sounds",
+                    "default": True
+                },
+                {
+                    "type": "checkbox",
+                    "title": "Textbox Sound Effects",
+                    "description": "Enables sound effects on textbox actions.",
+                    "key": "textbox_sounds",
+                    "default": True
+                },
+                {
+                    "type": "checkbox",
+                    "title": "Context Menu Sound Effects",
+                    "description": "Enables sound effects on context menu actions.",
+                    "key": "context_menu_sounds",
+                    "default": True
+                },
+                {
+                    "type": "checkbox",
+                    "title": "Floating Window Sound Effects",
+                    "description": "Enables sound effects on floating window actions.",
+                    "key": "floating_window_sounds",
+                    "default": True
+                },
+                {
+                    "type": "checkbox",
+                    "title": "Drag & Drop Sound Effects",
+                    "description": "Enables sound effects when dragging and dropping files.",
+                    "key": "drag_drop_sounds",
+                    "default": True
+                }
+            ],
+
+            "User Experience": [
+                {
+                    "type": "selector",
+                    "title": "Mouse Click Behavior",
+                    "key": "mouse_click_behavior",
+                    "map": {
+                        "Normal": "normal",
+                        "Fast (On Press)": "fast"
+                    },
+                    "default": "Normal"
+                },
+                {
+                    "type": "selector",
+                    "title": "Playhead Position",
+                    "key": "playhead_position",
+                    "map": {
+                        "Left": 0.25,
+                        "Center": 0.5,
+                        "Right": 0.75
+                    },
+                    "default": "Left"
+                },
+                {
+                    "type": "slider",
+                    "title": "Playhead Arrow Increment",
+                    "min": 1,
+                    "max": 10,
+                    "key": "arrow_increment",
+                    "default": 1
+                },
+                {
+                    "type": "selector",
+                    "title": "Default Scaling",
+                    "key": "default_scaling",
+                    "map": {
+                        "Very small": 100,
+                        "Small": 200,
+                        "Medium": 300,
+                        "Big": 400,
+                        "Very big": 500
+                    },
+                    "default": "Very big"
+                },
+                {
+                    "type": "selector",
+                    "title": "Waveform Smoothing",
+                    "key": "waveform_smoothing",
+                    "map": {
+                        "Accuracy": 0.5,
+                        "Balance": 1.7,
+                        "Smooth": 3
+                    },
+                    "default": "Balance"
+                }
+            ],
+
+            "Dev": [
+                {
+                    "type":        "checkbox",
+                    "title":       "Enable FloatingWindow Debugging",
+                    "description": "Enables debugging for the FloatingWindow class. Slows down the app.",
+                    "key":         "floating_window_debugging",
+                    "default":     False
+                }
+            ]
         }
-    ]
-}
+
+# Dot Matrix Font
 
 DOT_FONT = {
     'A': [[0,1,0], [1,0,1], [1,1,1], [1,0,1], [1,0,1]],
@@ -1707,7 +1841,7 @@ DOT_FONT = {
     '8': [[1,1,1], [1,0,1], [1,1,1], [1,0,1], [1,1,1]],
     '9': [[1,1,1], [1,0,1], [1,1,1], [0,0,1], [1,1,1]],
     '0': [[1,1,1], [1,0,1], [1,0,1], [1,0,1], [1,1,1]],
-    
+
     ',': [[0,0,0], [0,0,0], [0,0,0], [1,0,0], [0,1,0]],
     '?': [[1,1,1], [0,0,1], [0,1,1], [0,0,0], [0,1,0]],
     '-': [[0,0,0], [0,0,0], [1,1,1], [0,0,0], [0,0,0]],
@@ -1718,13 +1852,17 @@ DOT_FONT = {
     ' ': [[0], [0], [0], [0], [0]]
 }
 
+# VisualEasings
+
 VISUAL_EASINGS = {
-    "linear":         lambda t: t,
-    "ease_in":        lambda t: t * t,
-    "ease_out":       lambda t: 1 - (1 - t) ** 2,
-    "ease_in_out":    lambda t: 2 * t * t if t < 0.5 else 1 - (-2 * t + 2) ** 2 / 2,
-    "ease_out_cubic": lambda t: 1 - (1 - t) ** 3
+    "linear":         lambda time: time,
+    "ease_in":        lambda time: time * time,
+    "ease_out":       lambda time: 1 - (1 - time) ** 2,
+    "ease_in_out":    lambda time: 2 * time * time if time < 0.5 else 1 - (-2 * time + 2) ** 2 / 2,
+    "ease_out_cubic": lambda time: 1 - (1 - time) ** 3
 }
+
+# InterfaceResponses
 
 OK_TEXTS = [
     "Ok",

@@ -33,18 +33,12 @@ from System.Common import (
 )
 
 from System.Services import Player
-
-from System.Interface.Animation import Lifecycle
-
-from System.Interface.Animation.LoomEngine import (
-    Easing,
-    MixMode,
-    ui_engine
-)
-
 from System.Interface.Controls import BaseControlContainer
 
-from loguru import logger
+from System.Interface.Animation import (
+    Lifecycle,
+    LoomEngine
+)
 
 @Dev.track_ram
 class SegmentedStrip(Lifecycle.LoomAnimationMixin, QWidget):
@@ -69,9 +63,8 @@ class SegmentedStrip(Lifecycle.LoomAnimationMixin, QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
-        self.pill_color  = QColor(pill_color) if pill_color else QColor(Styles.Colors.NothingAccent)
-        self.hover_color = self.resolve_hover_color(hover_color)
-
+        self.pill_color    = QColor(pill_color) if pill_color else QColor(Styles.Colors.NothingAccent)
+        self.hover_color   = self.resolve_hover_color(hover_color)
         self.has_indicator = False
 
         self.data_by_identifier: dict[int, object] = {}
@@ -105,37 +98,37 @@ class SegmentedStrip(Lifecycle.LoomAnimationMixin, QWidget):
         return QColor(fallback) if fallback else QColor(255, 255, 255, 20)
 
     def setup_animation_handles(self) -> None:
-        self.indicator_handle = ui_engine.bind(
+        self.indicator_handle = LoomEngine.ui_engine.bind(
             owner      = self,
             name       = "indicator",
             base_value = QRectF(),
-            mix_mode   = MixMode.REPLACE,
+            mix_mode   = LoomEngine.MixMode.REPLACE,
             on_change  = self.on_indicator_changed
         )
 
-        self.hover_rectangle_handle = ui_engine.bind(
+        self.hover_rectangle_handle = LoomEngine.ui_engine.bind(
             owner      = self,
             name       = "hoverRectangle",
             base_value = QRectF(),
-            mix_mode   = MixMode.REPLACE,
+            mix_mode   = LoomEngine.MixMode.REPLACE,
             on_change  = self.on_hover_rectangle_changed
         )
 
-        self.hover_opacity_handle = ui_engine.bind(
+        self.hover_opacity_handle = LoomEngine.ui_engine.bind(
             owner      = self,
             name       = "hoverOpacity",
             base_value = 0.0,
-            mix_mode   = MixMode.REPLACE,
+            mix_mode   = LoomEngine.MixMode.REPLACE,
             on_change  = self.on_hover_opacity_changed
         )
     
     def on_indicator_changed(self, rectangle: QRectF) -> None:
         self.update()
 
-    def on_hover_rectangle_changed(self, rectangle: QRectF) -> None:
+    def on_hover_opacity_changed(self, opacity: float) -> None:
         self.update()
 
-    def on_hover_opacity_changed(self, opacity: float) -> None:
+    def on_hover_rectangle_changed(self, rectangle: QRectF) -> None:
         self.update()
 
     def setup_layout(
@@ -172,8 +165,8 @@ class SegmentedStrip(Lifecycle.LoomAnimationMixin, QWidget):
         button = QPushButton(text, self, objectName = "segmentedButton")
 
         button.setCheckable(True)
-        button.setCursor(Qt.CursorShape.PointingHandCursor)
         button.setFont(Utils.NType(button_font_size))
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
         button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         button.setMinimumHeight(30)
 
@@ -224,13 +217,13 @@ class SegmentedStrip(Lifecycle.LoomAnimationMixin, QWidget):
         self.hover_rectangle_handle.set_target(
             value           = target_rectangle,
             duration_ms     = 200,
-            easing_function = Easing.ease_out_quint
+            easing_function = LoomEngine.Easing.ease_out_quint
         )
 
         self.hover_opacity_handle.set_target(
             value           = 1.0,
             duration_ms     = 150,
-            easing_function = Easing.ease_in_out_sine
+            easing_function = LoomEngine.Easing.ease_in_out_sine
         )
 
         button_count = len(self.buttons)
@@ -250,7 +243,7 @@ class SegmentedStrip(Lifecycle.LoomAnimationMixin, QWidget):
         self.hover_opacity_handle.set_target(
             value           = 0.0,
             duration_ms     = 150,
-            easing_function = Easing.ease_in_out_sine
+            easing_function = LoomEngine.Easing.ease_in_out_sine
         )
 
     def paintEvent(self, event: QEvent) -> None:
@@ -342,16 +335,16 @@ class SegmentedStrip(Lifecycle.LoomAnimationMixin, QWidget):
         if index == -1:
             return
 
-        target_rectangle = QRectF(checked_button.geometry())
-        start_rectangle   = QRectF(target_rectangle.translated(-self.width(), 0))
-
+        target_rectangle   = QRectF(checked_button.geometry())
+        start_rectangle    = QRectF(target_rectangle.translated(-self.width(), 0))
         self.has_indicator = True
+
         self.indicator_handle.set_base(start_rectangle)
 
         self.indicator_handle.set_target(
             value           = target_rectangle,
             duration_ms     = random.randint(200, 600),
-            easing_function = Easing.ease_out_quint
+            easing_function = LoomEngine.Easing.ease_out_quint
         )
 
     def move_indicator(
@@ -365,8 +358,7 @@ class SegmentedStrip(Lifecycle.LoomAnimationMixin, QWidget):
         if not button:
             return
 
-        target_rectangle = QRectF(button.geometry())
-
+        target_rectangle   = QRectF(button.geometry())
         self.has_indicator = True
 
         if not animated:
@@ -376,7 +368,7 @@ class SegmentedStrip(Lifecycle.LoomAnimationMixin, QWidget):
         self.indicator_handle.set_target(
             value           = target_rectangle,
             duration_ms     = 300,
-            easing_function = Easing.ease_out_quint
+            easing_function = LoomEngine.Easing.ease_out_quint
         )
 
     def select_index(
@@ -532,8 +524,8 @@ class SelectorWithLabel(BaseControlContainer):
             self,
             description:   str,
             items:         list[str] | dict,
-            default_text:  str | None = None,
-            default_value: object     = None
+            default_text:  str       | None = None,
+            default_value: object           = None
         ) -> None:
 
         super().__init__()

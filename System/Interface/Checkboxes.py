@@ -1,8 +1,8 @@
 from PyQt6.QtCore import (
     Qt,
     QSize,
-    QEvent,
     QRectF,
+    QEvent,
     pyqtSignal
 )
 
@@ -10,8 +10,6 @@ from PyQt6.QtGui import (
     QPen,
     QColor,
     QPainter,
-    QHideEvent,
-    QShowEvent,
     QEnterEvent,
     QPaintEvent,
     QPainterPath
@@ -29,9 +27,9 @@ from System.Common import (
     Styles
 )
 
-from System.Interface.Animation.LoomEngine import (
-    Easing,
-    ui_engine
+from System.Interface.Animation import (
+    Lifecycle,
+    LoomEngine
 )
 
 from System.Services import Player
@@ -50,11 +48,11 @@ def pixel_size(value: object) -> float:
 # Checkbox
 
 @Dev.track_ram
-class Checkbox(QCheckBox):
-    overflow_padding:       int   = 4
-    resting_radius:         float = 4.0
+class Checkbox(Lifecycle.LoomAnimationMixin, QCheckBox):
     label_spacing:          int   = 6
+    resting_radius:         float = 4.0
     default_border:         str   = "#555555"
+    overflow_padding:       int   = 4
     indicator_visual_scale: float = 1.3
 
     def __init__(
@@ -66,27 +64,27 @@ class Checkbox(QCheckBox):
         super().__init__(name)
 
         self.setFont(Utils.NType(10))
-        self.setChecked(default)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setChecked(default)
         self.setMouseTracking(True)
 
         self.hovered = False
 
-        self.indicator_scale = ui_engine.bind(
+        self.indicator_scale = LoomEngine.ui_engine.bind(
             owner      = self,
             name       = "indicatorScale",
             base_value = 1.0,
             on_change  = self.on_indicator_property_changed
         )
 
-        self.indicator_radius = ui_engine.bind(
+        self.indicator_radius = LoomEngine.ui_engine.bind(
             owner      = self,
             name       = "indicatorRadius",
             base_value = self.resting_radius,
             on_change  = self.on_indicator_property_changed
         )
 
-        self.destroyed.connect(lambda: ui_engine.unbind_owner(self))
+        self.destroyed.connect(lambda: LoomEngine.ui_engine.unbind_owner(self))
 
     def on_indicator_property_changed(self, value: float) -> None:
         self.update()
@@ -103,13 +101,13 @@ class Checkbox(QCheckBox):
         self.indicator_scale.set_target(
             value           = 1.0,
             duration_ms     = 180,
-            easing_function = Easing.ease_out_quad
+            easing_function = LoomEngine.Easing.ease_out_quad
         )
 
         self.indicator_radius.set_target(
             value           = self.resting_radius,
             duration_ms     = 180,
-            easing_function = Easing.ease_out_quad
+            easing_function = LoomEngine.Easing.ease_out_quad
         )
 
     def enterEvent(self, event: QEnterEvent) -> None:
@@ -147,14 +145,6 @@ class Checkbox(QCheckBox):
 
     def minimumSizeHint(self) -> QSize:
         return self.sizeHint()
-
-    def showEvent(self, event: QShowEvent) -> None:
-        super().showEvent(event)
-        ui_engine.acquire()
-
-    def hideEvent(self, event: QHideEvent) -> None:
-        super().hideEvent(event)
-        ui_engine.release()
 
     def indicator_colors(self) -> tuple[QColor, QColor]:
         if self.isChecked():

@@ -185,11 +185,11 @@ class ThreadTicker:
             interval_ms: int
         ) -> None:
 
-        self.callback                        = callback
-        self.interval_ms                     = interval_ms
-        self.running                         = False
-        self.stop_event                      = threading.Event()
-        self.thread: threading.Thread | None = None
+        self.callback    = callback
+        self.interval_ms = interval_ms
+        self.running     = False
+        self.stop_event  = threading.Event()
+        self.thread      = None
 
     def run(self) -> None:
         next_tick = time.perf_counter()
@@ -244,13 +244,13 @@ class RuntimeBackend:
         self.qt_elapsed_timer    = None
         self.qt_application_type = None
 
-        self.qt_point_type  = None
-        self.qt_rect_type   = None
-        self.qt_size_type   = None
-        self.qt_color_type  = None
-        self.qt_pointf_type = None
-        self.qt_rectf_type  = None
-        self.qt_sizef_type  = None
+        self.qt_point_type       = None
+        self.qt_rect_type        = None
+        self.qt_size_type        = None
+        self.qt_color_type       = None
+        self.qt_pointf_type      = None
+        self.qt_rectf_type       = None
+        self.qt_sizef_type       = None
 
         if self.is_qt:
             self.initialize_qt_backend()
@@ -332,13 +332,13 @@ class RuntimeBackend:
         self.qt_elapsed_timer    = QElapsedTimer
         self.qt_application_type = QCoreApplication
 
-        self.qt_point_type  = QPoint
-        self.qt_rect_type   = QRect
-        self.qt_size_type   = QSize
-        self.qt_color_type  = QColor
-        self.qt_pointf_type = QPointF
-        self.qt_rectf_type  = QRectF
-        self.qt_sizef_type  = QSizeF
+        self.qt_point_type       = QPoint
+        self.qt_rect_type        = QRect
+        self.qt_size_type        = QSize
+        self.qt_color_type       = QColor
+        self.qt_pointf_type      = QPointF
+        self.qt_rectf_type       = QRectF
+        self.qt_sizef_type       = QSizeF
 
     def qt_application_running(self) -> bool:
         if not self.is_qt:
@@ -366,15 +366,16 @@ class RuntimeBackend:
                 return None
 
             logger.debug(f"Creating Qt ticker with interval {interval_ms} ms")
+
             return QtTicker(
-                callback              = callback,
-                interval_ms           = interval_ms,
-                timer_type            = self.qt_timer_type
+                callback    = callback,
+                interval_ms = interval_ms,
+                timer_type  = self.qt_timer_type
             )
 
         return ThreadTicker(
-            callback              = callback,
-            interval_ms           = interval_ms
+            callback    = callback,
+            interval_ms = interval_ms
         )
 
     def defer(self, callback: Callable[[], object]) -> None:
@@ -631,9 +632,9 @@ class AnimationMath:
         )
 
     @staticmethod
-    def _classify(value: object) -> str:
+    def classify(value: object) -> str:
         value_type = type(value)
-        kind        = AnimationMath._shape_cache.get(value_type)
+        kind       = AnimationMath._shape_cache.get(value_type)
 
         if kind is not None:
             return kind
@@ -697,7 +698,7 @@ class AnimationMath:
         if isinstance(start, list) and isinstance(end, list):
             return [AnimationMath.interpolate(s, e, progress) for s, e in zip(start, end)]
 
-        kind = AnimationMath._classify(start)
+        kind = AnimationMath.classify(start)
 
         if kind == "number":
             return AnimationMath.lerp_scalar(start, end, progress)
@@ -733,18 +734,14 @@ class AnimationMath:
         return start
 
     @staticmethod
-    def add(
-            first:  object,
-            second: object
-        ) -> object:
-        
+    def add(first: object, second: object) -> object:
         if isinstance(first, tuple) and isinstance(second, tuple):
             return tuple(AnimationMath.add(f, s) for f, s in zip(first, second))
-            
+        
         if isinstance(first, list) and isinstance(second, list):
             return [AnimationMath.add(f, s) for f, s in zip(first, second)]
 
-        kind = AnimationMath._classify(first)
+        kind = AnimationMath.classify(first)
 
         if kind == "number":
             return first + second
@@ -784,18 +781,14 @@ class AnimationMath:
         return second
 
     @staticmethod
-    def multiply(
-            first:  object,
-            second: object
-        ) -> object:
-        
+    def multiply(first: object, second: object) -> object:
         if isinstance(first, tuple) and isinstance(second, tuple):
             return tuple(AnimationMath.multiply(f, s) for f, s in zip(first, second))
             
         if isinstance(first, list) and isinstance(second, list):
             return [AnimationMath.multiply(f, s) for f, s in zip(first, second)]
 
-        kind = AnimationMath._classify(first)
+        kind = AnimationMath.classify(first)
 
         if kind == "number":
             return first * second
@@ -850,7 +843,7 @@ class AnimationMath:
         if isinstance(first, list) and isinstance(second, list):
             return any(AnimationMath.is_different(f, s, tolerance) for f, s in zip(first, second))
 
-        kind = AnimationMath._classify(first)
+        kind = AnimationMath.classify(first)
 
         if kind == "number":
             return abs(first - second) > tolerance
@@ -901,7 +894,7 @@ class AnimationMath:
         if isinstance(value, list) and isinstance(max_val, list):
             return [AnimationMath.soft_limit_max(v, m, softness_factor) for v, m in zip(value, max_val)]
 
-        kind = AnimationMath._classify(value)
+        kind = AnimationMath.classify(value)
 
         if kind == "number":
             threshold = max_val * softness_factor
@@ -952,8 +945,18 @@ class AnimationMath:
 
 class AnimationClip:
     __slots__ = (
-        "scheduler", "mode", "moments", "delay_ms", "easing", "tag", "loop",
-        "elapsed_ms", "is_finished", "finished_callback", "updated", "duration_ms"
+        "scheduler",
+        "mode",
+        "moments",
+        "delay_ms",
+        "easing",
+        "tag",
+        "loop",
+        "elapsed_ms",
+        "is_finished",
+        "finished_callback",
+        "updated",
+        "duration_ms"
     )
 
     def __init__(
@@ -961,12 +964,12 @@ class AnimationClip:
             scheduler:              Callable[[Callable[[], object]], None],
             moments:                list[tuple[float, object]],
             mode:                   PlaybackMode,
-            duration_ms:            int | None                  = None,
+            duration_ms:            int                  | None = None,
             delay_ms:               int                         = 0,
             easing_function:        Callable[[float], float]    = Easing.linear,
             finished_callback:      Callable[[], object] | None = None,
             loop:                   bool                        = False,
-            tag:                    str | None                  = None
+            tag:                    str                  | None = None
         ) -> None:
 
         self.scheduler             = scheduler
@@ -1019,14 +1022,15 @@ class AnimationClip:
             self.elapsed_ms %= total if total > 0 else 1
             return
 
-        self.elapsed_ms = total
-        self.is_finished          = True
+        self.elapsed_ms  = total
+        self.is_finished = True
 
         if self.finished_callback is None:
             return
 
         callback               = self.finished_callback
         self.finished_callback = None
+
         self.scheduler(callback)
 
     def value(self) -> object:
@@ -1116,9 +1120,9 @@ class AnimationClip:
 
     def interpolate_between(
             self,
-            left:            tuple[float, object],
-            right:           tuple[float, object],
-            eased_progress:  float
+            left:           tuple[float, object],
+            right:          tuple[float, object],
+            eased_progress: float
         ) -> object:
 
         segment_duration = right[0] - left[0]
@@ -1134,11 +1138,25 @@ class AnimationClip:
 
 class PropertyTrack:
     __slots__ = (
-        "scheduler", "mix_mode", "backend", "clips", "smoothing_enabled",
-        "smoothing_factor", "max_value", "soft_limit_factor", "base_value",
-        "cached_value", "target_value", "is_targeting", "target_start_value",
-        "target_end_value", "target_duration_ms", "target_elapsed_ms",
-        "target_easing", "updated", "interpolator"
+        "scheduler",
+        "mix_mode",
+        "backend",
+        "clips",
+        "smoothing_enabled",
+        "smoothing_factor",
+        "max_value",
+        "soft_limit_factor",
+        "base_value",
+        "cached_value",
+        "target_value",
+        "is_targeting",
+        "target_start_value",
+        "target_end_value",
+        "target_duration_ms",
+        "target_elapsed_ms",
+        "target_easing",
+        "updated",
+        "interpolator"
     )
 
     def __init__(
@@ -1149,53 +1167,53 @@ class PropertyTrack:
             backend:             RuntimeBackend | None = None,
             smoothing_enabled:   bool                  = False,
             smoothing_factor:    float                 = 0.1,
-            max_value:           object | None         = None,
+            max_value:           object         | None = None,
             soft_limit_factor:   float                 = 0.8
         ) -> None:
 
-        self.scheduler = scheduler
-        self.mix_mode  = mix_mode
-        self.backend   = backend
+        self.scheduler          = scheduler
+        self.mix_mode           = mix_mode
+        self.backend            = backend
 
-        self.clips = []
+        self.clips              = []
 
-        self.smoothing_enabled = smoothing_enabled
-        self.smoothing_factor  = smoothing_factor
+        self.smoothing_enabled  = smoothing_enabled
+        self.smoothing_factor   = smoothing_factor
 
-        self.max_value         = max_value
-        self.soft_limit_factor = soft_limit_factor
+        self.max_value          = max_value
+        self.soft_limit_factor  = soft_limit_factor
 
-        self.base_value   = base_value
-        self.cached_value = base_value
-        self.target_value = base_value
+        self.base_value         = base_value
+        self.cached_value       = base_value
+        self.target_value       = base_value
 
-        self.is_targeting = False
+        self.is_targeting       = False
 
-        self.target_start_value  = base_value
-        self.target_end_value    = base_value
+        self.target_start_value = base_value
+        self.target_end_value   = base_value
 
         self.target_duration_ms = 0
         self.target_elapsed_ms  = 0
         self.target_easing      = Easing.linear
 
-        self.updated = EventSignal()
+        self.updated            = EventSignal()
 
-        self.interpolator = self.choose_interpolator(base_value)
+        self.interpolator       = self.choose_interpolator(base_value)
 
     def choose_interpolator(self, value: object) -> Callable[[object, object, float], object]:
-        qt     = self.backend if (self.backend and self.backend.is_qt) else None
-        v_type = type(value)
+        qt             = self.backend if (self.backend and self.backend.is_qt) else None
+        v_type         = type(value)
 
         integer_points = (qt.qt_point_type,) if qt else ()
         float_points   = (Point, qt.qt_pointf_type) if qt else (Point,)
 
-        integer_sizes = (qt.qt_size_type,) if qt else ()
-        float_sizes   = (Size, qt.qt_sizef_type) if qt else (Size,)
+        integer_sizes  = (qt.qt_size_type,) if qt else ()
+        float_sizes    = (Size, qt.qt_sizef_type) if qt else (Size,)
 
-        integer_rects = (qt.qt_rect_type,) if qt else ()
-        float_rects   = (Rect, qt.qt_rectf_type) if qt else (Rect,)
+        integer_rects  = (qt.qt_rect_type,) if qt else ()
+        float_rects    = (Rect, qt.qt_rectf_type) if qt else (Rect,)
 
-        color_types = (Color, qt.qt_color_type) if qt else (Color,)
+        color_types    = (Color, qt.qt_color_type) if qt else (Color,)
 
         is_integer_target = isinstance(value, (int, *integer_points, *integer_sizes, *integer_rects, *color_types))
 
@@ -1277,9 +1295,9 @@ class PropertyTrack:
 
     def set_target(
             self,
-            value:                  object,
-            duration_ms:            int,
-            easing_function:        Callable[[float], float]
+            value:           object,
+            duration_ms:     int,
+            easing_function: Callable[[float], float]
         ) -> None:
 
         self.target_start_value = self.cached_value
@@ -1364,7 +1382,7 @@ class PropertyTrack:
         self.updated.emit(self.cached_value)
     
     def stop_target(self) -> None:
-        self.is_targeting       = False
+        self.is_targeting = False
 
         self.target_elapsed_ms  = 0
         self.target_start_value = self.cached_value
@@ -1384,7 +1402,7 @@ class PropertyTrack:
                 continue
 
             any_clip_finished = True
-            final_value        = clip.value()
+            final_value       = clip.value()
 
             if self.mix_mode == MixMode.MULTIPLY:
                 self.base_value = AnimationMath.multiply(self.base_value, final_value)
@@ -1444,9 +1462,9 @@ class PropertyTrack:
 
         should_notify = (
             AnimationMath.is_different(self.cached_value, self.target_value) or
-            bool(self.clips) or
-            self.is_targeting or
-            any_clip_finished or
+            bool(self.clips)                                                 or
+            self.is_targeting                                                or
+            any_clip_finished                                                or
             target_just_finished
         )
 
@@ -1457,10 +1475,15 @@ class PropertyTrack:
 
 class PropertyNamespace:
     def __init__(self) -> None:
-        self.identifiers_by_owner: WeakKeyDictionary = WeakKeyDictionary()
-        self.identifier_source                        = count(1)
+        self.identifiers_by_owner = WeakKeyDictionary()
+        self.identifier_source    = count(1)
 
-    def key_for(self, owner: object, name: str) -> str:
+    def key_for(
+            self,
+            owner: object,
+            name:  str
+        ) -> str:
+
         if owner not in self.identifiers_by_owner:
             self.identifiers_by_owner[owner] = next(self.identifier_source)
 
@@ -1490,7 +1513,7 @@ class PropertyHandle:
     def set_max_value(
             self,
             max_value:         object | None,
-            soft_limit_factor: float | None = None
+            soft_limit_factor: float  | None = None
         ) -> None:
 
         self.engine.set_property_max_value(self.key, max_value, soft_limit_factor)
@@ -1520,7 +1543,7 @@ class PropertyHandle:
             multiply_duration_by_speed:    bool                        = True,
             snap_to_start:                 bool                        = False,
             loop:                          bool                        = False,
-            tag:                           str | None                  = None,
+            tag:                           str                  | None = None,
             delay_ms:                      int                         = 0
         ) -> None:
 
@@ -1546,7 +1569,7 @@ class PropertyHandle:
             multiply_duration_by_speed:     bool                        = True,
             snap_to_start:                  bool                        = False,
             loop:                           bool                        = False,
-            tag:                            str | None                  = None,
+            tag:                            str                  | None = None,
             delay_ms:                       int                         = 0
         ) -> None:
 
@@ -1570,7 +1593,7 @@ class PropertyHandle:
             finished:                       Callable[[], object] | None = None,
             multiply_duration_by_speed:     bool                        = False,
             loop:                           bool                        = False,
-            tag:                            str | None                  = None,
+            tag:                            str                  | None = None,
             delay_ms:                       int                         = 0
         ) -> None:
 
@@ -1728,7 +1751,6 @@ class AnimationEngine:
         keys_to_delete = [key for key in self.tracks if key.startswith(prefix)]
 
         for key in keys_to_delete:
-            logger.warning(f"Deleted {key} property")
             del self.tracks[key]
 
     def bind(
@@ -1740,7 +1762,7 @@ class AnimationEngine:
             on_change:          Callable[[object], object] | None = None,
             smoothing_enabled:  bool                              = False,
             smoothing_factor:   float                             = 0.1,
-            max_value:          object | None                     = None,
+            max_value:          object                     | None = None,
             soft_limit_factor:  float                             = 0.8
         ) -> PropertyHandle:
 
@@ -1786,7 +1808,7 @@ class AnimationEngine:
             self,
             key:               str,
             max_value:         object | None,
-            soft_limit_factor: float | None = None
+            soft_limit_factor: float  | None = None
         ) -> None:
 
         if key not in self.tracks:
@@ -1797,11 +1819,11 @@ class AnimationEngine:
 
     def set_target_value(
             self,
-            key:                           str,
-            value:                         object,
-            duration_ms:                   int                      = 500,
-            easing_function:               Callable[[float], float] = Easing.smooth,
-            multiply_duration_by_speed:    bool                     = True
+            key:                        str,
+            value:                      object,
+            duration_ms:                int                      = 500,
+            easing_function:            Callable[[float], float] = Easing.smooth,
+            multiply_duration_by_speed: bool                     = True
         ) -> None:
 
         if key not in self.tracks:
@@ -1818,13 +1840,13 @@ class AnimationEngine:
             key:                          str,
             moments:                      list[tuple[float, object]],
             mode:                         PlaybackMode,
-            duration_ms:                  int | None,
+            duration_ms:                  int                  | None,
             easing_function:              Callable[[float], float],
             finished:                     Callable[[], object] | None,
             multiply_duration_by_speed:   bool,
             snap_to_start:                bool,
             loop:                         bool,
-            tag:                          str | None,
+            tag:                          str                  | None,
             delay_ms:                     int
         ) -> None:
 
@@ -1901,8 +1923,8 @@ class AnimationEngine:
         if self.ticker is not None:
             self.ticker.stop()
 
-        self.running    = False
-        self.ticker     = None
+        self.running      = False
+        self.ticker       = None
         self.active_users = 0
 
         self.tracks.clear()

@@ -2,6 +2,7 @@ import json
 import random
 
 from pathlib import Path
+from loguru  import logger
 
 from PyQt6.QtCore import QTimer
 
@@ -9,7 +10,7 @@ from System.Services import Player
 
 from System.Interface.Animation.LoomEngine import Easing
 
-# Sound Mini Language
+# Sound Playback
 
 def play_sound_choice(
         source:      list[str] | str | None,
@@ -41,34 +42,34 @@ class ValueResolver:
         self.owner = owner
         self.size  = size
 
-    def resolve(self, spec: object) -> object:
-        if not isinstance(spec, dict):
-            return spec
+    def resolve(self, specification: object) -> object:
+        if not isinstance(specification, dict):
+            return specification
 
-        if "period" in spec:
-            return self.owner.period_randomizer(*[tuple(bound) for bound in spec["period"]])
+        if "period" in specification:
+            return self.owner.period_randomizer(*[tuple(bound) for bound in specification["period"]])
 
-        if "uniform" in spec:
-            return random.uniform(*spec["uniform"])
+        if "uniform" in specification:
+            return random.uniform(*specification["uniform"])
 
-        if "randint" in spec:
-            return random.randint(*spec["randint"])
+        if "randint" in specification:
+            return random.randint(*specification["randint"])
 
-        if "choice" in spec:
-            return random.choice(spec["choice"])
+        if "choice" in specification:
+            return random.choice(specification["choice"])
 
-        if spec.get("maximum_scale"):
+        if specification.get("maximum_scale"):
             return self.owner.maximum_scale()
 
-        if spec.get("optimal_offset_x"):
+        if specification.get("optimal_offset_x"):
             offset_x, _ = self.owner.get_optimal_offset(*self.size)
             return offset_x
 
-        if spec.get("optimal_offset_y"):
+        if specification.get("optimal_offset_y"):
             _, offset_y = self.owner.get_optimal_offset(*self.size)
             return offset_y
 
-        raise ValueError(f"Unknown value spec: {spec}")
+        raise ValueError(f"Unknown value specification: {specification}")
 
     def resolve_keyframes(self, keyframes: list[list]) -> list[tuple[float, object]]:
         return [(moment, self.resolve(value)) for moment, value in keyframes]
@@ -79,8 +80,8 @@ class ValueResolver:
 # Window Animation Style
 
 class WindowAnimationStyle:
-    styles_directory = Path(__file__).parent / "Animation/Styles"
-    cache: dict = {}
+    styles_directory = Path("System/Interface/Animation/Styles")
+    cache            = {}
 
     def __init__(self, name: str) -> None:
         self.name = name
@@ -99,6 +100,27 @@ class WindowAnimationStyle:
         cls.cache[name] = data
 
         return data
+
+    @classmethod
+    def get_available_styles(cls) -> dict[str, str]:
+        styles: dict[str, str] = {}
+
+        if not cls.styles_directory.is_dir():
+            return styles
+
+        for file_path in sorted(cls.styles_directory.glob("*.json")):
+            style_identifier = file_path.stem
+
+            try:
+                data         = cls.load(style_identifier)
+                display_name = data.get("title") or data.get("name") or style_identifier.capitalize()
+
+                styles[display_name] = style_identifier
+
+            except Exception as exception:
+                logger.error(f"Failed to load animation style {file_path}: {exception}")
+
+        return styles
 
     def sound_for(self, stage: str) -> list[str] | str | None:
         return self.data.get("sounds", {}).get(stage)
@@ -120,7 +142,7 @@ class WindowAnimationStyle:
         for name, value in stage_data.get("bases", {}).items():
             handle = getattr(owner, name + "_property")
             handle.set_base(resolver.resolve(value))
-    
+
         for name, schedule in stage_data.get("schedules", {}).items():
             self.play_schedule(owner, name, resolver.resolve_schedule(schedule))
 
@@ -129,7 +151,7 @@ class WindowAnimationStyle:
 
         after_ms = stage_data.get("close_after_ms")
 
-        if after_ms is not None:
+        if after_ms:
             QTimer.singleShot(after_ms, owner.really_close)
 
     def play_schedule(
@@ -157,10 +179,10 @@ class WindowAnimationStyle:
         finished = getattr(owner, curve["finished"]) if "finished" in curve else None
 
         handle.play_curve(
-            keyframes                   = resolver.resolve_keyframes(curve["keyframes"]),
-            duration_ms                 = curve["duration_ms"],
-            easing_function             = easing,
-            delay_ms                    = curve.get("delay_ms", 0),
-            multiply_duration_by_speed  = curve.get("multiply_duration_by_speed", True),
-            finished                    = finished
+            keyframes                  = resolver.resolve_keyframes(curve["keyframes"]),
+            duration_ms                = curve["duration_ms"],
+            easing_function            = easing,
+            delay_ms                   = curve.get("delay_ms", 0),
+            multiply_duration_by_speed = curve.get("multiply_duration_by_speed", True),
+            finished                   = finished
         )

@@ -3,12 +3,12 @@ from PyQt6.QtCore import (
     QTimer
 )
 
-from loguru  import logger
-
 from System.Common import (
     Dev,
     Constants
 )
+
+from loguru  import logger
 
 # Timer
 

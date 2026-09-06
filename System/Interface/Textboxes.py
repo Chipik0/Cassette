@@ -8,10 +8,13 @@ from PyQt6.QtCore import (
     QEvent,
     QPoint,
     QTimer,
-    pyqtSignal
+    pyqtSignal,
 )
 
-from PyQt6.QtGui import QFontMetrics
+from PyQt6.QtGui import (
+    QFontMetrics,
+    QKeySequence
+)
 
 from PyQt6.QtWidgets import (
     QLineEdit,
@@ -114,10 +117,7 @@ class Textbox(Lifecycle.LoomAnimationMixin, QLineEdit):
     # Pan helper
 
     def calculate_screen_pan(self, global_pos: QPoint) -> float:
-        screen = None
-
-        if hasattr(self, 'screen'):
-            screen = self.screen()
+        screen = self.screen()
         
         if not screen:
             screen = QApplication.screenAt(global_pos) or QApplication.primaryScreen()
@@ -168,6 +168,11 @@ class Textbox(Lifecycle.LoomAnimationMixin, QLineEdit):
         key          = event.key()
         current_text = super().text()
         new_char     = event.text()
+
+        if event.matches(QKeySequence.StandardKey.Paste):
+            self.start_glitch()
+            event.ignore()
+            return
 
         if self.handle_arrow_keys(key, current_text):
             return super().keyPressEvent(event)
@@ -654,7 +659,8 @@ class SearchTextbox(Textbox):
             single_shot = True
         )
 
-        QTimer.singleShot(10000, self.set_random_quote)
+        if random.random() > 0.9:
+            QTimer.singleShot(30000, self.set_random_quote)
 
     def set_random_quote(self) -> None:
         quotes = open("System/Assets/Songs.txt", "r").read().split("\n")
@@ -723,7 +729,7 @@ class SearchTextbox(Textbox):
 
         easter_eggs = {
             "subject106": lambda: self.random_title_timer.start(),
-            "chips047":   lambda: webbrowser.open("https://github.com/Chipik0"),
+            "chips047":   lambda: webbrowser.open("https://github.com/chips047"),
             "hello":      lambda: self.setText("well uhH hello Hi Hello Hello Hellliio hiiii")
         }
 

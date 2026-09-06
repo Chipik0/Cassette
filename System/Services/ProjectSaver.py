@@ -29,6 +29,21 @@ from System.Services import (
 
 # Utility Functions
 
+# Full-track ffprobe duration is measured at the container level and can run
+# ahead of the decoded-PCM duration used by the trim widget (e.g. Opus encoder
+# pre-skip), so trims that cover the whole track still need a tolerance here.
+CROP_TOLERANCE_MS = 100
+
+def is_valid_opus_file(file_path: str) -> bool:
+    try:
+        with open(file_path, "rb") as f:
+            header = f.read(1024)
+            # Ogg контейнер всегда начинается с OggS. 
+            # Для валидности в OggOpus внутри также должен быть пакет OpusHead.
+            return header.startswith(b"OggS") and b"OpusHead" in header
+    except Exception:
+        return False
+
 def get_audio_duration_ms(file_path: str) -> int:
     cmd = [
         Constants.FFPROBE_PATH,
@@ -87,6 +102,7 @@ class SyncedDict(dict):
 
         self.composition                        = composition
         self.sync_callback                      = sync_callback
+        self.visualizator_changed_callback      = None
         self.glyph_id_to_track:  dict[int, str] = {}
         self.visualizator_data:  dict           = {}
         self.is_batching:        bool           = False
@@ -169,13 +185,15 @@ class SyncedDict(dict):
 
         if not effect or effect["name"] == "None":
             self.visualizator_data[track][glyph_id] = glyph_data
-            return
+        else:
+            if glyph_id not in self.composition.cached_effects:
+                return
 
-        if glyph_id not in self.composition.cached_effects:
-            return
-
-        for index, effect_glyph in enumerate(self.composition.cached_effects[glyph_id]):
-            self.visualizator_data[track][f"effect_{glyph_id}_{index}"] = effect_glyph
+            for index, effect_glyph in enumerate(self.composition.cached_effects[glyph_id]):
+                self.visualizator_data[track][f"effect_{glyph_id}_{index}"] = effect_glyph
+        
+        if self.visualizator_changed_callback:
+            self.visualizator_changed_callback()
 
     def remove_glyph_from_visualizator(self, glyph_id: int) -> None:
         track = self.glyph_id_to_track.get(glyph_id)
@@ -201,6 +219,9 @@ class SyncedDict(dict):
             self.visualizator_data.pop(track, None)
 
         self.glyph_id_to_track.pop(glyph_id, None)
+        
+        if self.visualizator_changed_callback:
+            self.visualizator_changed_callback()
 
     def sync_item_logic(
         self,
@@ -329,18 +350,70 @@ class BaseComposition:
         self.cropped_song_path = Utils.get_user_path(f"{self.id}/cropped_song.ogg", "Cassette/Songs")
         self.full_song_path    = Utils.get_user_path(f"{self.id}/full_song.ogg", "Cassette/Songs")
 
+    def ensure_full_song_is_opus(self) -> None:
+        if not os.path.exists(self.full_song_path):
+            return
+            
+        if is_valid_opus_file(self.full_song_path):
+            return
+
+        logger.info(f"Converting non-Opus audio file to Opus: {self.full_song_path}")
+        tmp_path = self.full_song_path.replace(".ogg", "_tmp.opus")
+        
+        cmd = [
+            Constants.FFMPEG_PATH,
+            "-y",
+            "-v", "error",
+            "-i", self.full_song_path,
+            "-vn",
+            "-c:a", "libopus",
+            "-ar", "48000",
+            tmp_path
+        ]
+        
+        result = Utils.run_hidden(cmd)
+        
+        if result.returncode != 0:
+            err = (result.stderr or "").strip()
+            logger.critical(err)
+            raise RuntimeError(err or "ffmpeg failed to convert full song to Opus")
+            
+        if os.path.exists(self.full_song_path):
+            os.remove(self.full_song_path)
+            
+        os.rename(tmp_path, self.full_song_path)
+
     def needs_cropped_audio(self) -> bool:
         if not os.path.exists(self.full_song_path):
             return False
         
         full_duration_ms = get_audio_duration_ms(self.full_song_path)
+
+        starts_at_zero = self.start_ms <= CROP_TOLERANCE_MS
+        ends_at_full   = abs(self.end_ms - full_duration_ms) <= CROP_TOLERANCE_MS
         
-        return not (self.start_ms == 0 and self.end_ms == full_duration_ms)
+        return not (starts_at_zero and ends_at_full)
 
     def get_playback_audio_path(self) -> str:
-        if self.needs_cropped_audio():
+        has_full    = os.path.exists(self.full_song_path)
+        has_cropped = os.path.exists(self.cropped_song_path)
+    
+        if not has_full and has_cropped:
             return self.cropped_song_path
-        
+    
+        if has_full and has_cropped:
+            if self.needs_cropped_audio():
+                return self.cropped_song_path
+            
+            return self.full_song_path
+    
+        if has_full and not has_cropped:
+            if self.needs_cropped_audio():
+                self.prepare_cropped_audio(self.full_song_path)
+                return self.cropped_song_path
+            
+            return self.full_song_path
+    
         return self.full_song_path
 
     def export_segment(
@@ -529,6 +602,8 @@ class Composition(BaseComposition):
         if audiofile_path:
             shutil.copyfile(audiofile_path, self.full_song_path)
 
+        self.ensure_full_song_is_opus()
+
         if self.needs_cropped_audio():
             if not os.path.exists(self.cropped_song_path):
                 self.prepare_cropped_audio(self.full_song_path)
@@ -616,6 +691,23 @@ class Composition(BaseComposition):
             with open(save_path, "r", encoding = "utf-8") as file:
                 data = json.load(file)
 
+            title = data.get("audio", {}).get("title")
+            if not title:
+                title = os.path.basename(self.song_path or "") or "Unknown Track"
+
+            artist = data.get("audio", {}).get("artist") or "Unknown Artist"
+
+            data["audio"] = {
+                **data.get("audio", {}),
+                "title":    title,
+                "artist":   artist,
+                "start_ms": self.start_ms,
+                "end_ms":   self.end_ms,
+                "bpm":      self.bpm,
+                "beats":    self.beats,
+                "fade_in":  self.fade_in_duration,
+                "fade_out": self.fade_out_duration,
+            }
             data["glyphs"] = dict(self.glyphs)
 
             with open(save_path, "w", encoding = "utf-8") as file:
@@ -653,6 +745,71 @@ class Composition(BaseComposition):
 
     def delete_bunch_of_glyphs(self, keys: list[int]) -> None:
         self.glyphs.delete_keys(keys)
+
+    def glyph_absolute_range(
+        self,
+        glyph:        dict,
+        old_start_ms: int
+    ) -> tuple[int, int]:
+
+        absolute_start = glyph["start"] + old_start_ms
+        absolute_end   = absolute_start + glyph["duration"]
+
+        return absolute_start, absolute_end
+
+    def count_glyphs_outside_range(
+        self,
+        start_ms: int,
+        end_ms:   int
+    ) -> int:
+
+        old_start_ms = self.start_ms or 0
+        count        = 0
+
+        for glyph in self.glyphs.values():
+            absolute_start, absolute_end = self.glyph_absolute_range(glyph, old_start_ms)
+
+            if absolute_start < start_ms or absolute_end > end_ms:
+                count += 1
+
+        return count
+
+    def trim_audio(
+        self,
+        start_ms: int,
+        end_ms:   int,
+        fade_in:  int = 0,
+        fade_out: int = 0
+    ) -> None:
+        old_start_ms = self.start_ms or 0
+
+        self.start_ms          = start_ms
+        self.end_ms            = end_ms
+        self.fade_in_duration  = fade_in
+        self.fade_out_duration = fade_out
+
+        kept_glyphs: dict[int, dict] = {}
+        removed_keys: list[int] = []
+
+        self.glyphs.start_batching()
+
+        for glyph_id, glyph in list(self.glyphs.items()):
+            absolute_start, absolute_end = self.glyph_absolute_range(glyph, old_start_ms)
+
+            if absolute_start < start_ms or absolute_end > end_ms:
+                removed_keys.append(glyph_id)
+                continue
+
+            new_glyph = copy.deepcopy(glyph)
+            new_glyph["start"] = absolute_start - start_ms
+            kept_glyphs[glyph_id] = new_glyph
+
+        self.glyphs.delete_keys(removed_keys)
+        self.glyphs.update(kept_glyphs)
+        self.glyphs.stop_batching()
+
+        self.prepare_cropped_audio(self.full_song_path)
+        self.save()
 
     def replace_glyph(
         self,
@@ -704,6 +861,8 @@ class MinimalComposition(BaseComposition):
         if not os.path.exists(self.full_song_path):
             Windows.ErrorWindow("Corrupted!", "This save is corrupted.").exec()
             return
+            
+        self.ensure_full_song_is_opus()
 
         if self.needs_cropped_audio():
             if not os.path.exists(self.cropped_song_path):

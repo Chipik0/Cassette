@@ -22,18 +22,12 @@ from System.Common import (
     Styles
 )
 
-from System.Interface.Animation import Lifecycle
-
-from System.Interface.Animation.LoomEngine import (
-    Easing,
-    MixMode,
-    ui_engine
+from System.Interface.Animation import (
+    Lifecycle,
+    LoomEngine
 )
 
 from System.Interface.Timing import Timer
-import string
-import random
-import time
 
 class TextGlitchMixin:
     def init_glitch(self, text: str) -> None:
@@ -101,9 +95,11 @@ class TextGlitchMixin:
                 self.glitch_solved_indices.update(to_solve)
 
         new_text = []
+
         for index, character in enumerate(self.glitch_original_text):
             if index in self.glitch_solved_indices:
                 new_text.append(character)
+            
             else:
                 new_text.append(random.choice(self.glitch_characters))
 
@@ -116,19 +112,19 @@ class TransformAnimationMixin:
     def init_transform_animation(self) -> None:
         self.animation_alignment = None
         
-        self.scale_handle = ui_engine.bind(
+        self.scale_handle = LoomEngine.ui_engine.bind(
             owner      = self,
             name       = "scale",
             base_value = 1.0,
-            mix_mode   = MixMode.REPLACE,
+            mix_mode   = LoomEngine.MixMode.REPLACE,
             on_change  = self.on_transform_changed
         )
 
-        self.rotation_handle = ui_engine.bind(
+        self.rotation_handle = LoomEngine.ui_engine.bind(
             owner      = self,
             name       = "rotation",
             base_value = 0.0,
-            mix_mode   = MixMode.REPLACE,
+            mix_mode   = LoomEngine.MixMode.REPLACE,
             on_change  = self.on_transform_changed
         )
 
@@ -144,16 +140,17 @@ class TransformAnimationMixin:
 
     def pulse_scale(self, peak_scale: float = 1.2, duration_ms: int = 100) -> None:
         self.scale_handle.play_curve(
-            keyframes       = [(0.0, 1.0), (0.5, peak_scale), (1.0, 1.0)],
-            duration_ms     = duration_ms,
-            easing_function = Easing.ease_out_cubic
+            keyframes                  = [(0.0, 1.0), (0.5, peak_scale), (1.0, 1.0)],
+            duration_ms                = duration_ms,
+            easing_function            = LoomEngine.Easing.ease_out_cubic,
+            multiply_duration_by_speed = False
         )
 
     def pulse_rotation(self, peak_angle: float, duration_ms: int = 100) -> None:
         self.rotation_handle.play_curve(
             keyframes       = [(0.0, 0.0), (0.5, peak_angle), (1.0, 0.0)],
             duration_ms     = duration_ms,
-            easing_function = Easing.ease_out_cubic
+            easing_function = LoomEngine.Easing.ease_out_cubic
         )
 
     def on_transform_changed(self, value: float) -> None:
@@ -164,21 +161,24 @@ class TransformAnimationMixin:
 
         if alignment & Qt.AlignmentFlag.AlignLeft:
             origin_x = 0.0
+
         elif alignment & Qt.AlignmentFlag.AlignRight:
             origin_x = float(rectangle.width())
+        
         else:
             origin_x = rectangle.width() / 2.0
 
         if alignment & Qt.AlignmentFlag.AlignTop:
             origin_y = 0.0
+
         elif alignment & Qt.AlignmentFlag.AlignBottom:
             origin_y = float(rectangle.height())
+        
         else:
             origin_y = rectangle.height() / 2.0
 
-        scale    = self.scale_handle.value
-        rotation = self.rotation_handle.value
-
+        scale     = self.scale_handle.value
+        rotation  = self.rotation_handle.value
         transform = QTransform()
 
         transform.translate(origin_x, origin_y)
@@ -253,6 +253,7 @@ class DescriptionLabel(TextGlitchMixin, TransformAnimationMixin, QLabel):
     def formatted(self, text: str) -> str:
         text = re.sub(r"`([^`]*)`", r'<span style="color:white;">\1</span>', text)
         text = text.replace("\n", "<br>")
+        
         return text
 
     def setText(self, text: str) -> None:

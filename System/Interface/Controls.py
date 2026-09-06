@@ -43,7 +43,7 @@ class BaseControlContainer(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
 
         self.setWindowFlags(
-            self.windowFlags() |
+            self.windowFlags()                |
             Qt.WindowType.FramelessWindowHint |
             Qt.WindowType.NoDropShadowWindowHint
         )
@@ -98,6 +98,7 @@ class BaseControlWidget(QWidget):
         self.top_label.setFont(Utils.NDot(9))
         self.top_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         self.top_label.setStyleSheet(Styles.Other.SecondFont + Styles.Other.Transparent)
+        self.top_label.setContentsMargins(2, 0, 0, 0)
 
         self.main_layout.addWidget(self.top_label)
 
@@ -160,12 +161,12 @@ class DraggableValueControl(BaseControlWidget):
 
         super().__init__(icon, static_label_text, parent)
 
-        self.initial_value = initial_value
-        self.current_value = initial_value
-        self.minimum_value = minimum_value
-        self.maximum_value = maximum_value
-        self.step          = step
-        self.unit_suffix   = unit_suffix
+        self.initial_value    = initial_value
+        self.current_value    = initial_value
+        self.minimum_value    = minimum_value
+        self.maximum_value    = maximum_value
+        self.step             = step
+        self.unit_suffix      = unit_suffix
 
         self.dragging         = False
         self.drag_start_x     = 0
@@ -198,9 +199,9 @@ class DraggableValueControl(BaseControlWidget):
         delta_x         = event.pos().x() - self.drag_start_x
         steps           = delta_x // pixels_per_step
 
-        new_value = self.drag_start_value + steps * self.step
-        new_value = int(round(new_value / self.step)) * self.step
-        new_value = max(self.minimum_value, min(self.maximum_value, new_value))
+        new_value       = self.drag_start_value + steps * self.step
+        new_value       = int(round(new_value / self.step)) * self.step
+        new_value       = max(self.minimum_value, min(self.maximum_value, new_value))
 
         if new_value != self.current_value:
             self.current_value = new_value

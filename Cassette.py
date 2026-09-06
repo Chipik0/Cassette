@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import random
+import threading
 import traceback
 
 from datetime import datetime
@@ -39,11 +40,13 @@ from PyQt6.QtGui import (
     QColor,
     QPixmap,
     QPainter,
+    QShortcut,
     QMoveEvent,
     QCloseEvent,
     QPaintEvent,
     QResizeEvent,
     QFontMetrics,
+    QKeySequence,
     QFontDatabase,
     QSurfaceFormat
 )
@@ -74,7 +77,6 @@ from System.Services import (
     ProjectSaver
 )
 
-from System.Interface.Animation import LoomEngine
 from System.Views.ProjectMenu import MainMenu
 from System.Views.Compositor import CompositorWidget
 
@@ -89,7 +91,6 @@ def handle_exception(
     exception_value:     object,
     exception_traceback: object,
 ) -> None:
-
     global is_processing_exception
 
     if is_processing_exception:
@@ -98,6 +99,14 @@ def handle_exception(
     is_processing_exception = True
 
     try:
+        if issubclass(exception_type, KeyboardInterrupt):
+            sys.__excepthook__(exception_type, exception_value, exception_traceback)
+            return
+
+        logger.opt(
+            exception = (exception_type, exception_value, exception_traceback)
+        ).critical("Fatal crash: Uncaught exception in main thread")
+
         error_message = "".join(
             traceback.format_exception(
                 exception_type,
@@ -106,18 +115,11 @@ def handle_exception(
             )
         )
 
-        if "KeyboardInterrupt" in error_message:
-            exit()
-            return
-
-        logger.error(f"Uncaught exception: {error_message}\n\n>>> Trying hard to not crash the program <<<")
-
         title = (
             f"Panic: {exception_value}"
             if random.random() > 0.005
             else "0x000000DEAD"
         )
-
 
         Windows.ErrorWindow(
             title,
@@ -126,12 +128,19 @@ def handle_exception(
         ).exec()
 
     except Exception as failure:
-        logger.critical(f"Critical failure in error handler: {failure}\n\nError window may not have been displayed.")
+        logger.critical(f"Critical failure in error handler: {failure}")
 
     finally:
         is_processing_exception = False
 
-sys.excepthook = handle_exception
+def handle_thread_exception(args: threading.ExceptHookArgs) -> None:
+    logger.opt(
+        exception = (args.exc_type, args.exc_value, args.exc_traceback)
+    ).critical(f"Fatal crash in background thread '{args.thread.name}'")
+
+sys.excepthook       = handle_exception
+threading.excepthook = handle_thread_exception
+Utils.setup_exe_logging()
 
 # Logic Classes
 
@@ -140,28 +149,42 @@ class WindowEffectManager:
 
     STARTUP_DATA = [
         {
+            "name": "bunny",
+            "content": "System/Assets/Image/Woah.png"
+        },
+        {
+            "name": "walter",
+            "content": "find the walter..."
+        },
+        {
+            "name": "anomaly_img",
             "content": "System/Assets/Image/Anomaly.png",
             "sound": "Packs/NOK/Anomaly",
             "duration": 7500,
             "fade": 200,
         },
         {
+            "name": "ieytd2_img",
             "content": "System/Assets/Image/IEYTD2.png",
             "scale": False,
         },
         {
+            "name": "the_void_text",
             "content": "First, there was The Void",
         },
         {
+            "name": "die_like_rest_text",
             "content": "The best of the best, still die like the rest",
         },
         {
+            "name": "cake_lie_text",
             "content": "The cake is a lie The cake is a lie The cake is a lie",
         },
         {
+            "name": "please_text",
             "content": "Please",
             "sound": "Packs/NOK/ThreeTone",
-        }
+        },
     ]
 
     def __init__(self, window: QMainWindow) -> None:
@@ -335,8 +358,25 @@ class WindowEffectManager:
 
     @staticmethod
     def choose_startup_egg() -> dict[str, object] | None:
-        if random.random() < WindowEffectManager.CHANCE:
-            return random.choice(WindowEffectManager.STARTUP_DATA)
+        if random.random() <= WindowEffectManager.CHANCE:
+            
+            available_eggs = []
+
+            for egg in WindowEffectManager.STARTUP_DATA:
+                setting_key = f"_{egg['name']}_seen"
+
+                if not Constants.current_settings.get(setting_key, False):
+                    available_eggs.append(egg)
+
+            if not available_eggs:
+                return None
+            
+            chosen_egg = random.choice(available_eggs)
+            
+            setting_key = f"_{chosen_egg['name']}_seen"
+            Constants.current_settings.set_value(setting_key, True)
+            
+            return chosen_egg
 
         return None
 
@@ -352,19 +392,24 @@ class StartupFadeOverlay(QWidget):
 
         self.background_opacity = 1.0
         self.current_pixmap     = None
-        self.current_text       = None
-        self.text_rectangle     = None
+        
+        self.main_text          = None
+        self.main_text_rect     = None
         self.font               = None
+        
+        self.egg_text           = None
+        self.egg_text_rect      = None
+        self.egg_font           = None
 
         self.background_fade_animation = QPropertyAnimation(
             self,
             b"backgroundOpacity"
         )
 
-        self.background_fade_animation.setDuration(700)
+        self.background_fade_animation.setDuration(400)
         self.background_fade_animation.setStartValue(1.0)
         self.background_fade_animation.setEndValue(0.0)
-        self.background_fade_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self.background_fade_animation.setEasingCurve(QEasingCurve.Type.OutExpo)
         self.background_fade_animation.finished.connect(self.handle_fade_finished)
 
     @pyqtProperty(float)
@@ -389,15 +434,22 @@ class StartupFadeOverlay(QWidget):
  
         is_new_user = Constants.current_settings.get("_new_user", True)
         hold_time   = default_hold_ms
-        self.font   = Utils.NType(30 if is_new_user else 10)
+        
+        self.font     = Utils.NType(30)
+        self.egg_font = Utils.NType(9)
 
         if is_new_user:
-            self.current_text    = "Get ready."
-            self.text_rectangle  = self.rect()
+            self.main_text      = "Get ready."
+            self.main_text_rect = self.rect()
             
             Constants.current_settings.set_value("_new_user", False)
 
-            Player.ui_player.play_sound("App/Startup", setting_key = "startup_sound")
+            Player.ui_player.play_sound(
+                "App/Start",
+                setting_key            = "startup_sound",
+                enable_tone_randomizer = False,
+                volume                 = 0.5
+            )
 
             QTimer.singleShot(
                 hold_time,
@@ -409,7 +461,14 @@ class StartupFadeOverlay(QWidget):
         startup_egg = WindowEffectManager.choose_startup_egg()
 
         if startup_egg is None:
-            Player.ui_player.play_sound("App/Startup", setting_key = "startup_sound")
+            self.main_text      = "Cassette"
+            self.main_text_rect = self.rect()
+
+            Player.ui_player.play_sound(
+                "App/Start",
+                setting_key            = "startup_sound",
+                enable_tone_randomizer = False
+            )
 
             QTimer.singleShot(
                 hold_time,
@@ -422,7 +481,8 @@ class StartupFadeOverlay(QWidget):
         hold_time = startup_egg.get("duration", default_hold_ms)
 
         if WindowEffectManager.is_image(content):
-            pixmap = QPixmap(content)
+            self.main_text = None
+            pixmap         = QPixmap(content)
 
             if startup_egg.get("scale", True):
                 self.current_pixmap = pixmap.scaled(
@@ -435,10 +495,12 @@ class StartupFadeOverlay(QWidget):
                 self.current_pixmap = pixmap
 
         else:
-            self.current_text = content
+            self.main_text      = "Cassette"
+            self.main_text_rect = self.rect()
+            self.egg_text       = content
 
-            metrics      = QFontMetrics(self.font)
-            rectangle    = metrics.boundingRect(self.current_text)
+            metrics      = QFontMetrics(self.egg_font)
+            rectangle    = metrics.boundingRect(self.egg_text)
             text_width   = rectangle.width() + 20
             text_height  = rectangle.height() + 20
             margin       = 80
@@ -453,7 +515,7 @@ class StartupFadeOverlay(QWidget):
                 max(margin, self.height() - text_height - margin)
             )
 
-            self.text_rectangle = QRect(
+            self.egg_text_rect = QRect(
                 random_x_position,
                 random_y_position,
                 text_width,
@@ -470,7 +532,11 @@ class StartupFadeOverlay(QWidget):
             )
         
         else:
-            Player.ui_player.play_sound("App/Startup", setting_key = "startup_sound")
+            Player.ui_player.play_sound(
+                "App/Start",
+                setting_key            = "startup_sound",
+                enable_tone_randomizer = False
+            )
 
         QTimer.singleShot(
             hold_time,
@@ -502,19 +568,25 @@ class StartupFadeOverlay(QWidget):
             center_y = (self.height() - self.current_pixmap.height()) // 2
 
             painter.drawPixmap(center_x, center_y, self.current_pixmap)
-
+            
             return
 
-        if self.current_text and self.text_rectangle is not None:
-            painter.setPen(QColor(255, 255, 255))
+        painter.setPen(QColor(255, 255, 255))
+
+        if self.main_text and self.main_text_rect:
             painter.setFont(self.font)
-            painter.drawText(self.text_rectangle, Qt.AlignmentFlag.AlignCenter, self.current_text)
+            painter.drawText(self.main_text_rect, Qt.AlignmentFlag.AlignCenter, self.main_text)
+
+        if self.egg_text and self.egg_text_rect:
+            painter.setFont(self.egg_font)
+            painter.drawText(self.egg_text_rect, Qt.AlignmentFlag.AlignCenter, self.egg_text)
 
 class ApplicationWindow(QMainWindow):
     EXIT_FADE_BASE_MS            = 3000
     EXIT_EFFECTS_DELAY_MS        = 1700
     EXIT_CLOSE_SOUND_DURATION_MS = 1500
     NO_AUDIO_EXIT_DELAY_MS       = 1800
+    ENTRY_VERTICAL_OFFSET_PX     = 150
 
     def __init__(self) -> None:
         super().__init__()
@@ -552,10 +624,11 @@ class ApplicationWindow(QMainWindow):
         self.intro_overlay = StartupFadeOverlay(self)
         self.intro_overlay.finished.connect(self.handle_intro_finished)
 
-        self.is_closing = False
+        self.is_closing           = False
         self.is_shutdown_complete = False
 
         self.setup_animations()
+        self.setup_screenshot_shortcut()
 
     def moveEvent(self, event: QMoveEvent) -> None:
         super().moveEvent(event)
@@ -573,6 +646,16 @@ class ApplicationWindow(QMainWindow):
             event.size().height()
         )
 
+        for index in range(self.stack.count()):
+            page = self.stack.widget(index)
+            page.resize(self.stack.size())
+
+            if page.layout():
+                page.layout().activate()
+
+        if self.entry_move_animation.state() == QPropertyAnimation.State.Running:
+            self.sync_entry_animation_geometry()
+
         if self.intro_overlay is None:
             return
 
@@ -580,7 +663,55 @@ class ApplicationWindow(QMainWindow):
             event.size().width(),
             event.size().height()
         )
-    
+
+    # Screenshot Setup (This is used to capture screenshots of the application for promotional purposes, so don't be afraid lol)
+
+    def setup_screenshot_shortcut(self) -> None:
+        self.screenshot_shortcut = QShortcut(QKeySequence("Ctrl+Shift+S"), self)
+        self.screenshot_shortcut.activated.connect(self.capture_4k_screenshot)
+
+    def capture_4k_screenshot(self) -> None:
+        target_width  = 3840
+        source_width  = self.width()
+        source_height = self.height()
+
+        if source_width <= 0 or source_height <= 0:
+            logger.warning("Cannot capture screenshot, window has invalid size")
+            return
+
+        scale_factor  = target_width / source_width
+        target_height = round(source_height * scale_factor)
+
+        pixmap = QPixmap(target_width, target_height)
+        pixmap.fill(Qt.GlobalColor.transparent)
+
+        painter = QPainter(pixmap)
+        painter.setRenderHints(
+            QPainter.RenderHint.Antialiasing     |
+            QPainter.RenderHint.TextAntialiasing |
+            QPainter.RenderHint.SmoothPixmapTransform
+        )
+
+        painter.scale(scale_factor, scale_factor)
+
+        self.render(painter)
+        painter.end()
+
+        screenshots_directory = os.path.join(base_directory, "Screenshots")
+        os.makedirs(screenshots_directory, exist_ok = True)
+
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        file_path = os.path.join(screenshots_directory, f"Cassette_4K_{timestamp}.png")
+
+        did_save_successfully = pixmap.save(file_path, "PNG")
+
+        if did_save_successfully:
+            logger.info(f"Saved 4K screenshot: {file_path} ({target_width}x{target_height}, scale {scale_factor:.2f}x)")
+            Player.ui_player.play_sound("App/Eject")
+
+        else:
+            logger.error(f"Failed to save 4K screenshot to: {file_path}")
+
     # Actions
 
     def process_new_songs_data(self, info: str) -> None:
@@ -698,20 +829,8 @@ class ApplicationWindow(QMainWindow):
         self.stack.setCurrentWidget(widget)
         widget.setVisible(True)
 
-        stack_rectangle = self.stack.geometry()
-        vertical_offset = 150 
-
         self.entry_move_animation.setTargetObject(widget)
-        self.entry_move_animation.setStartValue(
-            QRect(
-                stack_rectangle.x(),
-                stack_rectangle.y() + vertical_offset,
-                stack_rectangle.width(),
-                stack_rectangle.height()
-            )
-        )
-
-        self.entry_move_animation.setEndValue(stack_rectangle)
+        self.sync_entry_animation_geometry()
 
         self.entry_fade_animation.setTargetObject(widget.graphicsEffect())
         self.entry_fade_animation.setStartValue(0.0)
@@ -719,6 +838,20 @@ class ApplicationWindow(QMainWindow):
 
         self.entry_move_animation.start()
         self.entry_fade_animation.start()
+
+    def sync_entry_animation_geometry(self) -> None:
+        stack_rectangle = self.stack.geometry()
+
+        self.entry_move_animation.setStartValue(
+            QRect(
+                stack_rectangle.x(),
+                stack_rectangle.y() + self.ENTRY_VERTICAL_OFFSET_PX,
+                stack_rectangle.width(),
+                stack_rectangle.height()
+            )
+        )
+
+        self.entry_move_animation.setEndValue(stack_rectangle)
 
     @pyqtSlot()
     def handle_intro_finished(self) -> None:
@@ -766,7 +899,7 @@ class ApplicationWindow(QMainWindow):
             content_widget.composition.syncer.exit_app()
             logger.debug("Signaled Cassette Receiver to exit")
 
-        has_audio_to_fade = Player.player.is_playing and content_widget.global_waveform_max > 1e-6
+        has_audio_to_fade = Player.player.is_playing and content_widget.composition
 
         if has_audio_to_fade:
             self.shutdown_with_audio_fade()
@@ -778,10 +911,10 @@ class ApplicationWindow(QMainWindow):
         logger.debug("Playing exit effects with audio slowdown")
 
         animation_multiplier = Constants.current_settings.get("animation_multiplier", 1.0)
-        player                = Player.player
+        player               = Player.player
 
         remaining_ms  = max(0.0, player.duration_ms - player.get_position())
-        fade_duration = self.EXIT_FADE_BASE_MS * animation_multiplier
+        fade_duration = self.EXIT_FADE_BASE_MS     * animation_multiplier
         effects_delay = self.EXIT_EFFECTS_DELAY_MS * animation_multiplier
         quit_delay    = effects_delay * 2
 
@@ -834,7 +967,7 @@ class ApplicationWindow(QMainWindow):
 
         application = QApplication.instance()
 
-        if application is not None:
+        if application:
             logger.debug("Exiting application. Bye.")
             application.quit()
 
@@ -852,11 +985,10 @@ def main() -> None:
     surface_format.setProfile(QSurfaceFormat.OpenGLContextProfile.CoreProfile)
     surface_format.setOption(QSurfaceFormat.FormatOption.DeprecatedFunctions, False)
     surface_format.setSwapBehavior(QSurfaceFormat.SwapBehavior.TripleBuffer)
-    surface_format.setSwapInterval(0)
 
     logger.debug("Configuring application settings")
 
-    Constants.prepare_default_settings(Constants.SettingsDict)
+    Constants.prepare_default_settings(Constants.SettingsDict())
     Constants.load_settings()
 
     if Constants.current_settings.get("msaa"):
@@ -888,7 +1020,7 @@ def main() -> None:
 
     main_window = ApplicationWindow()
     main_window.show()
-    main_window.intro_overlay.start_overlay(670)
+    main_window.intro_overlay.start_overlay(200)
 
     sys.exit(application.exec())
 

@@ -169,7 +169,8 @@ def get_projects_info(songs_folder: str) -> dict[str, dict[str, object]]:
 # Widgets
 
 class TrackItemWidget(QWidget):
-    edit_clicked = pyqtSignal(str)
+    edit_clicked  = pyqtSignal(str)
+    audio_clicked = pyqtSignal(str)
 
     def __init__(
         self,
@@ -237,9 +238,10 @@ class TrackItemWidget(QWidget):
         icons_layout.setSpacing(4)
 
         icons_data = [
-            ("Delete.png", self.on_delete_clicked),
-            ("Edit.png",   self.on_edit_clicked),
-            ("Save.png",   self.on_export_clicked),
+            ("Save.png",     self.on_export_clicked),
+            ("Edit.png",     self.on_edit_clicked),
+            ("Settings.png", self.on_audio_clicked),
+            ("Delete.png",   self.on_delete_clicked)
         ]
 
         for icon_name, slot in icons_data:
@@ -259,6 +261,9 @@ class TrackItemWidget(QWidget):
     def on_edit_clicked(self) -> None:
         self.edit_clicked.emit(self.project_id)
 
+    def on_audio_clicked(self) -> None:
+        self.audio_clicked.emit(self.project_id)
+
     def on_delete_clicked(self) -> None:
         dialog = Windows.DialogWindow("Remove?")
 
@@ -273,7 +278,7 @@ class TrackItemWidget(QWidget):
         QTimer.singleShot(0, self.main_menu.refresh_tracks)
 
     def on_export_clicked(self) -> None:
-        composition = ProjectSaver.MinimalComposition(self.project_id)
+        composition = lambda: ProjectSaver.MinimalComposition(self.project_id)
         Windows.ExportDialogWindow(composition).exec()
 
 class FadeOverlay(QWidget):
@@ -611,6 +616,7 @@ class MainMenu(QWidget):
             )
 
             track_item.edit_clicked.connect(self.on_edit_project)
+            track_item.audio_clicked.connect(self.on_audio_settings)
             layout.addWidget(track_item, row, column)
 
         return widget
@@ -639,6 +645,7 @@ class MainMenu(QWidget):
             )
 
             track_item.edit_clicked.connect(self.on_edit_project)
+            track_item.audio_clicked.connect(self.on_audio_settings)
             self.track_widgets[project_id] = track_item
 
         self.apply_search_filter(self.search_box.text())
@@ -755,8 +762,8 @@ class MainMenu(QWidget):
         self.refresh_tracks()
 
     def on_settings(self) -> None:
-        settings_dialog = Windows.Settings()
-        settings_dialog.init_settings(Constants.SettingsDict)
+        settings_dialog = Windows.SettingsWindow()
+        settings_dialog.initialize_settings(Constants.SettingsDict())
         settings_dialog.exec()
 
     def on_import(self) -> None:
@@ -773,13 +780,20 @@ class MainMenu(QWidget):
     def on_about(self) -> None:
         modifiers = QApplication.keyboardModifiers()
 
-        if modifiers & Qt.KeyboardModifier.ShiftModifier:
+        has_shift = bool(modifiers & Qt.KeyboardModifier.ShiftModifier)
+        has_alt   = bool(modifiers & Qt.KeyboardModifier.AltModifier)
+        has_ctrl  = bool(modifiers & Qt.KeyboardModifier.ControlModifier)
+
+        if has_shift and has_ctrl:
+            return Windows.WalterWindow().exec()
+
+        if has_shift:
             return Windows.ByteBeatWindow().exec()
         
-        if modifiers & Qt.KeyboardModifier.AltModifier:
-            return Windows.About(more_info = True).exec()
+        if has_alt:
+            return Windows.AboutWindow(more_info = True).exec()
 
-        Windows.About().exec()
+        Windows.AboutWindow().exec()
 
     def on_glyphtones(self) -> None:
         webbrowser.open("https://glyphtones.firu.dev/")
@@ -787,6 +801,31 @@ class MainMenu(QWidget):
     def on_edit_project(self, project_id: str) -> None:
         self.setEnabled(False)
         self.edit_requested.emit(project_id)
+
+    def on_audio_settings(self, project_id: str) -> None:
+        try:
+            composition = ProjectSaver.Composition(id = project_id)
+            window = Windows.ExistingAudioSetupDialog(composition)
+
+            if not window.exec():
+                return
+
+            composition.bpm = window.get_bpm_value()
+
+            if window.snapped_times:
+                composition.beats = window.snapped_times
+
+            trim = window.get_trim_settings()
+
+            composition.trim_audio(
+                int(trim["start_ms"]),
+                int(trim["end_ms"]),
+                int(trim["fade_in"]),
+                int(trim["fade_out"])
+            )
+
+        except Exception as exception:
+            Windows.ErrorWindow("Audio edit failed", str(exception)).exec()
 
     def ask_for_file(self) -> str | None:
         options = QFileDialog.Option.ReadOnly

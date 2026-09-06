@@ -1,3 +1,5 @@
+from loguru import logger
+
 from PyQt6.QtCore import (
     Qt,
     pyqtSignal
@@ -15,8 +17,6 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidgetAction
 )
-
-from loguru import logger
 
 from System.Common import (
     Dev,
@@ -53,6 +53,7 @@ class ContextMenu(QMenu):
         self.setStyleSheet(Styles.Menus.ContextMenu)
         self.apply_styling(self)
         self.populate(self, self.entries)
+
         self.aboutToHide.connect(self.close_sound)
 
     def apply_styling(self, menu: QMenu) -> None:
@@ -138,8 +139,7 @@ class EffectPreviewWidget(QWidget):
         self.config      = config
         self.glyph       = glyph
         self.controls    = {}
-
-        self.effect_info: dict = GlyphEffects.EffectsConfig.get(self.effect_name, {})
+        self.effect_info = GlyphEffects.EffectsConfig.get(self.effect_name, {})
 
         self.setup_ui()
         self.populate_controls()

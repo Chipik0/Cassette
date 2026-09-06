@@ -108,7 +108,7 @@ def get_target_track(
     ) -> list:
 
     glyph_track = glyph["track"]
-    model_map   = Constants.PortMaps[port_from]["to"][port_to]
+    model_map   = Constants.PORT_MAPS[port_from]["to"][port_to]
     track_data  = model_map[glyph_track]
 
     if "effect" in glyph:
@@ -158,7 +158,7 @@ def expand_display_track_glyph(glyph: dict, model: str) -> list[dict]:
     device        = Constants.DEVICES[model]
     display_track = glyph["track"]
 
-    if display_track == Constants.MASTER_TRACK_ID or device.is_segment_track(display_track):
+    if display_track == Constants.MASTER_TRACK_IDENTIFIER or device.is_segment_track(display_track):
         return [
             make_glyph(glyph, real_track, segments = real_segments, copy_effects = True)
             for real_track, real_segments in device.expand_display_track(display_track, glyph.get("segments"))

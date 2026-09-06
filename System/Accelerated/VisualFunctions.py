@@ -1,5 +1,4 @@
 import numpy
-import math
 
 #pythran export process_waveform_tile(float32[:,:], int, float, float, float, float)
 

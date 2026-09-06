@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+import os
+import time
+import copy
 import math
+import zlib
+import base64
 import bisect
 
 import numpy as np
@@ -59,7 +64,7 @@ from System.Common import (
     Constants
 )
 
-from System.Services import Player
+from System.Services import Player, GlyphEffects
 from System.Interface import Timing
 
 from System.Interface.Animation import Lifecycle
@@ -238,6 +243,65 @@ class ValuePopup(Lifecycle.LoomAnimationMixin, QWidget):
 
     def on_hide_finished(self):
         super().hide()
+
+class Tooltip(ValuePopup):
+    def __init__(self, conductor) -> None:
+        super().__init__(conductor)
+
+        self.conductor       = conductor
+        self.is_hide_planned = False
+
+    # Display
+
+    def show_tooltip_at(
+            self,
+            text:        str,
+            target_item: object | None = None,
+            plan_hide:   bool          = False
+        ) -> None:
+        
+        self.is_hide_planned = plan_hide
+        self.show_text(text, self.calculate_position(target_item), plan_hide)
+
+    def calculate_position(self, target_item: object | None = None) -> QPoint:
+        viewport = self.conductor.viewport()
+
+        if not target_item:
+            selected_items = self.conductor.scene.selectedItems()
+            target_item    = selected_items[0] if selected_items else None
+
+        if not target_item:
+            return self.conductor.mapToGlobal(viewport.rect().center())
+
+        bounding_box   = target_item.boundingRect()
+        bottom_center  = QPointF(bounding_box.center().x(), bounding_box.bottom())
+        scene_position = target_item.mapToScene(bottom_center)
+        view_position  = self.conductor.mapFromScene(scene_position)
+
+        view_x = max(10, min(view_position.x(), viewport.width() - 10))
+        view_y = view_position.y() + 10
+
+        return viewport.mapToGlobal(QPoint(int(view_x), int(view_y)))
+
+    def hide_tooltip(self) -> None:
+        if not self.is_hide_planned:
+            self.hide()
+
+    def show_hover_tooltip(self, item: object) -> None:
+        if (glyph := self.conductor.composition.get_glyph(item.glyph_id)) is None:
+            return
+
+        effect      = glyph.get("effect")
+        effect_name = f"Effect: {effect['name']}" if effect else "No effect"
+
+        information = [
+            f"Start: {glyph['start']} ms",
+            f"Duration: {glyph['duration']} ms",
+            f"Brightness: {glyph.get('brightness', 0)}%",
+            effect_name
+        ]
+
+        self.show_tooltip_at("\n".join(information), item)
 
 @Dev.track_ram
 class MiniWaveformPreview(QWidget):
@@ -756,7 +820,8 @@ class ScheduledSegmentedBar(BaseSegmentedBar):
             
             progress        = (now - time_start) / duration
             keyframes       = item.get("keyframes")
-            easing_function = Constants.VISUAL_EASINGS[item.get("easing", "linear")]
+            easing_name     = item.get("easing", "linear")
+            easing_function = Constants.VISUAL_EASINGS.get(easing_name, Constants.VISUAL_EASINGS["linear"])
 
             value = (
                 self.eval_keyframes(keyframes, progress, easing_function)
@@ -915,6 +980,8 @@ class SegmentedBar(BaseSegmentedBar):
 
 @Dev.track_ram
 class PlayheadItem(Lifecycle.LoomAnimationMixin, QGraphicsObject):
+    playhead_pressed = pyqtSignal()
+
     def __init__(
         self,
         conductor,
@@ -925,10 +992,11 @@ class PlayheadItem(Lifecycle.LoomAnimationMixin, QGraphicsObject):
 
         self.conductor = conductor
 
-        self.width     = 2.0
-        self.height    = custom_height
-        self.target_x  = 0.0
-        self.last_emitted_normalized = None
+        self.width                    = 2.0
+        self.height                   = custom_height
+        self.target_x                 = 0.0
+        self.last_emitted_normalized  = None
+        self.last_distance_normalized = None
 
         self.cached_pen = QPen(QColor(255, 0, 0), 2.0)
         self.cached_pen.setCosmetic(True)
@@ -969,6 +1037,7 @@ class PlayheadItem(Lifecycle.LoomAnimationMixin, QGraphicsObject):
     ) -> None:
 
         self.target_x = x
+        self.playhead_pressed.emit()
 
         if animate and Constants.current_settings.get("playhead_animations", True):
             distance    = abs(x - self.x_anim.value)
@@ -986,19 +1055,24 @@ class PlayheadItem(Lifecycle.LoomAnimationMixin, QGraphicsObject):
 
     def update_actual_position(self, x: float) -> None:
         self.setPos(x, 0)
-        
+
         if self.conductor.total_content_width <= 0:
             return
 
         normalized = x / self.conductor.total_content_width
-        width = max(1, self.conductor.width())
+        
+        self.last_distance_normalized = normalized
+
+        width     = max(1, self.conductor.width())
         threshold = 1.0 / float(width)
 
         if self.last_emitted_normalized is not None and abs(normalized - self.last_emitted_normalized) < threshold:
             return
 
         self.last_emitted_normalized = normalized
-        self.conductor.playhead_moved.emit(normalized)
+
+        self.conductor.playhead_moved_ms.emit(x / self.conductor.px_per_sec * 1000.0)
+        self.conductor.playhead_moved_normalized.emit(normalized)
 
     def destroy(self) -> None:
         LoomEngine.ui_engine.unbind_owner(self)
@@ -1248,7 +1322,6 @@ class MarqueeItem(Lifecycle.LoomAnimationMixin, QGraphicsObject):
             multiply_duration_by_speed = False
         )
 
-@Dev.track_ram
 class GlyphItem(Lifecycle.LoomAnimationMixin, QGraphicsObject):
     STACK_LABEL_FONT  = Utils.NType(9)
     STACK_LABEL_COLOR = QColor(0, 0, 0)
@@ -1274,6 +1347,8 @@ class GlyphItem(Lifecycle.LoomAnimationMixin, QGraphicsObject):
         self.resize_margin       = 10
         self.interaction_mode    = None
         self.drag_start_position = QPointF()
+
+        self.is_occluded         = False
 
         self.cached_width        = -1.0
         self.cached_radius       = 0.0
@@ -1550,39 +1625,69 @@ class GlyphItem(Lifecycle.LoomAnimationMixin, QGraphicsObject):
         self.cached_stack_label  = f"+{self.stack_depth}"
 
     def draw_base_shape(
-            self,
-            painter: QPainter,
-            width:   float,
-            height:  float
-        ) -> None:
-        
+        self,
+        painter: QPainter,
+        width:   float,
+        height:  float
+    ) -> None:
+    
         has_stack = self.stack_depth > 0 and abs(self.stack_y_offset_handle.value) < 1.0
-
+    
         self.update_radius(width)
         self.update_border_pen()
+    
         radius    = self.cached_radius
         base_rect = QRectF(0, 0, width, height)
+    
+        pen = QPen(self.cached_border_pen)
+    
+        if not self.isSelected() and width < 15.0:
+            std_width = self.cached_border_pen.widthF()
+            
+            min_width_limit = 3.0
+            factor          = max(0.0, min(1.0, (width - min_width_limit) / (15.0 - min_width_limit)))
+            new_width       = std_width * factor
+    
+            if new_width <= 0.05:
+                pen.setStyle(Qt.PenStyle.NoPen)
 
+            else:
+                pen.setWidthF(new_width)
+    
+        use_sharp_corners = width < 15.0 or radius <= 0.0
+    
+        def draw_shape(rect: QRectF) -> None:
+            if use_sharp_corners:
+                painter.drawRect(rect)
+
+            else:
+                painter.drawRoundedRect(rect, radius, radius)
+    
         if has_stack:
             painter.setPen(Qt.PenStyle.NoPen)
-            
-            for step, color in enumerate(reversed(self.cached_stack_colors), start = 1):
+    
+            for step, color in enumerate(reversed(self.cached_stack_colors), start=1):
                 ox, oy = step * 3.0, step * 4.0
-                
+    
                 painter.setBrush(color)
-                painter.drawRoundedRect(
-                    QRectF(ox, oy, max(0.0, width - ox), max(0.0, height - oy)),
-                    radius, radius
+
+                draw_shape(
+                    QRectF(
+                        ox, oy,
+                        max(0.0, width - ox),
+                        max(0.0, height - oy)
+                    )
                 )
-
-        painter.setPen(self.cached_border_pen)
+    
+        painter.setPen(pen)
         painter.setBrush(Qt.GlobalColor.white)
-        painter.drawRoundedRect(base_rect, radius, radius)
 
+        draw_shape(base_rect)
+    
         if has_stack and width > 24:
             painter.setFont(self.STACK_LABEL_FONT)
             painter.setPen(self.STACK_LABEL_COLOR)
-
+    
             painter.drawText(
                 QRectF(0, 0, 30, 42),
                 Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignCenter,
@@ -1846,15 +1951,23 @@ class GlyphItem(Lifecycle.LoomAnimationMixin, QGraphicsObject):
 
         super().mousePressEvent(event)
 
+        alt_pressed = event.modifiers() & Qt.KeyboardModifier.AltModifier
+
+        if alt_pressed and event.button() == Qt.MouseButton.LeftButton and not self.keyframes:
+            controller.glyph_keyframe_edited.emit()
+            self.apply_default_fade_effect(event)
+            return
+
         if not self.keyframes:
             self.standard_press(event)
             return
 
-        if event.button() == Qt.MouseButton.RightButton and event.modifiers() & Qt.KeyboardModifier.AltModifier:
+        if event.button() == Qt.MouseButton.RightButton and alt_pressed:
             self.handle_fade_delete(event)
             return
 
-        if event.modifiers() & Qt.KeyboardModifier.AltModifier:
+        if alt_pressed:
+            controller.glyph_keyframe_edited.emit()
             self.handle_fade_press(event)
             return
 
@@ -1912,6 +2025,9 @@ class GlyphItem(Lifecycle.LoomAnimationMixin, QGraphicsObject):
 
     # Event Helpers
 
+    def set_is_occluded(self, state: bool) -> None:
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemHasNoContents, state)
+
     def standard_press(self, event: QGraphicsSceneMouseEvent) -> None:
         self.drag_start_position   = event.scenePos()
         self.interaction_mode = None
@@ -1925,6 +2041,37 @@ class GlyphItem(Lifecycle.LoomAnimationMixin, QGraphicsObject):
         self.conductor.glyph_controller.start_drag()
         
         event.accept()
+
+    def apply_default_fade_effect(self, event: QGraphicsSceneMouseEvent) -> None:
+        from System.Views.Compositor import Actions
+
+        current_glyph = self.data
+
+        if current_glyph is None:
+            return
+
+        original_glyph = copy.deepcopy(current_glyph)
+
+        faded_glyph = GlyphEffects.apply_visual_effect(
+            copy.deepcopy(current_glyph),
+            "Fade",
+            {"easing": "linear"}
+        )
+
+        self.conductor.composition.replace_glyph(self.glyph_id, faded_glyph)
+        self.conductor.glyph_controller.push_action(
+            Actions.ActionModify(
+                self.conductor.glyph_controller,
+                {self.glyph_id: original_glyph},
+                {self.glyph_id: faded_glyph}
+            )
+        )
+
+        self.pending_fade_keyframes = self.keyframes
+        self.update_geometry()
+        self.update()
+
+        self.handle_fade_press(event)
 
     def determine_interaction_mode(self, x_position: float) -> None:
         visual_width = self.ms_to_px(self.duration_ms)
@@ -2522,3 +2669,105 @@ class ElasticScrollArea(QScrollArea):
             return limit + (excess / (1.0 + excess / Constants.VISUAL_RESISTANCE_STRENGTH))
 
         return raw
+
+class ImageItem(QGraphicsItem):
+    def __init__(self, code: bytes, conductor):
+        super().__init__()
+
+        self.pixmap = QPixmap()
+        
+        compressed_bytes = base64.b64decode(code)
+        image_bytes      = zlib.decompress(compressed_bytes)
+        
+        self.pixmap.loadFromData(image_bytes)
+
+        self.has_been_seen = False
+
+        self.conductor = conductor
+
+    def boundingRect(self):
+        return QRectF(self.pixmap.rect())
+
+    def paint(self, painter, option, widget = None):
+        painter.drawPixmap(0, 0, self.pixmap)
+
+        if not self.has_been_seen:
+            self.has_been_seen = True
+            self.conductor.wheel_controller.stop_smooth_scroll()
+            self.conductor.wheel_controller.block_scroll()
+            QTimer.singleShot(150, self.freeze_program)
+
+    def freeze_program(self):
+        window = QApplication.activeWindow()
+
+        if window:
+            window.setWindowTitle("MENE TEKEL UPHARSIN")
+        
+        time.sleep(10)
+        os._exit(13)
+
+class TutorialProgressBar(QWidget):
+    TRACK_COLOR    = Styles.Colors.GlassBorder
+    FILL_COLOR     = Styles.Colors.NothingAccent
+    EASE_PER_TICK  = 0.28
+    SNAP_THRESHOLD = 0.003
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+
+        self.total           = 1.0
+        self.completed       = 0.0
+        self.displayed_ratio = 0.0
+
+        self.setFixedHeight(6)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+        self.ease_timer = Timing.Timer(Constants.FPS_60, self.ease_towards_target, parent = self)
+
+    def set_total(self, total: float) -> None:
+        self.total           = max(1.0, total)
+        self.completed       = 0.0
+        self.displayed_ratio = 0.0
+
+        self.ease_timer.stop()
+        self.update()
+
+    def set_completed(self, completed: float) -> None:
+        self.completed = max(0.0, min(self.total, completed))
+
+        if not self.ease_timer.isActive():
+            self.ease_timer.start()
+
+    def ease_towards_target(self) -> None:
+        target = self.completed / self.total
+        delta  = target - self.displayed_ratio
+
+        if abs(delta) < self.SNAP_THRESHOLD:
+            self.displayed_ratio = target
+            self.ease_timer.stop()
+
+        else:
+            self.displayed_ratio += delta * self.EASE_PER_TICK
+
+        self.update()
+
+    def paintEvent(self, event: QPaintEvent) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        track_rectangle = self.rect()
+        radius          = track_rectangle.height() / 2.0
+
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(self.TRACK_COLOR))
+        painter.drawRoundedRect(track_rectangle, radius, radius)
+
+        fill_width = track_rectangle.width() * self.displayed_ratio
+
+        if fill_width > 0.0:
+            fill_rectangle = QRect(track_rectangle.x(), track_rectangle.y(), int(round(fill_width)), track_rectangle.height())
+
+            painter.setBrush(QColor(self.FILL_COLOR))
+            painter.drawRoundedRect(fill_rectangle, radius, radius)
+
+        painter.end()

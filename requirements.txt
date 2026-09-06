@@ -5,5 +5,4 @@ aubio
 soundfile
 miniaudio
 PyOpenGL
-mutagen
 psutil

@@ -20,16 +20,12 @@ from System.Common import (
     Styles
 )
 
-from System.Services import Player
-
-from System.Interface.Animation import Lifecycle
-
-from System.Interface.Animation.LoomEngine import (
-    Easing,
-    MixMode,
-    ui_engine
+from System.Interface.Animation import (
+    Lifecycle,
+    LoomEngine
 )
 
+from System.Services import Player
 from System.Interface.Controls import BaseControlContainer
 
 # Slider With Label
@@ -97,11 +93,11 @@ class SliderWithLabel(Lifecycle.LoomAnimationMixin, BaseControlContainer):
         self.inner_layout.addLayout(slider_value_layout)
 
     def setup_animation_handle(self) -> None:
-        self.value_handle = ui_engine.bind(
+        self.value_handle = LoomEngine.ui_engine.bind(
             owner      = self,
             name       = "sliderValue",
             base_value = self.slider.value(),
-            mix_mode   = MixMode.REPLACE,
+            mix_mode   = LoomEngine.MixMode.REPLACE,
             on_change  = self.on_animated_value_changed
         )
 
@@ -128,7 +124,7 @@ class SliderWithLabel(Lifecycle.LoomAnimationMixin, BaseControlContainer):
         self.value_label.setText(str(value))
         self.valueChanged.emit(value)
 
-        self.target_value       = self.slider.value()
+        self.target_value = self.slider.value()
 
         if not self.slider_is_dragging:
             return
@@ -152,7 +148,7 @@ class SliderWithLabel(Lifecycle.LoomAnimationMixin, BaseControlContainer):
         self.value_handle.set_target(
             value           = self.target_value,
             duration_ms     = 450,
-            easing_function = Easing.ease_out_quint
+            easing_function = LoomEngine.Easing.ease_out_quint
         )
 
     def animate_to_value(self, value: int) -> None:
@@ -164,7 +160,7 @@ class SliderWithLabel(Lifecycle.LoomAnimationMixin, BaseControlContainer):
         self.value_handle.set_target(
             value           = self.target_value,
             duration_ms     = 450,
-            easing_function = Easing.ease_out_quint
+            easing_function = LoomEngine.Easing.ease_out_quint
         )
 
     def showEvent(self, event: QShowEvent) -> None:
@@ -180,7 +176,7 @@ class SliderWithLabel(Lifecycle.LoomAnimationMixin, BaseControlContainer):
         super().hideEvent(event)
 
         self.show_animation_pending = True
-        self.slider_is_dragging      = False
+        self.slider_is_dragging     = False
 
         self.value_handle.stop()
 
