@@ -38,8 +38,18 @@ class WalterWindow(FloatingWindowGPU):
         self.content_layout.addWidget(self.image)
         self.content_layout.addWidget(self.label)
 
-        self.chaos_timer = Timing.Timer(20,   self.chaos_mode,        parent = self)
-        self.stop_timer  = Timing.Timer(8500, self.chaos_timer.stop,  True, parent = self)
+        self.chaos_timer = Timing.Timer(
+            interval = 20,
+            callback = self.chaos_mode,
+            parent   = self
+        )
+        
+        self.stop_timer = Timing.Timer(
+            interval   = 8500,
+            callback   = self.chaos_timer.stop,
+            auto_start = True,
+            parent     = self
+        )
 
         self.image.clicked.connect(self.switch_walter)
 

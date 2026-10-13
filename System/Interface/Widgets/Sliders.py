@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from time import monotonic
+from time   import monotonic
 from random import randint
 
 from PyQt6.QtGui import (
     QHideEvent,
     QShowEvent,
-    QMouseEvent
+    QMouseEvent,
+    QWheelEvent
 )
 
 from PyQt6.QtCore import (
@@ -31,7 +32,7 @@ from System.Interface.Animation import (
     LoomEngine
 )
 
-from System.Services import Player
+from System.Services  import Player
 from System.Interface import Widgets
 
 # Direct Jump Slider
@@ -42,6 +43,7 @@ class DirectJumpSlider(QSlider):
             orientation: Qt.Orientation,
             parent:      Widgets.BaseControlContainer | None = None
         ) -> None:
+
         super().__init__(orientation, parent)
 
         self.setFixedHeight(26)
@@ -99,6 +101,9 @@ class DirectJumpSlider(QSlider):
 
         event.accept()
 
+    def wheelEvent(self, event: QWheelEvent) -> None:
+        event.ignore()
+
 # Slider With Label
 
 @Dev.track_ram
@@ -112,6 +117,7 @@ class SliderWithLabel(Lifecycle.LoomAnimationMixin, Widgets.BaseControlContainer
             maximum_value: int,
             default_value: int
         ) -> None:
+
         super().__init__()
 
         self.minimum_value                  = minimum_value
@@ -119,6 +125,7 @@ class SliderWithLabel(Lifecycle.LoomAnimationMixin, Widgets.BaseControlContainer
         self.target_value                   = default_value
         self.show_animation_pending         = True
         self.slider_is_dragging             = False
+        self.wheel_accumulator              = 0.0
         self.last_sound_timestamp_seconds   = 0.0
         self.minimum_sound_interval_seconds = 1.0 / 15.0
 
@@ -142,7 +149,9 @@ class SliderWithLabel(Lifecycle.LoomAnimationMixin, Widgets.BaseControlContainer
             font_size:      int,
             alignment_flag: Qt.AlignmentFlag = Qt.AlignmentFlag.AlignLeft
         ) -> QLabel:
+
         label = QLabel(text)
+
         label.setFont(Utils.NType(font_size))
         label.setStyleSheet("color: #dddddd; padding: 0px; border: none;")
         label.setAlignment(alignment_flag)
@@ -156,10 +165,12 @@ class SliderWithLabel(Lifecycle.LoomAnimationMixin, Widgets.BaseControlContainer
 
     def setup_slider(self, default_value: int) -> None:
         slider_value_layout = QHBoxLayout()
+
         slider_value_layout.setContentsMargins(0, 0, 0, 0)
         slider_value_layout.setSpacing(12)
 
         self.slider = DirectJumpSlider(Qt.Orientation.Horizontal, self.container_background)
+
         self.slider.setRange(self.minimum_value, self.maximum_value)
         self.slider.setSingleStep(1)
         self.slider.setPageStep(1)
@@ -181,7 +192,7 @@ class SliderWithLabel(Lifecycle.LoomAnimationMixin, Widgets.BaseControlContainer
     def setup_animation_handle(self) -> None:
         self.value_handle = LoomEngine.ui_engine.bind(
             owner      = self,
-            name       = "sliderValue",
+            name       = "slider_value",
             base_value = self.slider.value(),
             mix_mode   = LoomEngine.MixMode.REPLACE,
             on_change  = self.on_animated_value_changed
@@ -292,7 +303,38 @@ class SliderWithLabel(Lifecycle.LoomAnimationMixin, Widgets.BaseControlContainer
 
         self.value_handle.stop()
 
-    # Getters And Setters
+    def wheelEvent(self, event: QWheelEvent) -> None:
+        delta_y = event.angleDelta().y()
+
+        if delta_y == 0:
+            delta_y = event.angleDelta().x()
+
+        if delta_y == 0:
+            return
+
+        self.wheel_accumulator += delta_y
+        threshold               = 120.0
+
+        if abs(self.wheel_accumulator) < threshold:
+            event.accept()
+            return
+
+        steps                  = int(self.wheel_accumulator / threshold)
+        self.wheel_accumulator = 0.0
+
+        direction = 1 if steps > 0 else -1
+        new_value = self.clamp_value(self.value() + direction)
+
+        if new_value == self.value():
+            event.accept()
+            return
+
+        self.setValue(new_value, animated = False)
+        self.play_slider_tick_sound(new_value)
+
+        event.accept()
+
+    # Getters and Setters
 
     def value(self) -> int:
         if self.slider_is_dragging:
@@ -300,20 +342,30 @@ class SliderWithLabel(Lifecycle.LoomAnimationMixin, Widgets.BaseControlContainer
 
         return self.target_value
 
-    def setValue(self, value: int | float | str) -> None:
+    def setValue(
+            self,
+            value:    int | float | str,
+            animated: bool = True
+        ) -> None:
+
         target_value = self.parse_value(value)
         target_value = self.clamp_value(target_value)
 
         self.target_value = target_value
         self.value_label.setText(str(target_value))
 
-        if self.isVisible():
+        if animated and self.isVisible():
             self.animate_to_value(target_value)
             return
+
+        self.value_handle.stop_targeting()
+        self.value_handle.set_base(target_value)
 
         self.slider.blockSignals(True)
         self.slider.setValue(self.minimum_value if self.show_animation_pending else target_value)
         self.slider.blockSignals(False)
+
+        self.valueChanged.emit(target_value)
 
     def getValueAsText(self) -> str:
         return str(self.value())

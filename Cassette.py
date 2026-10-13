@@ -58,6 +58,8 @@ from System.Interface import (
     Windows
 )
 
+from System.Interface.Animation.WindowAnimator import WindowAnimator
+
 from System.Services import (
     Player,
     ProjectSaver
@@ -201,14 +203,14 @@ class WindowEffectManager:
         self.is_accordion_active            = False
 
         self.accordion_stop_timer = Timing.Timer(
-            2000,
-            self.reset_accordion_state,
+            interval    = 2000,
+            callback    = self.reset_accordion_state,
             single_shot = True
         )
 
         self.shake_stop_timer = Timing.Timer(
-            2000,
-            self.reset_shake_state,
+            interval    = 2000,
+            callback    = self.reset_shake_state,
             single_shot = True
         )
 
@@ -578,6 +580,8 @@ class ApplicationWindow(QMainWindow):
         self.stack = QStackedWidget()
         self.setCentralWidget(self.stack)
 
+        self.animator = WindowAnimator(self)
+
         self.main_menu_widget  = MainMenu(self)
         self.compositor_widget = CompositorWidget(self)
 
@@ -645,6 +649,10 @@ class ApplicationWindow(QMainWindow):
         self.screenshot_shortcut.activated.connect(self.capture_4k_screenshot)
 
     def capture_4k_screenshot(self) -> None:
+        animator = WindowAnimator.get()
+        animator.error_strike()
+        return
+
         target_width  = 3840
         source_width  = self.width()
         source_height = self.height()
@@ -686,10 +694,14 @@ class ApplicationWindow(QMainWindow):
         else:
             logger.error(f"Failed to save 4K screenshot to: {file_path}")
 
-    # Updates And Data
+    # Updates and Data
 
     def process_new_songs_data(self, information: str) -> None:
         with open("System/Assets/Songs.txt", "w", encoding = "utf-8") as file:
+            file.write(information)
+
+    def process_new_about_data(self, information: str) -> None:
+        with open("System/Assets/About.txt", "w", encoding = "utf-8") as file:
             file.write(information)
 
     def show_update_info(self, information: dict[str, object]) -> None:
@@ -837,10 +849,23 @@ class ApplicationWindow(QMainWindow):
         self.effect_manager.check_calendar_events()
 
         self.update_thread = Utils.UpdateChecker()
-        self.update_thread.update_info_received.connect(self.show_update_info)
-        self.update_thread.songs_info_receiver.connect(self.process_new_songs_data)
-        self.update_thread.fetch_latest_release()
-        self.update_thread.fetch_latest_songs_strings()
+        self.update_thread.resource_loaded.connect(self.handle_resource_loaded)
+        self.update_thread.fetch_all()
+
+    def handle_resource_loaded(
+            self,
+            resource_identifier: str,
+            data:                object
+        ) -> None:
+
+        if resource_identifier == "release" and isinstance(data, dict):
+            self.show_update_info(data)
+
+        elif resource_identifier == "songs":
+            self.process_new_songs_data(str(data))
+
+        elif resource_identifier == "about":
+            self.process_new_about_data(str(data))
 
     # Application Lifecycle
 

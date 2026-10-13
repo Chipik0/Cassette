@@ -8,44 +8,51 @@ from PyQt6.QtGui import (
 from PyQt6.QtCore import (
     Qt,
     QEvent,
+    QPoint,
     QRectF,
-    QPointF
+    QPointF,
+    QObject,
+    pyqtSignal
 )
 
 from PyQt6.QtWidgets import QApplication
 
 from System.Common import Styles
 
-from .AutoScroller import AutoScroller
-
 from .. import Timeline
 
-class MouseController:
+# Mouse Controller Class
+
+class MouseController(QObject):
+    drag_scroll_requested = pyqtSignal(QPoint)
+    drag_scroll_stopped   = pyqtSignal()
+
     def __init__(self, conductor: Timeline.ScrollableContent) -> None:
+        super().__init__(conductor)
+
         self.conductor            = conductor
+        self.playback_manager     = conductor.playback_manager
         self.is_marquee_selecting = False
         self.is_dragging_glyphs   = False
-        self.auto_scroller        = AutoScroller(conductor)
-        self.playback_manager     = conductor.playback_manager
 
     # State
 
     def set_glyphs_dragging(self, is_dragging: bool) -> None:
         self.is_dragging_glyphs = is_dragging
 
-    # MarqueeSelection
+    # Marquee Selection
 
     def start_marquee(self, event: QMouseEvent) -> None:
         self.conductor.marquee_item.start_marquee(self.conductor.mapToScene(event.pos()))
         self.is_marquee_selecting = True
 
-    def end_marquee(self, event: QMouseEvent) -> None:
+    def end_marquee(self) -> None:
         if not self.is_marquee_selecting:
             return
 
         self.conductor.marquee_item.end_marquee()
         self.is_marquee_selecting = False
-        self.stop_auto_scroll_drag()
+        self.drag_scroll_stopped.emit()
 
     def marquee_tick(self, event: QMouseEvent) -> None:
         if not self.is_marquee_selecting:
@@ -56,12 +63,10 @@ class MouseController:
             animate = False
         )
 
-        self.auto_scroller.process_position(self.conductor.viewport().mapToGlobal(event.pos()))
+        global_position = self.conductor.viewport().mapToGlobal(event.pos())
+        self.drag_scroll_requested.emit(global_position)
 
-    def stop_auto_scroll_drag(self) -> None:
-        self.auto_scroller.stop_drag()
-
-    # RulerInteractions
+    # Ruler Interactions
 
     def handle_ruler_press(self, event: QMouseEvent) -> None:
         if self.playback_manager.is_playing:
@@ -78,15 +83,15 @@ class MouseController:
         waveform_end   = Styles.Metrics.Waveform.Height + Styles.Metrics.Tracks.RulerHeight
 
         if waveform_end > position_y > 0:
-            if not playhead_hover.isVisible():
-                playhead_hover.show()
+            target_scene_x = float(self.conductor.mapToScene(event.pos()).x())
+            is_playing     = self.playback_manager.is_playing
 
-            playhead_hover.setPos(self.conductor.mapToScene(event.pos()).x(), 0)
+            playhead_hover.show_at(target_scene_x, immediate = is_playing)
 
         elif playhead_hover.isVisible():
-            playhead_hover.hide()
+            playhead_hover.hide_animated()
 
-    # SyntheticEvents
+    # Synthetic Events
 
     def force_mouse_update(self) -> None:
         if (
@@ -110,27 +115,30 @@ class MouseController:
 
         self.process_mouse_move_event(synthetic_event)
 
-    # EventDispatching
+    # Event Dispatching
 
     def process_mouse_press_event(self, event: QMouseEvent) -> None:
         if event.button() != Qt.MouseButton.LeftButton:
             return
 
         ruler_area = QRectF(
-            0,
-            0,
-            self.conductor.width(),
-            Styles.Metrics.Tracks.RulerHeight + Styles.Metrics.Waveform.Height
+            0.0,
+            0.0,
+            float(self.conductor.width()),
+            float(Styles.Metrics.Tracks.RulerHeight + Styles.Metrics.Waveform.Height)
         )
 
         if ruler_area.contains(event.position()):
             self.handle_ruler_press(event)
             event.accept()
+
             return
 
-        viewport_pos = event.position().toPoint()
-        if self.conductor.itemAt(viewport_pos):
+        viewport_position = event.position().toPoint()
+
+        if self.conductor.itemAt(viewport_position):
             event.ignore()
+
             return
 
         if not (event.modifiers() & Qt.KeyboardModifier.ControlModifier):
@@ -144,7 +152,7 @@ class MouseController:
         self.handle_ruler_hover(event)
 
     def process_mouse_release_event(self, event: QMouseEvent) -> None:
-        self.end_marquee(event)
+        self.end_marquee()
 
     def process_mouse_leave_event(self, event: QMouseEvent) -> None:
-        self.conductor.playhead_hover.hide()
+        self.conductor.playhead_hover.hide_animated()

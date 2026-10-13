@@ -57,7 +57,8 @@ from .Textboxes import (
 from .TimelineItems import (
     GlyphItem,
     MarqueeItem,
-    PlayheadItem
+    PlayheadItem,
+    HoverPlayheadItem
 )
 
 from .LoadAnimation import (

@@ -129,7 +129,6 @@ jobs:
         run: |
           OS="${{ runner.os }}"
 
-          # Удаляем APK перед сборкой PyInstaller, чтобы он не попал в сборку
           rm -f System/ADB/CassetteReceiver.apk
 
           if [ "$OS" == "Windows" ]; then

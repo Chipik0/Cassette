@@ -8,17 +8,17 @@ import random
 
 from loguru import logger
 
-from PyQt6.QtCore import (
-    QTimer,
-    QCoreApplication
-)
+from PyQt6.QtCore import QCoreApplication
 
 from System.Common import (
     Utils,
     Constants
 )
 
-from System.Interface import Windows
+from System.Interface import (
+    Timing,
+    Windows
+)
 
 from System.Services import (
     Player,
@@ -508,6 +508,9 @@ class BaseComposition:
 
         os.rename(temporary_path, self.cropped_song_path)
 
+    def save(self, immediate: bool = False) -> None:
+        pass
+
     def export(
             self,
             watermark:        str        = "Cassette",
@@ -582,9 +585,9 @@ class BaseComposition:
 class Composition(BaseComposition):
     def __init__(
             self,
-            audiofile_path: str | None = None,
+            audiofile_path: str  | None = None,
             settings:       dict | None = None,
-            identifier:     int | None  = None
+            identifier:     int  | None  = None
         ) -> None:
 
         settings = settings or {}
@@ -600,10 +603,11 @@ class Composition(BaseComposition):
         self.cached_save_data = copy.deepcopy(settings)
         self.progress         = float(self.cached_save_data.get("progress", 0.0))
 
-        self.save_timer = QTimer()
-        self.save_timer.setSingleShot(True)
-        self.save_timer.setInterval(500)
-        self.save_timer.timeout.connect(self.flush_save_to_disk)
+        self.save_timer = Timing.Timer(
+            interval    = 500,
+            callback    = self.flush_save_to_disk,
+            single_shot = True
+        )
 
         application = QCoreApplication.instance()
 

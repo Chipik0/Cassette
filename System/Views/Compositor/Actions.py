@@ -40,8 +40,6 @@ class ActionModify:
         }
     ]
 
-    # Initialization Section
-
     def __init__(
             self,
             controller:   object,
@@ -54,7 +52,7 @@ class ActionModify:
         self.glyphs_before_modify = copy.deepcopy(before_state)
         self.glyphs_after_modify  = copy.deepcopy(after_state)
 
-    # Description Section
+    # Description
 
     def get_description(self) -> str:
         before_glyphs = self.glyphs_before_modify
@@ -90,7 +88,7 @@ class ActionModify:
 
         return "nothing"
 
-    # Execution Section
+    # Execution
 
     def undo(self) -> None:
         self.composition.start_batching()
@@ -115,9 +113,6 @@ class ActionModify:
 # Additions
 
 class ActionAdd:
-
-    # Initialization Section
-
     def __init__(
             self,
             controller:   object,
@@ -128,14 +123,14 @@ class ActionAdd:
         self.composition  = controller.composition
         self.added_glyphs = copy.deepcopy(added_glyphs)
 
-    # Description Section
+    # Description
 
     def get_description(self) -> str:
         count = len(self.added_glyphs)
 
         return f"addition of {count} glyph{'s' if count != 1 else ''}"
 
-    # Execution Section
+    # Execution
 
     def undo(self) -> None:
         for glyph_id in self.added_glyphs:
@@ -157,9 +152,6 @@ class ActionAdd:
 # Deletions
 
 class ActionDelete:
-
-    # Initialization Section
-
     def __init__(
             self,
             controller:     object,
@@ -170,14 +162,14 @@ class ActionDelete:
         self.composition    = controller.composition
         self.deleted_glyphs = copy.deepcopy(deleted_glyphs)
 
-    # Description Section
+    # Description
 
     def get_description(self) -> str:
         count = len(self.deleted_glyphs)
 
         return f"deletion of {count} glyph{'s' if count != 1 else ''}"
 
-    # Execution Section
+    # Execution
 
     def undo(self) -> None:
         self.composition.start_batching()
@@ -196,9 +188,6 @@ class ActionDelete:
 # Keyframe Group Commands
 
 class EditFadeKeyframesCommand:
-
-    # Initialization Section
-
     def __init__(
             self,
             controller:     object,
@@ -221,7 +210,7 @@ class EditFadeKeyframesCommand:
         else:
             self.mutations = copy.deepcopy(mutations_data)
 
-    # Execution Section
+    # Execution
 
     def undo(self) -> None:
         self.composition.start_batching()
@@ -247,7 +236,7 @@ class EditFadeKeyframesCommand:
         finally:
             self.composition.stop_batching()
 
-    # Description Section
+    # Description
 
     def get_description(self) -> str:
         count = len(self.mutations)
@@ -257,7 +246,7 @@ class EditFadeKeyframesCommand:
 
         return f"editing fade keyframes on {count} glyphs"
 
-    # Application Section
+    # Application
 
     def apply_glyph_keyframes(
             self,

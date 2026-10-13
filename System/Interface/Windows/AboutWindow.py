@@ -20,9 +20,12 @@ from System.Common import (
 
 from System.Interface import Widgets
 
-from System.Interface.Windows import FloatingWindowGPU
-
-from System.Interface.Windows.FeedbackWindow import FeedbackWindow
+from System.Interface.Windows import (
+    ErrorWindow,
+    UpdateWindow,
+    FeedbackWindow,
+    FloatingWindowGPU
+)
 
 # About Window
 
@@ -42,22 +45,16 @@ class AboutWindow(FloatingWindowGPU):
             enable_audioplayer_effects = False
         )
 
+        self.update_checker = None
+
         if more_info:
             text = (
                 f"System {sys.platform} {platform.machine()}\n"
                 f"Python: {sys.version}"
             )
-        
+
         else:
-            text = (
-                "The best open - source compositor. Currently in active development!\n\n"
-                "`Inspirations and credits`\n"
-                "- UI sounds from `R.E.P.O.` by `semiwork`.\n"
-                "- Open sound from `The Upturned` by `Zeekers`.\n"
-                "- Open sounds from `Simulacra` by `Kaigan Games`.\n"
-                "- Sounds from `Pacific Drive` by `Ironwood Studios`.\n\n"
-                "Made with care, way too much profiling, and a genuine love for smooth interfaces."
-            )
+            text = open("System/Assets/About.txt", "r", encoding = "utf-8").read()
 
         about_label = Widgets.DescriptionLabel(text, 500)
 
@@ -70,10 +67,11 @@ class AboutWindow(FloatingWindowGPU):
         image_label = QLabel()
         image_label.setPixmap(image_pixmap)
 
-        row = Widgets.ButtonRow(
+        self.button_row = Widgets.ButtonRow(
             [
-                (Widgets.ButtonWithOutline, "GitHub",   self.on_github),
-                (Widgets.ButtonWithOutline, "Feedback", self.on_feedback)
+                (Widgets.ButtonWithOutline, "GitHub",        self.on_github),
+                (Widgets.ButtonWithOutline, "Feedback",      self.on_feedback),
+                (Widgets.ButtonWithOutline, "Check updates", self.on_check_updates)
             ]
         )
 
@@ -82,14 +80,15 @@ class AboutWindow(FloatingWindowGPU):
 
         self.content_layout.addWidget(about_label)
         self.content_layout.addWidget(image_label)
-        self.content_layout.addLayout(row)
+        self.content_layout.addLayout(self.button_row)
         self.content_layout.addWidget(ok_button)
-    
+
     def on_github(self) -> None:
         github_link = Constants.GITHUB_LINK
 
         if random.random() < 0.95:
             webbrowser.open(github_link)
+
             return
 
         fox_image = Utils.get_fox_image()
@@ -97,3 +96,63 @@ class AboutWindow(FloatingWindowGPU):
 
     def on_feedback(self) -> None:
         FeedbackWindow().exec()
+
+    def on_check_updates(self) -> None:
+        button = self.button_row.get_button_by_number(2)
+
+        if button:
+            button.setEnabled(False)
+            button.setText("Checking...")
+
+        self.update_checker = Utils.UpdateChecker()
+        self.update_checker.update_info_received.connect(self.on_update_info_received)
+        self.update_checker.error_occurred.connect(self.on_update_check_failed)
+        self.update_checker.fetch_latest_release()
+
+    def on_update_info_received(
+            self,
+            release_information: dict
+        ) -> None:
+
+        button = self.button_row.get_button_by_number(2)
+
+        if button:
+            button.setEnabled(True)
+            button.setText("Check updates")
+
+        remote_tag = str(release_information.get("tag_name", ""))
+
+        with open(Utils.get_resource_path("version"), "r", encoding = "utf-8") as version_file:
+            local_version = version_file.read().strip()
+
+        if Utils.is_newer_version(remote_tag, local_version):
+            window = UpdateWindow(
+                version             = remote_tag,
+                changelog           = str(release_information.get("body", "")),
+                url                 = str(release_information.get("html_url", Constants.GITHUB_LINK)),
+                release_information = release_information,
+                parent              = self.parent()
+            )
+            window.exec()
+
+            return
+
+        button.setText("Latest version")
+
+    def on_update_check_failed(
+            self,
+            request_type: str
+        ) -> None:
+
+        button = self.button_row.get_button_by_number(2)
+
+        if button:
+            button.setEnabled(True)
+            button.setText("Check updates")
+            button.start_glitch()
+
+        ErrorWindow(
+            "Check Failed",
+            "Unable to fetch the latest release from GitHub. Please check your network connection.",
+            "I hate my Wi - Fi"
+        ).exec()

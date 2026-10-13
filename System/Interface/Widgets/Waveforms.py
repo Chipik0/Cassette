@@ -41,9 +41,9 @@ from System.Common import (
     Constants
 )
 
+from System.Interface           import Timing
 from System.Interface.Animation import LoomEngine
-
-from System.Interface.Widgets import (
+from System.Interface.Widgets   import (
     WaveMode,
     PulseStatusWidget
 )
@@ -86,7 +86,7 @@ def create_waveform_polygon_path(
 class MiniWaveformPreview(QWidget):
     preview_clicked = pyqtSignal(float)
 
-    PLAYHEAD_UPDATE_INTERVAL_MS = 40
+    PLAYHEAD_UPDATE_INTERVAL_MS = 33
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -111,10 +111,11 @@ class MiniWaveformPreview(QWidget):
         self.cached_gradient_fade_opaque      = QColor(0, 0, 0, 255)
         self.cached_gradient_fade_transparent = QColor(0, 0, 0, 0)
 
-        self.playhead_update_timer = QTimer(self)
-        self.playhead_update_timer.setInterval(self.PLAYHEAD_UPDATE_INTERVAL_MS)
-        self.playhead_update_timer.setTimerType(Qt.TimerType.PreciseTimer)
-        self.playhead_update_timer.timeout.connect(self.apply_pending_playhead_position)
+        self.playhead_update_timer = Timing.Timer(
+            interval = self.PLAYHEAD_UPDATE_INTERVAL_MS,
+            callback = self.apply_pending_playhead_position,
+            parent   = self
+        )
 
     # Data
 
@@ -126,6 +127,9 @@ class MiniWaveformPreview(QWidget):
         self.update()
 
     def set_playhead_position(self, value: float) -> None:
+        if self.mouse_pressed:
+            return
+
         normalized_value = float(numpy.clip(value, 0.0, 1.0))
         width_px         = max(1, self.width())
         threshold        = 1.0 / float(width_px)
@@ -299,7 +303,7 @@ class MiniWaveformPreview(QWidget):
         self.mouse_pressed = True
         normalized_x       = float(numpy.clip(event.position().x() / float(max(1, self.width())), 0.0, 1.0))
 
-        self.set_playhead_position(normalized_x)
+        self.repaint_playhead_region(normalized_x)
         self.preview_clicked.emit(normalized_x)
 
         super().mousePressEvent(event)
@@ -312,7 +316,7 @@ class MiniWaveformPreview(QWidget):
 
         normalized_x = float(numpy.clip(event.position().x() / float(max(1, self.width())), 0.0, 1.0))
 
-        self.set_playhead_position(normalized_x)
+        self.repaint_playhead_region(normalized_x)
         self.preview_clicked.emit(normalized_x)
 
         super().mouseMoveEvent(event)
@@ -370,11 +374,16 @@ class TrimmingWaveformWidget(QWidget):
 
         self.waveform_opacity_handle = LoomEngine.ui_engine.bind(
             owner      = self,
-            name       = "waveformOpacity",
+            name       = "waveform_opacity",
             base_value = 0.0,
             mix_mode   = LoomEngine.MixMode.REPLACE,
-            on_change  = lambda value: self.update()
+            on_change  = self.on_property_update
         )
+
+    def on_property_update(self, value: object):
+        self.update()
+
+    # State
 
     def start_loading(self) -> None:
         self.is_loading          = True
@@ -486,6 +495,8 @@ class TrimmingWaveformWidget(QWidget):
     def set_is_playing(self, is_playing: bool) -> None:
         self.is_playing = is_playing
 
+    # Rendering
+
     def generate_pixmap(self) -> None:
         width_px        = self.width()
         height_px       = self.height()
@@ -518,6 +529,8 @@ class TrimmingWaveformWidget(QWidget):
         painter.end()
 
         self.waveform_pixmap = pixmap
+
+    # Events
 
     def paintEvent(self, event: QPaintEvent) -> None:
         opacity = float(self.waveform_opacity_handle.value)

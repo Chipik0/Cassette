@@ -37,16 +37,6 @@ from System.Interface.Animation import (
 from System.Services  import Player
 from System.Interface import Widgets
 
-# Pixel Parsing
-
-def pixel_size(value: object) -> float:
-    if isinstance(value, (int, float)):
-        return float(value)
-
-    digits = "".join(character for character in str(value) if character.isdigit() or character == ".")
-
-    return float(digits) if digits else 0.0
-
 # Checkbox
 
 @Dev.track_ram
@@ -74,14 +64,14 @@ class Checkbox(Lifecycle.LoomAnimationMixin, QCheckBox):
 
         self.indicator_scale = LoomEngine.ui_engine.bind(
             owner      = self,
-            name       = "indicatorScale",
+            name       = "indicator_scale",
             base_value = 1.0,
             on_change  = self.on_indicator_property_changed
         )
 
         self.indicator_radius = LoomEngine.ui_engine.bind(
             owner      = self,
-            name       = "indicatorRadius",
+            name       = "indicator_radius",
             base_value = self.resting_radius,
             on_change  = self.on_indicator_property_changed
         )
@@ -90,6 +80,59 @@ class Checkbox(Lifecycle.LoomAnimationMixin, QCheckBox):
 
     def on_indicator_property_changed(self, value: float) -> None:
         self.update()
+
+    def content_rect(self) -> QRectF:
+        padding = self.overflow_padding
+
+        return QRectF(self.rect().adjusted(padding, padding, -padding, -padding))
+
+    def indicator_size(self) -> float:
+        return Styles.Metrics.CheckboxSize
+
+    def border_width(self) -> float:
+        return Styles.Metrics.GlassBorderThick
+
+    def minimumSizeHint(self) -> QSize:
+        return self.sizeHint()
+
+    def indicator_colors(self) -> tuple[QColor, QColor]:
+        if self.isChecked():
+            return QColor(Styles.Colors.NothingAccent), QColor(Styles.Colors.NothingAccent)
+
+        if self.hovered:
+            return QColor(Styles.Colors.EffectMenu.Hover), QColor(Styles.Colors.NothingAccentPressed)
+
+        return QColor(Styles.Colors.EffectMenu.Hover), QColor(self.default_border)
+
+    def layout_rects(self) -> tuple[QRectF, QRectF]:
+        content_rect = self.content_rect()
+        size         = self.indicator_size()
+
+        indicator_rect = QRectF(
+            content_rect.left(),
+            content_rect.top() + (content_rect.height() - size) / 2,
+            size,
+            size
+        )
+
+        label_rect = QRectF(
+            indicator_rect.right() + self.label_spacing,
+            content_rect.top() - 1,
+            content_rect.right() - indicator_rect.right() - self.label_spacing,
+            content_rect.height()
+        )
+
+        return indicator_rect, label_rect
+
+    def sizeHint(self) -> QSize:
+        metrics    = self.fontMetrics()
+        text_width = metrics.horizontalAdvance(self.text())
+        size       = int(self.indicator_size())
+
+        width  = size + self.label_spacing + text_width
+        height = max(size, metrics.height())
+
+        return QSize(width + self.overflow_padding * 2, height + self.overflow_padding * 2)
 
     def nextCheckState(self) -> None:
         super().nextCheckState()
@@ -123,59 +166,6 @@ class Checkbox(Lifecycle.LoomAnimationMixin, QCheckBox):
 
         self.hovered = False
         self.update()
-
-    def content_rect(self) -> QRectF:
-        padding = self.overflow_padding
-
-        return QRectF(self.rect().adjusted(padding, padding, -padding, -padding))
-
-    def indicator_size(self) -> float:
-        return pixel_size(Styles.Metrics.CheckboxSize)
-
-    def border_width(self) -> float:
-        return pixel_size(Styles.Metrics.GlassBorderThick)
-
-    def sizeHint(self) -> QSize:
-        metrics    = self.fontMetrics()
-        text_width = metrics.horizontalAdvance(self.text())
-        size       = int(self.indicator_size())
-
-        width  = size + self.label_spacing + text_width
-        height = max(size, metrics.height())
-
-        return QSize(width + self.overflow_padding * 2, height + self.overflow_padding * 2)
-
-    def minimumSizeHint(self) -> QSize:
-        return self.sizeHint()
-
-    def indicator_colors(self) -> tuple[QColor, QColor]:
-        if self.isChecked():
-            return QColor(Styles.Colors.NothingAccent), QColor(Styles.Colors.NothingAccent)
-
-        if self.hovered:
-            return QColor(Styles.Colors.EffectMenu.Hover), QColor(Styles.Colors.NothingAccentPressed)
-
-        return QColor(Styles.Colors.EffectMenu.Hover), QColor(self.default_border)
-
-    def layout_rects(self) -> tuple[QRectF, QRectF]:
-        content_rect = self.content_rect()
-        size         = self.indicator_size()
-
-        indicator_rect = QRectF(
-            content_rect.left(),
-            content_rect.top() + (content_rect.height() - size) / 2,
-            size,
-            size
-        )
-
-        label_rect = QRectF(
-            indicator_rect.right() + self.label_spacing,
-            content_rect.top() - 1,
-            content_rect.right() - indicator_rect.right() - self.label_spacing,
-            content_rect.height()
-        )
-
-        return indicator_rect, label_rect
 
     def paintEvent(self, event: QPaintEvent) -> None:
         indicator_rect, label_rect = self.layout_rects()

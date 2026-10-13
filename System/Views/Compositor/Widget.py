@@ -9,6 +9,7 @@ from PyQt6.QtGui import (
 
 from PyQt6.QtCore import (
     Qt,
+    QSize,
     QTimer,
     pyqtSignal
 )
@@ -32,9 +33,12 @@ from System.Services import (
 )
 
 from System.Interface import (
+    Timing,
     Widgets,
     Windows
 )
+
+from System.Interface.Animation import LoomEngine
 
 from . import Timeline
 
@@ -53,6 +57,12 @@ class CompositorWidget(QWidget):
 
         self.is_ejecting                   = False
         self.pending_mini_preview_position = None
+
+        self.preview_tick_timer = Timing.Timer(
+            interval = Constants.FPS_30,
+            callback = self.on_preview_tick,
+            parent   = self
+        )
 
         self.overall_layout = QVBoxLayout(self)
         self.overall_layout.setContentsMargins(8, 8, 8, 8)
@@ -78,7 +88,7 @@ class CompositorWidget(QWidget):
 
         self.glyph_dur_control = Widgets.DraggableValueControl(
             QIcon("System/Assets/Icons/Compositor/Duration.png"),
-            "duration",
+            "Duration",
             100,
             5,
             5000,
@@ -88,7 +98,7 @@ class CompositorWidget(QWidget):
 
         self.brightness_control = Widgets.DraggableValueControl(
             QIcon("System/Assets/Icons/Compositor/Brightness.png"),
-            "brightness",
+            "Brightness",
             100,
             5,
             100,
@@ -98,13 +108,13 @@ class CompositorWidget(QWidget):
 
         self.playspeed_button = Widgets.CycleButton(
             QIcon("System/Assets/Icons/Compositor/Speed.png"),
-            "speed",
+            "Speed",
             [("1x", 1.0), ("0.5x", 0.5), ("0.2x", 0.2)]
         )
 
         self.default_effect = Widgets.CycleButton(
             QIcon("System/Assets/Icons/Compositor/Effect.png"),
-            "effect",
+            "Effect",
             [
                 ("None", "none"),
                 ("Fade out", "fade_out"),
@@ -112,6 +122,19 @@ class CompositorWidget(QWidget):
                 ("Fade in out", "fade_in_out")
             ]
         )
+
+        self.device_status_button = Widgets.ButtonWithOutline(
+            icon                 = QIcon("System/Assets/Icons/Compositor/Receiver.png"),
+            enable_glitch_effect = False
+        )
+
+        self.device_status_button.setFixedSize(
+            Styles.Metrics.ElementHeight,
+            Styles.Metrics.ElementHeight
+        )
+
+        self.device_status_button.setIconSize(QSize(20, 20))
+        self.device_status_button.setToolTip("Device Status")
 
         self.top_status_label.setFont(Utils.NDot(11))
         self.top_status_label.setMinimumHeight(Styles.Metrics.ElementHeight)
@@ -127,6 +150,7 @@ class CompositorWidget(QWidget):
         control_bar.addWidget(self.brightness_control)
         control_bar.addWidget(self.playspeed_button)
         control_bar.addWidget(self.default_effect)
+        control_bar.addWidget(self.device_status_button)
         control_bar.addWidget(self.export_button)
 
         self.overall_layout.addWidget(self.top_control_bar_widget)
@@ -141,12 +165,13 @@ class CompositorWidget(QWidget):
 
         self.playspeed_button.state_changed.connect(self.on_playspeed_state_changed)
         self.default_effect.state_changed.connect(self.on_default_effect_changed)
+        self.device_status_button.clicked.connect(self.open_device_status_window)
 
         self.content_widget.playhead_moved_normalized.connect(self.on_playhead_position_changed)
         self.content_widget.speed_cycle_requested.connect(self.playspeed_button.next_state)
         self.content_widget.playground_requested.connect(self.open_playground_window)
 
-        self.mini_preview_widget.preview_clicked.connect(self.content_widget.scroll_to_normalized_position)
+        self.mini_preview_widget.preview_clicked.connect(self.on_mini_preview_clicked)
         self.glyph_dur_control.valueChanged.connect(self.on_duration_control_changed)
         self.brightness_control.valueChanged.connect(self.on_brightness_control_changed)
 
@@ -162,6 +187,26 @@ class CompositorWidget(QWidget):
         self.content_widget.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
     # Slots
+
+    def on_preview_tick(self) -> None:
+        if self.playback_manager.is_playing:
+            current_position = self.mini_preview_widget.playhead_position
+            target_position  = self.pending_mini_preview_position
+
+            if target_position is None or abs(target_position - current_position) < 0.02:
+                self.preview_tick_timer.stop()
+
+                return
+
+        if self.pending_mini_preview_position is None:
+            self.preview_tick_timer.stop()
+
+            return
+
+        self.apply_mini_preview_position()
+
+    def on_mini_preview_clicked(self, normalized_position: float) -> None:
+        self.content_widget.scroll_to_normalized_position(normalized_position)
 
     def on_playspeed_state_changed(
             self,
@@ -200,6 +245,7 @@ class CompositorWidget(QWidget):
     def load_composition(self, composition: ProjectSaver.Composition) -> None:
         if self.is_ejecting:
             self.interrupt_eject_and_load(composition)
+
             return
 
         self.finish_composition_loading(composition)
@@ -212,7 +258,7 @@ class CompositorWidget(QWidget):
 
         self.playback_manager.fade_out_and_stop(
             duration_ms = Constants.INTERRUPTED_FADE_DURATION_MS,
-            easing      = Player.Easing.ease_out_quart,
+            easing      = LoomEngine.Easing.ease_out_quart,
             on_finish   = lambda: self.finish_composition_loading(composition)
         )
 
@@ -234,7 +280,7 @@ class CompositorWidget(QWidget):
             self.content_widget.playhead_timer.stop()
             self.playback_manager.fade_out_and_stop(
                 duration_ms = Constants.EJECT_FADE_DURATION_MS,
-                easing      = Player.Easing.ease_out_quart
+                easing      = LoomEngine.Easing.ease_out_quart
             )
 
             animation_multiplier = Constants.current_settings.get("animation_multiplier", 1.0)
@@ -242,6 +288,7 @@ class CompositorWidget(QWidget):
 
             QTimer.singleShot(scaled_fade_duration, self.clear_ejecting_flag)
 
+        self.preview_tick_timer.stop()
         self.content_widget.composition.syncer.stop()
 
         self.content_widget.playhead_moved_normalized.disconnect(self.on_playhead_position_changed)
@@ -304,10 +351,17 @@ class CompositorWidget(QWidget):
         preview_width = max(1, self.mini_preview_widget.width())
         threshold     = 1.0 / float(preview_width)
 
-        if abs(normalized_position - current_position) < threshold:
+        difference = abs(normalized_position - current_position)
+
+        if difference < threshold:
             return
 
         self.pending_mini_preview_position = normalized_position
+
+        is_large_jump = difference > 0.05
+
+        if (not self.playback_manager.is_playing or is_large_jump) and not self.preview_tick_timer.isActive():
+            self.preview_tick_timer.start()
 
     def apply_mini_preview_position(self) -> None:
         if self.pending_mini_preview_position is None:
@@ -329,3 +383,6 @@ class CompositorWidget(QWidget):
     @staticmethod
     def open_playground_window() -> None:
         Windows.Playground().exec()
+
+    def open_device_status_window(self) -> None:
+        Windows.DeviceStatusWindow(parent = self).exec()

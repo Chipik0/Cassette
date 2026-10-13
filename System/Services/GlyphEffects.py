@@ -6,7 +6,7 @@ from loguru import logger
 
 from System.Common import Constants
 
-# Data Extraction And Parsing
+# Data Extraction and Parsing
 
 def parse_effect_arguments(
         configuration:     dict,
@@ -197,10 +197,10 @@ def strobe_effect(
         glyph:             dict,
         model:             str | None,
         bpm:               int | float,
-        frequency:         int | float = 1,
-        duty_cycle:        int | float = 50,
-        first_brightness:  int = 100,
-        second_brightness: int = 0,
+        frequency:         int | float        = 1,
+        duty_cycle:        int | float        = 50,
+        first_brightness:  int                = 100,
+        second_brightness: int                = 0,
         bpm_snap:          int | float | bool = False
     ) -> list[dict]:
 
@@ -255,9 +255,9 @@ def bpm_effect(
         model:         str | None,
         bpm:           int | float,
         multiplier:    int | float,
-        mode:          str = "Standard",
+        mode:          str         = "Standard",
         decay_length:  int | float = 50,
-        enable_fading: bool = True
+        enable_fading: bool        = True
     ) -> list[dict]:
 
     glyph_data = extract_glyph_data(glyph, model)
@@ -408,7 +408,7 @@ def sparkle_effect(
         model:      str | None,
         bpm:        int | float,
         multiplier: int | float,
-        density:    int = 1,
+        density:    int  = 1,
         fade_out:   bool = True
     ) -> list[dict]:
 
@@ -515,7 +515,7 @@ def fill_effect(
         glyph:  dict,
         model:  str | None,
         bpm:    int | float,
-        side:   int = 1,
+        side:   int  = 1,
         invert: bool = False
     ) -> list[dict]:
 
@@ -562,7 +562,7 @@ def random_fill_effect(
         model:    str | None,
         bpm:      int | float,
         bpm_snap: int | float | bool = False,
-        mode:     str = "Fill"
+        mode:     str                = "Fill"
     ) -> list[dict]:
 
     glyph_data      = extract_glyph_data(glyph, model)
@@ -617,12 +617,12 @@ def glitch_effect(
         glyph:                dict,
         model:                str | None,
         bpm:                  int | float,
-        fps:                  float = 20.0,
-        duty_cycle:           float = 0.7,
-        min_brightness_ratio: float = 0.3,
-        cluster_mode:         str = "Scattered",
+        fps:                  float              = 20.0,
+        duty_cycle:           float              = 0.7,
+        min_brightness_ratio: float              = 0.3,
+        cluster_mode:         str                = "Scattered",
         bpm_snap:             int | float | bool = False,
-        enable_fade_out:      bool = False
+        enable_fade_out:      bool               = False
     ) -> list[dict]:
 
     if bpm_snap:
@@ -683,7 +683,7 @@ def ripple_effect(
         glyph:         dict,
         model:         str | None,
         bpm:           int | float,
-        tail:          int = 4,
+        tail:          int         = 4,
         center_offset: int | float = 50.0
     ) -> list[dict]:
 
@@ -876,10 +876,10 @@ def zebra_effect(
         glyph:     dict,
         model:     str | None,
         bpm:       int | float,
-        fps:       int | float = 1,
-        on_count:  int = 1,
-        off_count: int = 1,
-        side:      int = 1,
+        fps:       int | float        = 1,
+        on_count:  int                = 1,
+        off_count: int                = 1,
+        side:      int                = 1,
         bpm_snap:  int | float | bool = False
     ) -> list[dict]:
 
@@ -931,8 +931,8 @@ def shocker_effect(
         glyph:     dict,
         model:     str | None,
         bpm:       int | float,
-        frequency: float = 5.0,
-        fade_out:  bool = True,
+        frequency: float              = 5.0,
+        fade_out:  bool               = True,
         bpm_snap:  int | float | bool = False
     ) -> list[dict]:
 
@@ -1082,7 +1082,7 @@ def boomerang_effect(
 
     return output
 
-# Configuration And Utilities
+# Configuration and Utilities
 
 EffectsConfig = {
     "None": {

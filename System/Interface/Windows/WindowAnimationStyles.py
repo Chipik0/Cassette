@@ -8,16 +8,15 @@ from loguru  import logger
 
 from PyQt6.QtCore import QTimer
 
-from System.Services import Player
-
-from System.Interface.Animation.LoomEngine import Easing
+from System.Services            import Player
+from System.Interface.Animation import LoomEngine
 
 # Sound Playback
 
 def play_sound_choice(
         source:      list[str] | str | None,
-        setting_key: str | None = None,
-        speed:       float      = 1.0
+        setting_key: str       | None = None,
+        speed:       float            = 1.0
     ) -> None:
 
     if not source:
@@ -177,7 +176,7 @@ class WindowAnimationStyle:
         ) -> None:
 
         handle   = getattr(owner, name + "_property")
-        easing   = getattr(Easing, curve.get("easing", "ease_out_cubic"))
+        easing   = getattr(LoomEngine.Easing, curve.get("easing", "ease_out_cubic"))
         finished = getattr(owner, curve["finished"]) if "finished" in curve else None
 
         handle.play_curve(

@@ -12,7 +12,7 @@ import soundfile
 import threading
 
 from pathlib import Path
-from loguru import logger
+from loguru  import logger
 
 from PyQt6.QtCore import (
     QTimer,
@@ -26,12 +26,9 @@ from System.Common import (
     Constants
 )
 
-from System.Interface.Animation.LoomEngine import (
-    Easing,
-    ui_engine
-)
-
-from System.Accelerated import PlayerFunctions
+from System.Interface           import Timing
+from System.Accelerated         import PlayerFunctions
+from System.Interface.Animation import LoomEngine
 
 Utils.check_dynamic_library(PlayerFunctions)
 
@@ -190,13 +187,15 @@ class PlaybackManager(QObject):
             name            = item[0]
             base_value      = item[1]
             callback        = item[2] if len(item) > 2 else None
-            property_handle = ui_engine.bind(self, name, base_value, on_change = callback)
+            property_handle = LoomEngine.ui_engine.bind(self, name, base_value, on_change = callback)
 
             setattr(self, f"{name}_property", property_handle)
 
-        self.scrub_friction_timer = QTimer(self)
-        self.scrub_friction_timer.setInterval(25)
-        self.scrub_friction_timer.timeout.connect(self.process_scrub_friction_tick)
+        self.scrub_friction_timer = Timing.Timer(
+            interval = 25,
+            callback = self.process_scrub_friction_tick,
+            parent   = self
+        )
 
         self.supports_reverse_resampling = self.detect_reverse_support()
 
@@ -207,16 +206,16 @@ class PlaybackManager(QObject):
         old_timer = self.property_timers.pop(property_name)
         old_timer.stop()
         old_timer.deleteLater()
-        ui_engine.release()
+        LoomEngine.ui_engine.release()
 
     def set_property(
             self,
             property_name:     str,
             value:             float,
-            duration_ms:       int    = 0,
-            easing:            Easing = Easing.smooth,
-            on_finish:         object = None,
-            multiply_duration: bool   = True
+            duration_ms:       int               = 0,
+            easing:            LoomEngine.Easing = LoomEngine.Easing.smooth,
+            on_finish:         object            = None,
+            multiply_duration: bool              = True
         ) -> None:
 
         property_handle = getattr(self, f"{property_name}_property")
@@ -231,7 +230,7 @@ class PlaybackManager(QObject):
 
             return
 
-        ui_engine.acquire()
+        LoomEngine.ui_engine.acquire()
 
         timer = QTimer(self)
         timer.setSingleShot(True)
@@ -239,7 +238,7 @@ class PlaybackManager(QObject):
         def combined_finish() -> None:
             self.property_timers.pop(property_name, None)
             timer.deleteLater()
-            ui_engine.release()
+            LoomEngine.ui_engine.release()
 
             if on_finish:
                 on_finish()
@@ -259,8 +258,8 @@ class PlaybackManager(QObject):
     def apply_properties(
             self,
             properties:  dict[str, float],
-            duration_ms: int    = 0,
-            easing:      Easing = Easing.smooth
+            duration_ms: int               = 0,
+            easing:      LoomEngine.Easing = LoomEngine.Easing.smooth
         ) -> None:
 
         for name, value in properties.items():
@@ -270,7 +269,7 @@ class PlaybackManager(QObject):
         for timer in list(self.property_timers.values()):
             timer.stop()
             timer.deleteLater()
-            ui_engine.release()
+            LoomEngine.ui_engine.release()
 
         self.property_timers.clear()
 
@@ -432,7 +431,7 @@ class PlaybackManager(QObject):
             self.set_speed(
                 self.base_speed,
                 duration_ms           = 180,
-                easing                = Easing.ease_out_quad,
+                easing                = LoomEngine.Easing.ease_out_quad,
                 use_engine_multiplier = False
             )
             self.playback_state_changed.emit(True)
@@ -446,7 +445,7 @@ class PlaybackManager(QObject):
         self.set_speed(
             0.0,
             duration_ms           = 60,
-            easing                = Easing.ease_out_quad,
+            easing                = LoomEngine.Easing.ease_out_quad,
             on_finish             = on_finish_stop,
             use_engine_multiplier = False
         )
@@ -614,7 +613,7 @@ class PlaybackManager(QObject):
                 self.set_speed(
                     0.0,
                     duration_ms           = fade_ms,
-                    easing                = Easing.ease_out_quart,
+                    easing                = LoomEngine.Easing.ease_out_quart,
                     use_engine_multiplier = False,
                     on_finish             = apply_load
                 )
@@ -1289,10 +1288,10 @@ class PlaybackManager(QObject):
 
     def set_channel_delay(
             self,
-            left_to_ms:  float | None = None,
-            right_to_ms: float | None = None,
-            duration_ms: int          = 0,
-            easing:      Easing       = Easing.smooth
+            left_to_ms:  float | None      = None,
+            right_to_ms: float | None      = None,
+            duration_ms: int               = 0,
+            easing:      LoomEngine.Easing = LoomEngine.Easing.smooth
         ) -> None:
 
         if left_to_ms is None and right_to_ms is None:
@@ -1326,13 +1325,13 @@ class PlaybackManager(QObject):
     def set_speed(
             self,
             new_speed:             float,
-            duration_ms:           int    = 0,
-            easing:                Easing = Easing.smooth,
-            on_finish:             object = None,
-            use_engine_multiplier: bool   = True,
-            cleanup_on_finish:     bool   = False,
-            shutdown_on_finish:    bool   = False,
-            update_base:           bool   = True
+            duration_ms:           int               = 0,
+            easing:                LoomEngine.Easing = LoomEngine.Easing.smooth,
+            on_finish:             object            = None,
+            use_engine_multiplier: bool              = True,
+            cleanup_on_finish:     bool              = False,
+            shutdown_on_finish:    bool              = False,
+            update_base:           bool              = True
         ) -> None:
 
         is_slowdown = new_speed < self.speed
@@ -1381,9 +1380,9 @@ class PlaybackManager(QObject):
 
     def fade_out_and_stop(
             self,
-            duration_ms: int           = 1000,
-            easing:      Easing        = Easing.ease_out_quart,
-            on_finish:   object | None = None
+            duration_ms: int               = 1000,
+            easing:      LoomEngine.Easing = LoomEngine.Easing.ease_out_quart,
+            on_finish:   object | None     = None
         ) -> None:
 
         if not self.is_playing:
@@ -1403,9 +1402,9 @@ class PlaybackManager(QObject):
 
     def pulse_speed(
             self,
-            pulse_peak_speed: float  = 1.2,
-            duration_ms:      int    = 300,
-            easing:           Easing = Easing.ease_out_cubic
+            pulse_peak_speed: float             = 1.2,
+            duration_ms:      int               = 300,
+            easing:           LoomEngine.Easing = LoomEngine.Easing.ease_out_cubic
         ) -> None:
 
         if not self.is_actively_playing:
@@ -1450,10 +1449,11 @@ class PlaybackManager(QObject):
                 update_base           = False
             )
 
-        self.pulse_timer = QTimer(self)
-        self.pulse_timer.setSingleShot(True)
-        self.pulse_timer.timeout.connect(return_to_base)
-        self.pulse_timer.start(duration_half)
+        self.pulse_timer = Timing.Timer(
+            callback    = return_to_base,
+            single_shot = True,
+            parent      = self
+        )
 
         self.set_speed(
             pulse_peak_speed,
@@ -1466,8 +1466,8 @@ class PlaybackManager(QObject):
     def set_volume(
             self,
             volume:      float,
-            duration_ms: int    = 0,
-            easing:      Easing = Easing.smooth
+            duration_ms: int               = 0,
+            easing:      LoomEngine.Easing = LoomEngine.Easing.smooth
         ) -> None:
 
         clamped_volume = max(0.0, min(volume, 1.0))
@@ -1475,11 +1475,11 @@ class PlaybackManager(QObject):
 
     def set_bitcrush(
             self,
-            bits:        int    = 24,
-            downsample:  int    = 1,
-            mix:         float  = 0.0,
-            duration_ms: int    = 0,
-            easing:      Easing = Easing.smooth
+            bits:        int               = 24,
+            downsample:  int               = 1,
+            mix:         float             = 0.0,
+            duration_ms: int               = 0,
+            easing:      LoomEngine.Easing = LoomEngine.Easing.smooth
         ) -> None:
 
         self.apply_properties(
@@ -1494,11 +1494,11 @@ class PlaybackManager(QObject):
 
     def set_eq(
             self,
-            low:         float  = 1.0,
-            mid:         float  = 1.0,
-            high:        float  = 1.0,
-            duration_ms: int    = 0,
-            easing:      Easing = Easing.smooth
+            low:         float             = 1.0,
+            mid:         float             = 1.0,
+            high:        float             = 1.0,
+            duration_ms: int               = 0,
+            easing:      LoomEngine.Easing = LoomEngine.Easing.smooth
         ) -> None:
 
         self.apply_properties(
@@ -1513,9 +1513,9 @@ class PlaybackManager(QObject):
 
     def set_background_noise(
             self,
-            mix:         float  = 0.3,
-            duration_ms: int    = 0,
-            easing:      Easing = Easing.smooth
+            mix:         float             = 0.3,
+            duration_ms: int               = 0,
+            easing:      LoomEngine.Easing = LoomEngine.Easing.smooth
         ) -> None:
 
         clamped_mix = max(0.0, min(1.0, mix))
@@ -1523,9 +1523,9 @@ class PlaybackManager(QObject):
 
     def set_reverb(
             self,
-            mix:         float  = 1.0,
-            duration_ms: int    = 0,
-            easing:      Easing = Easing.smooth
+            mix:         float             = 1.0,
+            duration_ms: int               = 0,
+            easing:      LoomEngine.Easing = LoomEngine.Easing.smooth
         ) -> None:
 
         clamped_mix = max(0.0, min(1.0, mix))
@@ -1534,7 +1534,7 @@ class PlaybackManager(QObject):
     def set_car_radio_active(
             self,
             duration_ms: int,
-            easing:      Easing
+            easing:      LoomEngine.Easing
         ) -> None:
 
         self.set_eq(low = 1.6, mid = 1.0, high = 0.7, duration_ms = duration_ms, easing = easing)
@@ -1544,7 +1544,7 @@ class PlaybackManager(QObject):
     def set_car_radio_inactive(
             self,
             duration_ms: int,
-            easing:      Easing
+            easing:      LoomEngine.Easing
         ) -> None:
 
         self.set_eq(low = 1.0, mid = 1.0, high = 1.0, duration_ms = duration_ms, easing = easing)
@@ -1554,8 +1554,8 @@ class PlaybackManager(QObject):
     def set_car_radio(
             self,
             active:      bool,
-            duration_ms: int    = 0,
-            easing:      Easing = Easing.smooth
+            duration_ms: int               = 0,
+            easing:      LoomEngine.Easing = LoomEngine.Easing.smooth
         ) -> None:
 
         if active:
@@ -1586,7 +1586,7 @@ class PlaybackManager(QObject):
             mix:         float                                  = 1.0,
             gain:        float                                  = 1.0,
             duration_ms: int                                    = 0,
-            easing:      Easing                                 = Easing.smooth
+            easing:      LoomEngine.Easing                      = LoomEngine.Easing.smooth
         ) -> None:
 
         target_mix          = max(0.0, min(1.0, float(mix)))
@@ -1634,19 +1634,19 @@ class PlaybackManager(QObject):
 
     def set_noise(
             self,
-            intensity:          float  = 0.3,
-            mix:                float  = 0.3,
-            permanent:          bool   = False,
-            color:              str    = "brown",
-            attack_ms:          float  = 100.0,
-            peak_ms:            float  = 180.0,
-            release_ms:         float  = 250.0,
-            mute_audio:         float  = 0.45,
-            min_duration_ms:    float  = 160.0,
-            max_duration_ms:    float  = 900.0,
-            randomize_duration: bool   = True,
-            duration_ms:        int    = 0,
-            easing:             Easing = Easing.smooth
+            intensity:          float             = 0.3,
+            mix:                float             = 0.3,
+            permanent:          bool              = False,
+            color:              str               = "brown",
+            attack_ms:          float             = 100.0,
+            peak_ms:            float             = 180.0,
+            release_ms:         float             = 250.0,
+            mute_audio:         float             = 0.45,
+            min_duration_ms:    float             = 160.0,
+            max_duration_ms:    float             = 900.0,
+            randomize_duration: bool              = True,
+            duration_ms:        int               = 0,
+            easing:             LoomEngine.Easing = LoomEngine.Easing.smooth
         ) -> None:
 
         self.radio_noise_color              = color if color in {"white", "pink", "brown"} else "brown"
@@ -1676,7 +1676,7 @@ class PlaybackManager(QObject):
             mode:        str    = "constant",
             focus:       str    = "all",
             duration_ms: int    = 0,
-            easing:      Easing = Easing.smooth
+            easing:      LoomEngine.Easing = LoomEngine.Easing.smooth
         ) -> None:
 
         self.echo_mode  = mode if mode in {"constant", "random"} else "constant"
@@ -1695,7 +1695,7 @@ class PlaybackManager(QObject):
     def full_shutdown(self) -> None:
         self.reset_playback_state()
 
-        ui_engine.unbind_owner(self)
+        LoomEngine.ui_engine.unbind_owner(self)
 
         with self.lock:
             self.close_stream()
@@ -1850,8 +1850,10 @@ class UISoundManager:
 
         self.ensure_device()
 
+        UI_HEADROOM = 0.8
+
         master_volume         = Constants.current_settings.get("sound_effect_volume", 100) / 100.0
-        final_volume          = float(volume) * master_volume
+        final_volume          = float(volume) * master_volume * UI_HEADROOM
         left_gain, right_gain = self.pan_to_gains(pan)
 
         with self.lock:
@@ -1955,7 +1957,6 @@ class UISoundManager:
                         frames,
                         loop
                     )
-
                 else:
                     sound_block, new_position, is_active = PlayerFunctions.process_ui_sound_interp(
                         data,
@@ -1973,7 +1974,6 @@ class UISoundManager:
 
                 if is_active:
                     updates.append((sound_id, new_position))
-
                 else:
                     to_remove.append(sound_id)
 
@@ -1985,7 +1985,8 @@ class UISoundManager:
                 for sound_id in to_remove:
                     self.active_sounds.pop(sound_id, None)
 
-            numpy.clip(master_block, -1.0, 1.0, out = master_block)
+            master_block = numpy.tanh(master_block * 0.7)
+
             master_block = numpy.nan_to_num(master_block, nan = 0.0, posinf = 1.0, neginf = -1.0)
             pcm          = (master_block * 32767.0).astype(numpy.int16)
             frames       = yield pcm.tobytes()

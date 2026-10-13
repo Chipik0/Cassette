@@ -6,9 +6,9 @@ import threading
 import traceback
 import importlib.util
 
-from enum import Enum
+from enum      import Enum
 from itertools import count
-from weakref import WeakKeyDictionary
+from weakref   import WeakKeyDictionary
 
 from loguru import logger
 
@@ -215,8 +215,10 @@ class ThreadTicker:
             return
 
         self.stop_event.clear()
+
         self.thread  = threading.Thread(target = self.run, daemon = True)
         self.running = True
+
         self.thread.start()
 
     def stop(self) -> None:
@@ -257,7 +259,7 @@ class RuntimeBackend:
 
     def initialize_qt_backend(self) -> None:
         if self.name == "pyqt5":
-            from PyQt5.QtCore import (
+            from PyQt5.QtCore import ( # type: ignore
                 QSize,
                 QTimer,
                 QPoint,
@@ -269,12 +271,10 @@ class RuntimeBackend:
                 QCoreApplication
             )
 
-            from PyQt5.QtGui import (
-                QColor
-            )
+            from PyQt5.QtGui import QColor # type: ignore
 
         elif self.name == "pyqt6":
-            from PyQt6.QtCore import (
+            from PyQt6.QtCore import ( # type: ignore
                 QSize,
                 QTimer,
                 QPoint,
@@ -286,12 +286,10 @@ class RuntimeBackend:
                 QCoreApplication
             )
 
-            from PyQt6.QtGui import (
-                QColor
-            )
+            from PyQt6.QtGui import QColor # type: ignore
 
         elif self.name == "pyside2":
-            from PySide2.QtCore import (
+            from PySide2.QtCore import ( # type: ignore
                 QSize,
                 QTimer,
                 QPoint,
@@ -303,12 +301,10 @@ class RuntimeBackend:
                 QCoreApplication
             )
 
-            from PySide2.QtGui import (
-                QColor
-            )
+            from PySide2.QtGui import QColor # type: ignore
 
         elif self.name == "pyside6":
-            from PySide6.QtCore import (
+            from PySide6.QtCore import ( # type: ignore
                 QSize,
                 QTimer,
                 QPoint,
@@ -320,9 +316,7 @@ class RuntimeBackend:
                 QCoreApplication
             )
 
-            from PySide6.QtGui import (
-                QColor
-            )
+            from PySide6.QtGui import QColor # type: ignore
 
         else:
             raise ValueError(f"Unknown backend: {self.name}")
@@ -917,25 +911,25 @@ class AnimationMath:
         if kind == "size":
             return AnimationMath.construct_like(
                 value,
-                AnimationMath.soft_limit_max(AnimationMath.component_value(value, "width"),  AnimationMath.component_value(max_val, "width"), softness_factor),
+                AnimationMath.soft_limit_max(AnimationMath.component_value(value, "width"),  AnimationMath.component_value(max_val, "width"),  softness_factor),
                 AnimationMath.soft_limit_max(AnimationMath.component_value(value, "height"), AnimationMath.component_value(max_val, "height"), softness_factor)
             )
 
         if kind == "rect":
             return AnimationMath.construct_like(
                 value,
-                AnimationMath.soft_limit_max(AnimationMath.component_value(value, "x"),      AnimationMath.component_value(max_val, "x"), softness_factor),
-                AnimationMath.soft_limit_max(AnimationMath.component_value(value, "y"),      AnimationMath.component_value(max_val, "y"), softness_factor),
-                AnimationMath.soft_limit_max(AnimationMath.component_value(value, "width"),  AnimationMath.component_value(max_val, "width"), softness_factor),
+                AnimationMath.soft_limit_max(AnimationMath.component_value(value, "x"),      AnimationMath.component_value(max_val, "x"),      softness_factor),
+                AnimationMath.soft_limit_max(AnimationMath.component_value(value, "y"),      AnimationMath.component_value(max_val, "y"),      softness_factor),
+                AnimationMath.soft_limit_max(AnimationMath.component_value(value, "width"),  AnimationMath.component_value(max_val, "width"),  softness_factor),
                 AnimationMath.soft_limit_max(AnimationMath.component_value(value, "height"), AnimationMath.component_value(max_val, "height"), softness_factor)
             )
 
         if kind == "color":
             return AnimationMath.construct_like(
                 value,
-                int(AnimationMath.soft_limit_max(AnimationMath.component_value(value, "red"),   AnimationMath.component_value(max_val, "red"), softness_factor)),
+                int(AnimationMath.soft_limit_max(AnimationMath.component_value(value, "red"),   AnimationMath.component_value(max_val, "red"),   softness_factor)),
                 int(AnimationMath.soft_limit_max(AnimationMath.component_value(value, "green"), AnimationMath.component_value(max_val, "green"), softness_factor)),
-                int(AnimationMath.soft_limit_max(AnimationMath.component_value(value, "blue"),  AnimationMath.component_value(max_val, "blue"), softness_factor)),
+                int(AnimationMath.soft_limit_max(AnimationMath.component_value(value, "blue"),  AnimationMath.component_value(max_val, "blue"),  softness_factor)),
                 int(AnimationMath.soft_limit_max(AnimationMath.component_value(value, "alpha"), AnimationMath.component_value(max_val, "alpha"), softness_factor))
             )
 
@@ -1414,8 +1408,7 @@ class PropertyTrack:
                 self.base_value = final_value
 
         self.clips = running_clips
-
-        target = self.base_value
+        target     = self.base_value
 
         if self.is_targeting:
             self.target_elapsed_ms += delta_ms
@@ -1630,8 +1623,8 @@ class AnimationEngine:
             frames_per_second: int        = 120
         ) -> None:
 
-        self.backend     = RuntimeBackend(backend_name)
-        self.namespace   = PropertyNamespace()
+        self.backend   = RuntimeBackend(backend_name)
+        self.namespace = PropertyNamespace()
 
         self.tracks: dict[str, PropertyTrack] = {}
 
@@ -1665,8 +1658,7 @@ class AnimationEngine:
         self.apply_settings()
 
     def resolve_frames_per_second(self) -> int:
-        target = Constants.current_settings.instance.value("target_fps", 0, type = int)
-        return target
+        return Constants.current_settings.instance.value("target_fps", 0, type = int)
 
     def apply_settings(self) -> None:
         requested_fps = self.resolve_frames_per_second()

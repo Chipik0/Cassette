@@ -31,14 +31,11 @@ from System.Common import (
     Constants
 )
 
-from System.Services import Player
-from System.Interface.Timing import Timer
-from System.Interface.Animation import Lifecycle
-
-from System.Interface.Animation.LoomEngine import (
-    Easing,
-    MixMode,
-    ui_engine
+from System.Services            import Player
+from System.Interface.Timing    import Timer
+from System.Interface.Animation import (
+    Lifecycle,
+    LoomEngine
 )
 
 # Textbox
@@ -98,19 +95,19 @@ class Textbox(Lifecycle.LoomAnimationMixin, QLineEdit):
     def setup_animations(self) -> None:
         self.animations_enabled = Constants.current_settings["textbox_animations"]
 
-        self.position_handle = ui_engine.bind(
+        self.position_handle = LoomEngine.ui_engine.bind(
             owner      = self,
             name       = "position",
             base_value = QPoint(0, 0),
-            mix_mode   = MixMode.REPLACE,
+            mix_mode   = LoomEngine.MixMode.REPLACE,
             on_change  = self.on_position_changed
         )
 
-        self.glitch_text_handle = ui_engine.bind(
+        self.glitch_text_handle = LoomEngine.ui_engine.bind(
             owner      = self,
-            name       = "glitchText",
+            name       = "glitch_text",
             base_value = "",
-            mix_mode   = MixMode.REPLACE,
+            mix_mode   = LoomEngine.MixMode.REPLACE,
             on_change  = self.on_glitch_text_changed
         )
 
@@ -208,7 +205,6 @@ class Textbox(Lifecycle.LoomAnimationMixin, QLineEdit):
 
         else:
             super().keyPressEvent(event)
-
             return
 
         if not (key in (Qt.Key.Key_Left, Qt.Key.Key_Right, Qt.Key.Key_Enter) or self.is_key_pressed):
@@ -293,7 +289,7 @@ class Textbox(Lifecycle.LoomAnimationMixin, QLineEdit):
             self.position_handle.set_target(
                 value                      = QPoint(0, 0),
                 duration_ms                = 250,
-                easing_function            = Easing.ease_out_quad,
+                easing_function            = LoomEngine.Easing.ease_out_quad,
                 multiply_duration_by_speed = False
             )
 
@@ -476,7 +472,7 @@ class Textbox(Lifecycle.LoomAnimationMixin, QLineEdit):
         self.position_handle.set_target(
             value                      = target_pos,
             duration_ms                = 250,
-            easing_function            = Easing.ease_out_expo,
+            easing_function            = LoomEngine.Easing.ease_out_expo,
             multiply_duration_by_speed = False
         )
 
@@ -526,9 +522,9 @@ class Textbox(Lifecycle.LoomAnimationMixin, QLineEdit):
         font_metrics    = QFontMetrics(self.font())
         character_width = font_metrics.horizontalAdvance("W")
 
-        count       = self.width() // character_width
-        message     = random.choice(self.error_messages)
-        full_string = (message * (count // len(message) + 1))[:count]
+        count           = self.width() // character_width
+        message         = random.choice(self.error_messages)
+        full_string     = (message * (count // len(message) + 1))[:count]
 
         return full_string
 
@@ -621,7 +617,7 @@ class Textbox(Lifecycle.LoomAnimationMixin, QLineEdit):
             self.position_handle.set_target(
                 value                      = QPoint(0, 0),
                 duration_ms                = 180,
-                easing_function            = Easing.ease_out_quad,
+                easing_function            = LoomEngine.Easing.ease_out_quad,
                 multiply_duration_by_speed = False
             )
 
@@ -636,7 +632,7 @@ class Textbox(Lifecycle.LoomAnimationMixin, QLineEdit):
         self.position_handle.set_target(
             value                      = QPoint(offset, 0),
             duration_ms                = 120,
-            easing_function            = Easing.ease_out_cubic,
+            easing_function            = LoomEngine.Easing.ease_out_cubic,
             multiply_duration_by_speed = False
         )
 
@@ -647,7 +643,7 @@ class Textbox(Lifecycle.LoomAnimationMixin, QLineEdit):
         self.position_handle.set_target(
             value                      = QPoint(0, 0),
             duration_ms                = 180,
-            easing_function            = Easing.ease_out_elastic,
+            easing_function            = LoomEngine.Easing.ease_out_elastic,
             multiply_duration_by_speed = False
         )
 
@@ -660,7 +656,7 @@ class Textbox(Lifecycle.LoomAnimationMixin, QLineEdit):
         self.position_handle.set_target(
             value                      = target_pos,
             duration_ms                = 100,
-            easing_function            = Easing.linear,
+            easing_function            = LoomEngine.Easing.linear,
             multiply_duration_by_speed = False
         )
 
@@ -679,7 +675,7 @@ class Textbox(Lifecycle.LoomAnimationMixin, QLineEdit):
         self.position_handle.set_target(
             value                      = QPoint(0, 0),
             duration_ms                = duration_ms,
-            easing_function            = Easing.ease_out_back,
+            easing_function            = LoomEngine.Easing.ease_out_back,
             multiply_duration_by_speed = False
         )
 
@@ -755,14 +751,14 @@ class SearchTextbox(Textbox):
         self.safeTextChanged.connect(self.on_text_changed)
 
         self.random_title_timer = Timer(
-            50,
-            self.on_random_title_timer,
+            interval    = 50,
+            callback    = self.on_random_title_timer,
             single_shot = True
         )
 
         self.glitch_count_reset_timer = Timer(
-            20000,
-            self.on_search_box_reset,
+            interval    = 20000,
+            callback    = self.on_search_box_reset,
             single_shot = True
         )
 
@@ -824,6 +820,13 @@ class SearchTextbox(Textbox):
 
         return random.choice(bucket)
 
+    def open_parry_game(self) -> None:
+        self.clear()
+
+        from System.Interface.Windows import ParryGameWindow
+
+        ParryGameWindow(parent = self.window()).exec()
+
     def on_text_changed(self, text: str) -> None:
         normalized_text = (text or "").lower().strip().replace(" ", "")
         easter_response = self.get_easter_response(normalized_text)
@@ -836,7 +839,8 @@ class SearchTextbox(Textbox):
         easter_eggs = {
             "subject106": lambda: self.random_title_timer.start(),
             "chips047":   lambda: webbrowser.open("https://github.com/chips047"),
-            "hello":      lambda: self.setText("well uhH hello Hi Hello Hello Hellliio hiiii")
+            "hello":      lambda: self.setText("well uhH hello Hi Hello Hello Hellliio hiiii"),
+            "tamashika":  self.open_parry_game
         }
 
         if normalized_text in easter_eggs:

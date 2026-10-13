@@ -20,7 +20,6 @@ from PyQt6.QtCore import (
     QEvent,
     QPoint,
     QRectF,
-    QTimer,
     QObject,
     pyqtSignal,
     QElapsedTimer
@@ -46,12 +45,9 @@ from System.Services.Player import (
     bpm_informer
 )
 
-from System.Interface.Animation import Lifecycle
-
-from System.Interface.Animation.LoomEngine import (
-    Easing,
-    MixMode,
-    ui_engine
+from System.Interface.Animation import (
+    Lifecycle,
+    LoomEngine
 )
 
 # Buttons
@@ -62,13 +58,13 @@ class BaseButton(Lifecycle.LoomAnimationMixin, QPushButton):
     double_clicked = pyqtSignal()
     glitch_started = pyqtSignal()
 
-    glitch_step_count = 7
-    glitch_step_ms    = 24
+    glitch_step_count = 6
+    glitch_step_ms    = 30
 
     def __init__(
             self,
-            text:                 str | None     = None,
-            icon:                 QIcon | None   = None,
+            text:                 str     | None = None,
+            icon:                 QIcon   | None = None,
             parent:               QWidget | None = None,
             enable_glitch_effect: bool           = True
         ) -> None:
@@ -86,11 +82,11 @@ class BaseButton(Lifecycle.LoomAnimationMixin, QPushButton):
         self.glitch_sound_locked  = not enable_glitch_effect
         self.is_glitching         = False
 
-        self.press_scale_handle = ui_engine.bind(
+        self.press_scale_handle = LoomEngine.ui_engine.bind(
             owner      = self,
-            name       = "pressScale",
+            name       = "press_scale",
             base_value = 1.0,
-            mix_mode   = MixMode.REPLACE,
+            mix_mode   = LoomEngine.MixMode.REPLACE,
             on_change  = self.on_press_scale_changed
         )
 
@@ -102,11 +98,11 @@ class BaseButton(Lifecycle.LoomAnimationMixin, QPushButton):
     def setup_glitch_effect(self) -> None:
         self.original_button_text = super().text()
 
-        self.glitch_handle = ui_engine.bind(
+        self.glitch_handle = LoomEngine.ui_engine.bind(
             owner      = self,
             name       = "glitch",
             base_value = (self.original_button_text, QPoint(0, 0), QSize(0, 0)),
-            mix_mode   = MixMode.REPLACE,
+            mix_mode   = LoomEngine.MixMode.REPLACE,
             on_change  = self.on_glitch_frame_changed
         )
 
@@ -119,14 +115,14 @@ class BaseButton(Lifecycle.LoomAnimationMixin, QPushButton):
         self.press_scale_handle.set_target(
             value           = 0.97,
             duration_ms     = 100,
-            easing_function = Easing.ease_out_cubic
+            easing_function = LoomEngine.Easing.ease_out_cubic
         )
 
     def animate_release(self) -> None:
         self.press_scale_handle.set_target(
             value           = 1.0,
             duration_ms     = 100,
-            easing_function = Easing.ease_out_cubic
+            easing_function = LoomEngine.Easing.ease_out_cubic
         )
 
     def animate_punch(self) -> None:
@@ -136,7 +132,7 @@ class BaseButton(Lifecycle.LoomAnimationMixin, QPushButton):
                 (1.0, 1.0)
             ],
             100,
-            Easing.ease_out_cubic
+            LoomEngine.Easing.ease_out_cubic
         )
 
     def on_glitch_frame_changed(self, frame: tuple[str, QPoint, QSize]) -> None:
@@ -163,7 +159,7 @@ class BaseButton(Lifecycle.LoomAnimationMixin, QPushButton):
                 (
                     self.glitch_step_ms,
                     (
-                        self.generate_random_text(estimated_length),
+                        self.random_ass_text(estimated_length),
                         QPoint(random.randint(-3, 3), random.randint(-4, 4)),
                         QSize(random.randint(-4, 4), random.randint(-2, 2))
                     )
@@ -227,11 +223,13 @@ class BaseButton(Lifecycle.LoomAnimationMixin, QPushButton):
         if event.button() == Qt.MouseButton.RightButton:
             self.right_clicked.emit()
             super().mousePressEvent(event)
+
             return
 
         elif event.button() == Qt.MouseButton.MiddleButton:
             self.middle_clicked.emit()
             super().mousePressEvent(event)
+
             return
 
         if event.button() == Qt.MouseButton.LeftButton and Constants.current_settings["mouse_click_behavior"] == "fast":
@@ -239,9 +237,11 @@ class BaseButton(Lifecycle.LoomAnimationMixin, QPushButton):
             self.pressed.emit()
             self.clicked.emit()
             self.fast_clicked = True
+
             return
 
         self.fast_clicked = False
+
         super().mousePressEvent(event)
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
@@ -249,6 +249,7 @@ class BaseButton(Lifecycle.LoomAnimationMixin, QPushButton):
             self.setDown(False)
             self.released.emit()
             self.fast_clicked = False
+
             return
 
         super().mouseReleaseEvent(event)
@@ -282,26 +283,24 @@ class BaseButton(Lifecycle.LoomAnimationMixin, QPushButton):
         self.original_button_text = text
         super().setText(text)
 
-    def generate_random_text(self, length: int) -> str:
+    def random_ass_text(self, length: int) -> str:
         characters = string.ascii_letters + string.digits
         return "".join(random.choices(characters, k = length))
 
-    random_ass_text = generate_random_text
-
 class RectangularButton(BaseButton):
-    default_style_sheet: str | None   = None
+    default_style_sheet: str   | None = None
     default_height:      int          = 40
     border_radius:       float | None = None
     border_width:        float | None = None
 
     def __init__(
             self,
-            text:                 str | None     = None,
-            icon:                 QIcon | None   = None,
+            text:                 str     | None = None,
+            icon:                 QIcon   | None = None,
             parent:               QWidget | None = None,
             enable_glitch_effect: bool           = True,
-            style_sheet:          str | None     = None,
-            height:               int | None     = None
+            style_sheet:          str     | None = None,
+            height:               int     | None = None
         ) -> None:
 
         super().__init__(
@@ -311,8 +310,8 @@ class RectangularButton(BaseButton):
             enable_glitch_effect = enable_glitch_effect
         )
 
-        resolved_height      = height if height is not None else self.default_height
-        resolved_style_sheet = style_sheet if style_sheet is not None else self.default_style_sheet
+        resolved_height      = height      or self.default_height
+        resolved_style_sheet = style_sheet or self.default_style_sheet
 
         self.setFont(Utils.NType(10))
         self.setFixedHeight(resolved_height)
@@ -385,18 +384,20 @@ class ConfirmButton(ButtonWithOutline):
         self.is_connected_to_beat  = False
         self.cached_border_radius  = self.resolve_border_radius()
 
-        self.border_pulse_handle = ui_engine.bind(
+        self.border_pulse_handle = LoomEngine.ui_engine.bind(
             owner      = self,
-            name       = "borderPulse",
+            name       = "border_pulse",
             base_value = 0.0,
-            mix_mode   = MixMode.REPLACE,
+            mix_mode   = LoomEngine.MixMode.REPLACE,
             on_change  = self.on_border_pulse_changed
         )
 
-        self.confirmation_timer = QTimer(self)
-        self.confirmation_timer.setSingleShot(True)
-        self.confirmation_timer.setInterval(self.confirm_timeout_ms)
-        self.confirmation_timer.timeout.connect(self.reset_confirmation)
+        self.confirmation_timer = LoomEngine.Timing.Timer(
+            interval    = self.confirm_timeout_ms,
+            callback    = self.reset_confirmation,
+            single_shot = True,
+            parent      = self
+        )
 
         self.elapsed_timer = QElapsedTimer()
 
@@ -463,7 +464,7 @@ class ConfirmButton(ButtonWithOutline):
         self.border_pulse_handle.set_target(
             value           = 0.0,
             duration_ms     = 50,
-            easing_function = Easing.ease_out_cubic
+            easing_function = LoomEngine.Easing.ease_out_cubic
         )
 
     def pulse_border(self) -> None:
@@ -475,7 +476,7 @@ class ConfirmButton(ButtonWithOutline):
                 (1.0, 0.0)
             ],
             duration_ms,
-            Easing.ease_out_cubic
+            LoomEngine.Easing.ease_out_cubic
         )
 
         tone = (self.elapsed_timer.elapsed() / self.confirmation_timer.interval()) + 0.7
@@ -571,7 +572,7 @@ class OptionButton(BaseButton):
         if callback:
             self.clicked.connect(callback)
 
-# ButtonContainers
+# Button Containers
 
 @Dev.track_ram
 class ButtonRow(QHBoxLayout):

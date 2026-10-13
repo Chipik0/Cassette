@@ -45,7 +45,7 @@ class AudioSetupDialog(BPMEditorBase):
         self.ok_button.setMaximumWidth(56)
         self.cancel_button.setMaximumWidth(80)
 
-        self.model_selector = Widgets.Selector(["1", "2", "2a", "3a", "4a", "4b"])
+        self.model_selector = Widgets.Selector(list(Constants.NUMBER_TO_CODE.keys()))
         self.model_selector.setMinimumWidth(240)
 
         settings_layout = QHBoxLayout()

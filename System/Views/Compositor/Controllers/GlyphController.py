@@ -64,8 +64,8 @@ class GlyphController(QObject):
 
         self.hovered_item = None
         self.hover_timer  = Timing.Timer(
-            1000,
-            self.on_hover_timeout,
+            interval    = 1000,
+            callback    = self.on_hover_timeout,
             single_shot = True,
             parent      = self
         )
@@ -138,7 +138,7 @@ class GlyphController(QObject):
         for item in self.glyph_items.values():
             item.setSelected(True)
 
-    # Modification And History
+    # Modification and History
 
     def modify_selected_glyphs(
             self,
@@ -484,6 +484,103 @@ class GlyphController(QObject):
 
     # Glyph Management
 
+    def nudge_selected_glyphs_horizontal(self, delta_ms: int) -> None:
+        selected_glyph_ids = self.get_selected_glyph_ids()
+
+        if not selected_glyph_ids:
+            return
+
+        audio_duration_ms = self.conductor.playback_manager.duration_ms
+        before_state      = {}
+        after_state       = {}
+
+        for glyph_id in selected_glyph_ids:
+            glyph_data = self.composition.get_glyph(glyph_id)
+
+            if not glyph_data:
+                continue
+
+            current_start = glyph_data["start"]
+            duration      = glyph_data["duration"]
+            new_start     = max(0, min(audio_duration_ms - duration, current_start + delta_ms))
+
+            if new_start == current_start:
+                continue
+
+            before_state[glyph_id] = copy.deepcopy(glyph_data)
+
+            new_glyph_data         = copy.deepcopy(glyph_data)
+            new_glyph_data["start"] = int(new_start)
+            after_state[glyph_id]  = new_glyph_data
+
+        if not after_state:
+            return
+
+        self.composition.start_batching()
+
+        try:
+            self.push_action(Actions.ActionModify(self, before_state, after_state))
+            self.composition.update_bunch_of_glyphs(after_state)
+            self.update_glyphs(after_state, animate_movement = True)
+
+            self.elements_changed.emit()
+            self.glyph_property_changed.emit("start")
+            self.refresh_all_occlusion()
+
+            Player.ui_player.play_sound("Click/Toggle3", speed = 1.1 if delta_ms > 0 else 0.9)
+
+        finally:
+            self.composition.stop_batching()
+
+    def nudge_selected_glyphs_duration(self, delta_ms: int) -> None:
+        selected_glyph_ids = self.get_selected_glyph_ids()
+
+        if not selected_glyph_ids:
+            return
+
+        audio_duration_ms = self.conductor.playback_manager.duration_ms
+        before_state      = {}
+        after_state       = {}
+
+        for glyph_id in selected_glyph_ids:
+            glyph_data = self.composition.get_glyph(glyph_id)
+
+            if not glyph_data:
+                continue
+
+            current_duration = glyph_data["duration"]
+            current_start    = glyph_data["start"]
+            maximum_duration = audio_duration_ms - current_start
+            new_duration     = max(10, min(maximum_duration, current_duration + delta_ms))
+
+            if new_duration == current_duration:
+                continue
+
+            before_state[glyph_id] = copy.deepcopy(glyph_data)
+
+            new_glyph_data            = copy.deepcopy(glyph_data)
+            new_glyph_data["duration"] = int(new_duration)
+            after_state[glyph_id]     = new_glyph_data
+
+        if not after_state:
+            return
+
+        self.composition.start_batching()
+
+        try:
+            self.push_action(Actions.ActionModify(self, before_state, after_state))
+            self.composition.update_bunch_of_glyphs(after_state)
+            self.update_glyphs(after_state, animate_movement = True)
+
+            self.elements_changed.emit()
+            self.glyph_property_changed.emit("duration")
+            self.refresh_all_occlusion()
+
+            Player.ui_player.play_sound("Click/Toggle3", speed = 1.2 if delta_ms > 0 else 0.8)
+
+        finally:
+            self.composition.stop_batching()
+
     def set_caching_active(self, active: bool) -> None:
         self.caching_active = active
 
@@ -633,6 +730,7 @@ class GlyphController(QObject):
             self.update_glyphs(after_state, animate_movement = True)
 
             self.elements_changed.emit()
+            self.refresh_stack_indicators(force = True)
             self.refresh_all_occlusion()
 
             Player.ui_player.play_sound("Click/Toggle", speed = 1.1 if direction < 0 else 0.9)
@@ -724,14 +822,11 @@ class GlyphController(QObject):
         QTimer.singleShot(0, lambda: self.refresh_stack_indicators(force = True))
 
         if self.expanded_stack:
-            new_ids = list(glyph_ids)
-            QTimer.singleShot(0, lambda: self.handle_spawned_while_expanded(new_ids))
+            QTimer.singleShot(0, self.handle_spawned_while_expanded)
 
         self.refresh_all_occlusion()
 
-    def handle_spawned_while_expanded(self, new_glyph_ids: list[int]) -> None:
-        del new_glyph_ids
-
+    def handle_spawned_while_expanded(self) -> None:
         if not self.expanded_stack:
             return
 
@@ -931,7 +1026,7 @@ class GlyphController(QObject):
             {glyph_id: (old_keyframes, new_keyframes)}
         )
 
-    # Stacking And Groups
+    # Stacking and Groups
 
     def get_overlapping_group(self, glyph_id: int) -> list[int]:
         data = self.composition.get_glyph(glyph_id)

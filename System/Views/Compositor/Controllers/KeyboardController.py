@@ -13,18 +13,14 @@ from PyQt6.QtGui import (
 from PyQt6.QtCore import (
     Qt,
     QEvent,
-    QTimer,
     QObject,
     pyqtSignal
 )
 
 from System.Common import Constants
 
-from System.Services import (
-    Player,
-    RealTimeVisualizer
-)
-
+from System.Services          import Player
+from System.Interface         import Timing
 from System.Interface.Windows import ErrorWindow
 
 from .. import Timeline
@@ -69,8 +65,6 @@ class KeyboardController(QObject):
         Qt.Key.Key_Minus: "11"
     }
 
-    # Initialization Section
-
     def __init__(self, conductor: Timeline.ScrollableContent) -> None:
         super().__init__(conductor)
 
@@ -85,14 +79,17 @@ class KeyboardController(QObject):
         self.space_press_times: list[float] = []
         self.easter_egg_active: bool        = False
 
-        self.space_hold_timer = QTimer(self)
-        self.space_hold_timer.setSingleShot(True)
-        self.space_hold_timer.timeout.connect(self.trigger_space_easter_egg)
+        self.space_hold_timer = Timing.Timer(
+            interval    = 800,
+            callback    = self.trigger_space_easter_egg,
+            single_shot = True,
+            parent      = self
+        )
 
         self.setup_track_hotkeys()
         self.setup_hotkeys()
 
-    # Hotkey Setup Section
+    # Hotkey Setup
 
     def bind(
             self,
@@ -106,6 +103,8 @@ class KeyboardController(QObject):
         self.shortcuts.append(shortcut)
 
     # Setup
+
+    # Hotkey Setup
 
     def setup_hotkeys(self) -> None:
         base_shortcuts = [
@@ -132,10 +131,10 @@ class KeyboardController(QObject):
             (Qt.Key.Key_Down, self.handle_move_track_down),
 
             (Qt.Key.Key_Space,                                     self.handle_playback_toggle),
-            (Qt.Key.Key_Left,                                      lambda: self.handle_manual_playhead_move(-self.move_increment)),
-            (Qt.Key.Key_Right,                                     lambda: self.handle_manual_playhead_move(self.move_increment)),
-            (Qt.KeyboardModifier.ShiftModifier | Qt.Key.Key_Left,  lambda: self.handle_manual_playhead_move(-self.move_increment * 10)),
-            (Qt.KeyboardModifier.ShiftModifier | Qt.Key.Key_Right, lambda: self.handle_manual_playhead_move(self.move_increment * 10)),
+            (Qt.Key.Key_Left,                                      self.handle_arrow_left),
+            (Qt.Key.Key_Right,                                     self.handle_arrow_right),
+            (Qt.KeyboardModifier.ShiftModifier | Qt.Key.Key_Left,  self.handle_shift_arrow_left),
+            (Qt.KeyboardModifier.ShiftModifier | Qt.Key.Key_Right, self.handle_shift_arrow_right),
 
             (Qt.Key.Key_Delete,    self.handle_deletion),
             (Qt.Key.Key_Backspace, self.handle_deletion),
@@ -159,7 +158,7 @@ class KeyboardController(QObject):
         for key, track_identifier in self.TRACK_KEY_MAPPINGS.items():
             self.bind(key, partial(self.spawn_track_glyph_requested.emit, track_identifier))
 
-    # Event Filter Section
+    # Event Filter
 
     def eventFilter(
             self,
@@ -229,7 +228,37 @@ class KeyboardController(QObject):
             self.space_press_times.clear()
             self.space_hold_timer.stop()
 
-    # Playhead Section
+    # Arrow Navigation and Nudge Handlers
+    
+    def handle_arrow_left(self) -> None:
+        if self.conductor.scene.selectedItems():
+            self.conductor.glyph_controller.nudge_selected_glyphs_horizontal(-10)
+            return
+
+        self.handle_manual_playhead_move(-self.move_increment)
+
+    def handle_arrow_right(self) -> None:
+        if self.conductor.scene.selectedItems():
+            self.conductor.glyph_controller.nudge_selected_glyphs_horizontal(10)
+            return
+
+        self.handle_manual_playhead_move(self.move_increment)
+
+    def handle_shift_arrow_left(self) -> None:
+        if self.conductor.scene.selectedItems():
+            self.conductor.glyph_controller.nudge_selected_glyphs_duration(-10)
+            return
+
+        self.handle_manual_playhead_move(-self.move_increment * 10)
+
+    def handle_shift_arrow_right(self) -> None:
+        if self.conductor.scene.selectedItems():
+            self.conductor.glyph_controller.nudge_selected_glyphs_duration(10)
+            return
+
+        self.handle_manual_playhead_move(self.move_increment * 10)
+
+    # Playhead
 
     def handle_playback_toggle(self) -> None:
         current_time           = time.time()
@@ -325,7 +354,7 @@ class KeyboardController(QObject):
     def go_to_end(self) -> None:
         self.jump_to_position(self.playback_manager.duration_ms, "Feedback/PlayheadBackward", "playhead_end")
 
-    # Glyph Actions Section
+    # Glyph Actions
 
     def handle_deletion(self) -> None:
         self.delete_requested.emit()
@@ -388,7 +417,7 @@ class KeyboardController(QObject):
 
         return True
 
-    # Cleanup Section
+    # Cleanup
 
     def cleanup_shortcuts(self) -> None:
         self.conductor.removeEventFilter(self)

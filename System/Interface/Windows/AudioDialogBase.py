@@ -44,8 +44,8 @@ from System.Interface import (
     Widgets
 )
 
-from System.Interface.Animation import LoomEngine
-from System.Interface.Windows.ErrorWindow import ErrorWindow
+from System.Interface.Animation                 import LoomEngine
+from System.Interface.Windows.ErrorWindow       import ErrorWindow
 from System.Interface.Windows.FloatingWindowGPU import FloatingWindowGPU
 
 from System.Interface.Windows.Helpers import (
@@ -53,7 +53,7 @@ from System.Interface.Windows.Helpers import (
     make_time_textbox
 )
 
-# Pipeline Section
+# Pipeline
 
 class AudioLoadingDialog(FloatingWindowGPU):
     def launch_worker_thread(
@@ -181,7 +181,7 @@ class AudioLoadingDialog(FloatingWindowGPU):
             logger.warning(f"Could not delete cache yet, retrying... {error}")
             QTimer.singleShot(1000, self.safe_delete_cache)
 
-# Audio Editor Section
+# Audio Editor
 
 class AudioEditorBase(AudioLoadingDialog):
     def setup_trim_section(self) -> None:
@@ -207,7 +207,12 @@ class AudioEditorBase(AudioLoadingDialog):
         self.play_button.setEnabled(False)
         self.play_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
 
-        self.playback_timer = Timing.Timer(Constants.FPS_60, self.update_playback, parent = self)
+        self.playback_timer = Timing.Timer(
+            interval    = Constants.FPS_60,
+            callback    = self.update_playback,
+            parent      = self,
+            fps_managed = True
+        )
 
         self.trim_widget.regionChanged.connect(self.update_textboxes)
         self.end_time_textbox.safeTextChanged.connect(self.edit_end_time)
@@ -433,7 +438,7 @@ class AudioEditorBase(AudioLoadingDialog):
         super().on_cancel()
         super().closeEvent(event)
 
-# BPM Editor Section
+# BPM Editor
 
 class BPMEditorBase(AudioEditorBase):
     def setup_bpm_section(self) -> None:
@@ -453,22 +458,22 @@ class BPMEditorBase(AudioEditorBase):
         self.bpm_input.setStyleSheet(Styles.Controls.FloatingTextBoxRound)
 
         self.bpm_animation_timer = Timing.Timer(
-            Constants.FPS_30,
-            self.animate_bpm_spinbox,
+            interval   = Constants.FPS_30,
+            callback   = self.animate_bpm_spinbox,
             auto_start = True,
             parent     = self
         )
 
         self.bpm_remove_timer = Timing.Timer(
-            0,
-            self.bpm_remove_step,
-            parent = self
+            interval   = 0,
+            callback   = self.bpm_remove_step,
+            parent     = self
         )
 
         if self.animations_active:
             self.bpm_textbox_width = LoomEngine.ui_engine.bind(
                 owner      = self,
-                name       = "bpmTextboxWidth",
+                name       = "bpm_textbox_width",
                 base_value = self.bpm_input.width(),
                 mix_mode   = LoomEngine.MixMode.REPLACE,
                 on_change  = self.bpm_input.setFixedWidth

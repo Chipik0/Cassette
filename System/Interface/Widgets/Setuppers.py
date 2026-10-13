@@ -15,9 +15,12 @@ from PyQt6.QtWidgets import (
     QApplication
 )
 
-from System.Common import Dev
-from System.Services import Player
-from System.Interface import Widgets
+from System.Common    import Dev
+from System.Services  import Player
+from System.Interface import (
+    Timing,
+    Widgets
+)
 
 @Dev.track_ram
 class DelaySetupper(Widgets.BaseControlContainer):
@@ -40,10 +43,11 @@ class DelaySetupper(Widgets.BaseControlContainer):
         self.tap_timestamps     = []
         self.actual_click_times = []
 
-        self.beat_timer = QTimer(self)
-        self.beat_timer.setInterval(int(self.beat_interval_ms))
-        self.beat_timer.setTimerType(Qt.TimerType.PreciseTimer)
-        self.beat_timer.timeout.connect(self.play_click)
+        self.beat_timer = Timing.Timer(
+            interval = int(self.beat_interval_ms),
+            callback = self.play_click,
+            parent   = self
+        )
 
         self.setup_ui(description, default_ms)
 
@@ -56,8 +60,8 @@ class DelaySetupper(Widgets.BaseControlContainer):
         self.inner_layout.setContentsMargins(10, 10, 10, 10)
         self.inner_layout.setSpacing(10)
 
-        self.label            = Widgets.DescriptionLabel(description)
-        self.delay_textbox    = Widgets.Textbox(
+        self.label         = Widgets.DescriptionLabel(description)
+        self.delay_textbox = Widgets.Textbox(
             input_type   = "number",
             min_number   = 0,
             max_number   = 1000,

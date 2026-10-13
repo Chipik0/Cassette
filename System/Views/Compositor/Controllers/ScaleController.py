@@ -28,8 +28,6 @@ class ScaleController(QObject):
     view_synchronized       = pyqtSignal()
     animation_state_changed = pyqtSignal(bool)
 
-    # Initialization Section
-
     def __init__(self, conductor: Timeline.ScrollableContent) -> None:
         super().__init__(conductor)
 
@@ -42,8 +40,8 @@ class ScaleController(QObject):
         self.scale_anim_anchor_view = 0.0
 
         self.waveform_anim_timer = Timing.Timer(
-            Constants.FPS_120,
-            self.on_waveform_anim_tick,
+            interval    = Constants.FPS_120,
+            callback    = self.on_waveform_anim_tick,
             fps_managed = True
         )
 
@@ -55,7 +53,7 @@ class ScaleController(QObject):
         self.frozen_fallback_px_per_sec: float              = self.px_per_sec
         self.tile_fade_alphas:           dict[int, float]   = {}
 
-    # Scaling Section
+    # Scaling
 
     def scale_view(
             self,
@@ -214,7 +212,7 @@ class ScaleController(QObject):
             if not self.waveform_anim_timer.isActive():
                 self.waveform_anim_timer.start()
 
-    # Animation Updates Section
+    # Animation Updates
 
     def on_waveform_anim_tick(self) -> None:
         if self.scale_anim_active:
@@ -304,7 +302,7 @@ class ScaleController(QObject):
 
         self.conductor.horizontalScrollBar().setValue(new_scroll_value)
 
-    # Cleanup Section
+    # Cleanup
 
     def cleanup(self) -> None:
         self.waveform_anim_timer.stop()

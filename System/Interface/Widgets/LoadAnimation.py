@@ -7,7 +7,6 @@ from enum import Enum
 
 from PyQt6.QtCore import (
     Qt,
-    QTimer,
     pyqtSignal
 )
 
@@ -31,6 +30,9 @@ from System.Interface.Animation import (
     Lifecycle,
     LoomEngine
 )
+
+from System.Interface import Timing
+from System.Common import    Constants
 
 # Wave Types
 
@@ -149,7 +151,6 @@ class PulseStatusWidget(Lifecycle.LoomAnimationMixin, QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
 
-        self.engine_acquired          = False
         self.wave_mode                = WaveMode.PULSE
         self.cardiac_arrest_active    = False
         self.sweep_position           = 0.0
@@ -161,10 +162,14 @@ class PulseStatusWidget(Lifecycle.LoomAnimationMixin, QWidget):
         self.buffer_values            = []
         self.line_thickness_px        = 2.0
         self.last_update_time_sec     = time.perf_counter()
+        self.manual_beat_mode         = False
+        self.manual_beat_active       = False
 
-        self.simulation_timer = QTimer(self)
-        self.simulation_timer.setInterval(16)
-        self.simulation_timer.timeout.connect(self.advance_simulation)
+        self.simulation_timer = Timing.Timer(
+            interval = Constants.FPS_60,
+            callback = self.advance_simulation,
+            parent   = self
+        )
 
         self.setup_user_interface()
         self.setup_animations()
@@ -184,7 +189,7 @@ class PulseStatusWidget(Lifecycle.LoomAnimationMixin, QWidget):
             name       = "line_color",
             base_value = QColor(255, 255, 255, 255),
             mix_mode   = LoomEngine.MixMode.REPLACE,
-            on_change  = lambda value: self.update()
+            on_change  = self.on_property_update
         )
 
         self.flatten_handle = LoomEngine.ui_engine.bind(
@@ -192,7 +197,7 @@ class PulseStatusWidget(Lifecycle.LoomAnimationMixin, QWidget):
             name       = "flatten_ratio",
             base_value = 1.0,
             mix_mode   = LoomEngine.MixMode.REPLACE,
-            on_change  = lambda value: self.update()
+            on_change  = self.on_property_update
         )
 
         self.amplitude_handle = LoomEngine.ui_engine.bind(
@@ -200,7 +205,7 @@ class PulseStatusWidget(Lifecycle.LoomAnimationMixin, QWidget):
             name       = "amplitude",
             base_value = 28.0,
             mix_mode   = LoomEngine.MixMode.REPLACE,
-            on_change  = lambda value: self.update()
+            on_change  = self.on_property_update
         )
 
         self.beats_per_minute_handle = LoomEngine.ui_engine.bind(
@@ -222,8 +227,11 @@ class PulseStatusWidget(Lifecycle.LoomAnimationMixin, QWidget):
             name       = "mode_transition",
             base_value = 0.0,
             mix_mode   = LoomEngine.MixMode.REPLACE,
-            on_change  = lambda value: self.update()
+            on_change  = self.on_property_update
         )
+
+    def on_property_update(self, value: object):
+        self.update()
 
     def showEvent(self, event: QShowEvent) -> None:
         super().showEvent(event)
@@ -303,6 +311,9 @@ class PulseStatusWidget(Lifecycle.LoomAnimationMixin, QWidget):
             if self.cardiac_arrest_active:
                 sample_value = 0.0
 
+            elif self.manual_beat_mode and not self.manual_beat_active:
+                sample_value = 0.0
+
             else:
                 interpolation_factor = (step_offset / pixel_count) if pixel_count > 0 else 0.0
                 interpolated_phase   = (self.cardiac_phase + phase_advance * interpolation_factor) % 1.0
@@ -310,10 +321,20 @@ class PulseStatusWidget(Lifecycle.LoomAnimationMixin, QWidget):
 
             self.buffer_values[resolved_index] = sample_value
 
-        self.cardiac_phase  = (self.cardiac_phase + phase_advance) % 1.0
+        if self.manual_beat_mode and self.manual_beat_active:
+            self.cardiac_phase += phase_advance
+
+            if self.cardiac_phase >= 1.0:
+                self.cardiac_phase      = 0.0
+                self.manual_beat_active = False
+                self.heartbeat_occurred.emit()
+
+        else:
+            self.cardiac_phase = (self.cardiac_phase + phase_advance) % 1.0
+
         self.sweep_position = (self.sweep_position + pixel_advance) % buffer_length
 
-        if not self.cardiac_arrest_active and self.wave_mode == WaveMode.PULSE:
+        if not self.cardiac_arrest_active and not self.manual_beat_mode and self.wave_mode == WaveMode.PULSE:
             if HeartbeatSynthesizer.did_phase_cross_target(
                 previous_phase,
                 self.cardiac_phase,
@@ -500,6 +521,19 @@ class PulseStatusWidget(Lifecycle.LoomAnimationMixin, QWidget):
             easing_function            = easing_function,
             multiply_duration_by_speed = False
         )
+
+    def set_manual_mode(self, enabled: bool) -> None:
+        self.manual_beat_mode   = enabled
+        self.manual_beat_active = False
+        self.cardiac_phase      = 0.0
+
+        self.update()
+
+    def trigger_single_beat(self, bpm: float = 75.0) -> None:
+        self.manual_beat_active = True
+        self.cardiac_phase      = 0.0
+
+        self.beats_per_minute_handle.set_base(bpm)
 
     def set_beats_per_minute(
             self,

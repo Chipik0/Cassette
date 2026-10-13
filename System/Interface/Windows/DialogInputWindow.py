@@ -8,8 +8,7 @@ from PyQt6.QtWidgets import QWidget
 from System.Common   import Constants
 from System.Services import Player
 
-from System.Interface import Widgets
-
+from System.Interface         import Widgets
 from System.Interface.Windows import FloatingWindowGPU
 
 # Dialog Input Window

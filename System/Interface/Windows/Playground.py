@@ -4,8 +4,8 @@ from loguru import logger
 
 from collections.abc import Callable
 
-from PyQt6.QtCore    import QPoint
-from PyQt6.QtWidgets import QWidget
+from PyQt6.QtCore     import QPoint
+from PyQt6.QtWidgets  import QWidget
 
 from System.Common    import Styles
 from System.Services  import Player
@@ -46,6 +46,7 @@ class Playground(FloatingWindowGPU):
             control:  QWidget,
             callback: Callable[[], None]
         ) -> None:
+
         if isinstance(control, Widgets.CheckboxWithLabel):
             control.stateChanged.connect(lambda *unused_arguments: callback())
             return
@@ -403,12 +404,14 @@ class Playground(FloatingWindowGPU):
 
         try:
             Player.bpm_informer.beat_4.disconnect(self.bpm_tick_animation)
+        
         except Exception:
             pass
 
         try:
             self.player.beat_heavy.disconnect(self.beat_heavy_animation)
             self.player.beat_normal.disconnect(self.beat_normal_animation)
+        
         except Exception:
             pass
 

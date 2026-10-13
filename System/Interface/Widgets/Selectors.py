@@ -3,9 +3,12 @@ from __future__ import annotations
 import random
 
 from PyQt6.QtGui import (
+    QFont,
     QBrush,
     QColor,
     QPainter,
+    QWheelEvent,
+    QFontMetrics,
     QPainterPath
 )
 
@@ -22,9 +25,9 @@ from PyQt6.QtWidgets import (
     QLabel,
     QWidget,
     QHBoxLayout,
-    QSizePolicy,
     QVBoxLayout,
     QPushButton,
+    QSizePolicy,
     QButtonGroup
 )
 
@@ -65,9 +68,11 @@ class SegmentedStrip(Lifecycle.LoomAnimationMixin, QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
-        self.pill_color    = QColor(pill_color) if pill_color else QColor(Styles.Colors.NothingAccent)
-        self.hover_color   = self.resolve_hover_color(hover_color)
-        self.has_indicator = False
+        self.pill_color        = QColor(pill_color) if pill_color else QColor(Styles.Colors.NothingAccent)
+        self.hover_color       = self.resolve_hover_color(hover_color)
+        self.hovered_button    = None
+        self.has_indicator     = False
+        self.wheel_accumulator = 0.0
 
         self.data_by_identifier: dict[int, object] = {}
         self.buttons:            list[QPushButton] = []
@@ -95,9 +100,7 @@ class SegmentedStrip(Lifecycle.LoomAnimationMixin, QWidget):
         if hover_color:
             return QColor(hover_color)
 
-        fallback = getattr(Styles.Colors, "ThirdBackground", None)
-
-        return QColor(fallback) if fallback else QColor(255, 255, 255, 20)
+        return QColor(Styles.Colors.ThirdBackground)
 
     def setup_animation_handles(self) -> None:
         self.indicator_handle = LoomEngine.ui_engine.bind(
@@ -110,7 +113,7 @@ class SegmentedStrip(Lifecycle.LoomAnimationMixin, QWidget):
 
         self.hover_rectangle_handle = LoomEngine.ui_engine.bind(
             owner      = self,
-            name       = "hoverRectangle",
+            name       = "hover_rectangle",
             base_value = QRectF(),
             mix_mode   = LoomEngine.MixMode.REPLACE,
             on_change  = self.on_hover_rectangle_changed
@@ -118,20 +121,11 @@ class SegmentedStrip(Lifecycle.LoomAnimationMixin, QWidget):
 
         self.hover_opacity_handle = LoomEngine.ui_engine.bind(
             owner      = self,
-            name       = "hoverOpacity",
+            name       = "hover_opacity",
             base_value = 0.0,
             mix_mode   = LoomEngine.MixMode.REPLACE,
             on_change  = self.on_hover_opacity_changed
         )
-    
-    def on_indicator_changed(self, rectangle: QRectF) -> None:
-        self.update()
-
-    def on_hover_opacity_changed(self, opacity: float) -> None:
-        self.update()
-
-    def on_hover_rectangle_changed(self, rectangle: QRectF) -> None:
-        self.update()
 
     def setup_layout(
             self,
@@ -169,7 +163,7 @@ class SegmentedStrip(Lifecycle.LoomAnimationMixin, QWidget):
         button.setCheckable(True)
         button.setFont(Utils.NType(button_font_size))
         button.setCursor(Qt.CursorShape.PointingHandCursor)
-        button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        button.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         button.setMinimumHeight(30)
 
         button.setStyleSheet(f"""
@@ -193,6 +187,48 @@ class SegmentedStrip(Lifecycle.LoomAnimationMixin, QWidget):
         self.data_by_identifier[index] = data
         self.buttons.append(button)
 
+    # Layout and Sizing
+
+    def update_button_widths(self) -> None:
+        button_count = len(self.buttons)
+
+        if button_count == 0:
+            return
+
+        total_spacing   = (button_count - 1) * self.layout.spacing()
+        available_width = self.width() - total_spacing
+
+        if available_width <= 0:
+            return
+
+        text_widths: list[int] = []
+
+        for button in self.buttons:
+            font_metrics = QFontMetrics(button.font())
+            text_width   = font_metrics.horizontalAdvance(button.text())
+            text_widths.append(text_width)
+
+        total_text_width = sum(text_widths)
+        remaining_space  = available_width - total_text_width
+
+        if remaining_space > 0:
+            extra_per_button = remaining_space // button_count
+            remainder_pixels = remaining_space % button_count
+
+            for index, button in enumerate(self.buttons):
+                bonus_pixel  = 1 if index < remainder_pixels else 0
+                target_width = text_widths[index] + extra_per_button + bonus_pixel
+                button.setFixedWidth(int(target_width))
+
+            return
+
+        minimum_padding = 16
+
+        for index, button in enumerate(self.buttons):
+            button.setFixedWidth(text_widths[index] + minimum_padding)
+
+    # Event Handlers
+
     def eventFilter(
             self,
             watched: QObject,
@@ -211,7 +247,8 @@ class SegmentedStrip(Lifecycle.LoomAnimationMixin, QWidget):
         return super().eventFilter(watched, event)
 
     def handle_hover_enter(self, watched: QPushButton) -> None:
-        target_rectangle = QRectF(watched.geometry())
+        self.hovered_button = watched
+        target_rectangle    = QRectF(watched.geometry())
 
         if self.hover_opacity_handle.value == 0.0 or self.hover_rectangle_handle.value.isNull():
             self.hover_rectangle_handle.set_base(target_rectangle)
@@ -242,6 +279,8 @@ class SegmentedStrip(Lifecycle.LoomAnimationMixin, QWidget):
         )
 
     def handle_hover_leave(self) -> None:
+        self.hovered_button = None
+
         self.hover_opacity_handle.set_target(
             value           = 0.0,
             duration_ms     = 150,
@@ -259,47 +298,22 @@ class SegmentedStrip(Lifecycle.LoomAnimationMixin, QWidget):
         self.draw_hover_pill(painter)
         self.draw_main_pill(painter)
 
-    def draw_hover_pill(self, painter: QPainter) -> None:
-        opacity   = self.hover_opacity_handle.value
-        rectangle = self.hover_rectangle_handle.value
-
-        if opacity <= 0.0 or rectangle.isNull():
-            return
-
-        if rectangle.width() <= 0 or rectangle.height() <= 0:
-            return
-
-        painter.setOpacity(opacity)
-        painter.setBrush(QBrush(self.hover_color))
-
-        path = QPainterPath()
-
-        path.addRoundedRect(rectangle, self.corner_radius, self.corner_radius)
-        painter.drawPath(path)
-
-    def draw_main_pill(self, painter: QPainter) -> None:
-        rectangle = self.indicator_handle.value
-
-        if not self.has_indicator or rectangle.isNull():
-            return
-
-        if rectangle.width() <= 0 or rectangle.height() <= 0:
-            return
-
-        painter.setOpacity(1.0)
-        painter.setBrush(QBrush(self.pill_color))
-
-        path = QPainterPath()
-
-        path.addRoundedRect(rectangle, self.corner_radius, self.corner_radius)
-        painter.drawPath(path)
-
     def showEvent(self, event: QEvent) -> None:
         super().showEvent(event)
+
+        self.update_button_widths()
+        self.layout.activate()
+
         QTimer.singleShot(0, self.animate_entrance)
 
     def resizeEvent(self, event: QEvent) -> None:
         super().resizeEvent(event)
+
+        self.update_button_widths()
+        self.layout.activate()
+
+        if self.hovered_button:
+            self.hover_rectangle_handle.set_base(QRectF(self.hovered_button.geometry()))
 
         checked_identifier = self.group.checkedId()
 
@@ -307,6 +321,48 @@ class SegmentedStrip(Lifecycle.LoomAnimationMixin, QWidget):
             return
 
         self.move_indicator(checked_identifier, animated = False)
+
+    def wheelEvent(self, event: QWheelEvent) -> None:
+        delta_y = event.angleDelta().y()
+
+        if delta_y == 0:
+            delta_y = event.angleDelta().x()
+
+        if delta_y == 0:
+            return
+
+        self.wheel_accumulator += delta_y
+        threshold               = 120.0
+
+        if abs(self.wheel_accumulator) < threshold:
+            event.accept()
+            return
+
+        steps                  = int(self.wheel_accumulator / threshold)
+        self.wheel_accumulator = 0.0
+
+        current_index = self.current_index()
+        button_count  = len(self.buttons)
+
+        if button_count <= 1:
+            event.accept()
+            return
+
+        direction = -1 if steps > 0 else 1
+        new_index = max(0, min(button_count - 1, current_index + direction))
+
+        if new_index == current_index:
+            event.accept()
+            return
+
+        button = self.group.button(new_index)
+
+        if not button:
+            event.accept()
+            return
+
+        self.on_button_clicked(button)
+        event.accept()
 
     def on_button_clicked(self, button: QPushButton) -> None:
         count = len(self.group.buttons())
@@ -325,6 +381,17 @@ class SegmentedStrip(Lifecycle.LoomAnimationMixin, QWidget):
         )
 
         self.select_index(index, animated = True, emit = True)
+
+    # Indicator and Hover Animation
+
+    def on_indicator_changed(self, rectangle: QRectF) -> None:
+        self.update()
+
+    def on_hover_opacity_changed(self, opacity: float) -> None:
+        self.update()
+
+    def on_hover_rectangle_changed(self, rectangle: QRectF) -> None:
+        self.update()
 
     def animate_entrance(self) -> None:
         checked_button = self.group.checkedButton()
@@ -372,6 +439,45 @@ class SegmentedStrip(Lifecycle.LoomAnimationMixin, QWidget):
             duration_ms     = 300,
             easing_function = LoomEngine.Easing.ease_out_quint
         )
+
+    # Drawing Methods
+
+    def draw_hover_pill(self, painter: QPainter) -> None:
+        opacity   = self.hover_opacity_handle.value
+        rectangle = self.hover_rectangle_handle.value
+
+        if opacity <= 0.0 or rectangle.isNull():
+            return
+
+        if rectangle.width() <= 0 or rectangle.height() <= 0:
+            return
+
+        painter.setOpacity(opacity)
+        painter.setBrush(QBrush(self.hover_color))
+
+        path = QPainterPath()
+
+        path.addRoundedRect(rectangle, self.corner_radius, self.corner_radius)
+        painter.drawPath(path)
+
+    def draw_main_pill(self, painter: QPainter) -> None:
+        rectangle = self.indicator_handle.value
+
+        if not self.has_indicator or rectangle.isNull():
+            return
+
+        if rectangle.width() <= 0 or rectangle.height() <= 0:
+            return
+
+        painter.setOpacity(1.0)
+        painter.setBrush(QBrush(self.pill_color))
+
+        path = QPainterPath()
+
+        path.addRoundedRect(rectangle, self.corner_radius, self.corner_radius)
+        painter.drawPath(path)
+
+    # Selection and State
 
     def select_index(
             self,
@@ -444,7 +550,21 @@ class SegmentedStrip(Lifecycle.LoomAnimationMixin, QWidget):
     def current_data(self) -> object:
         return self.data_by_identifier.get(self.group.checkedId())
 
-    def pan_ratio(self, index: int, count: int) -> float:
+    # Helpers and Properties
+
+    def setFont(self, font: QFont) -> None:
+        for button in self.group.buttons():
+            button.setFont(font)
+
+        super().setFont(font)
+        self.update_button_widths()
+
+    def pan_ratio(
+            self,
+            index: int,
+            count: int
+        ) -> float:
+
         if count <= 1:
             return 0.0
 
@@ -487,6 +607,8 @@ class Selector(QWidget):
 
         self.set_current_index(default_index)
 
+    # Event Handlers
+
     def on_selection_changed(
             self,
             index: int,
@@ -495,6 +617,8 @@ class Selector(QWidget):
         ) -> None:
 
         self.selectionChanged.emit(index, text)
+
+    # State Access and Helpers
 
     def current_index(self) -> int:
         return self.strip.current_index()
@@ -518,6 +642,10 @@ class Selector(QWidget):
     def get_value_as_text(self) -> str:
         return self.current_text()
 
+    def setFont(self, font: QFont) -> None:
+        self.strip.setFont(font)
+        super().setFont(font)
+
 @Dev.track_ram
 class SelectorWithLabel(Widgets.BaseControlContainer):
     selectionChanged = pyqtSignal(int, str, object)
@@ -526,8 +654,8 @@ class SelectorWithLabel(Widgets.BaseControlContainer):
             self,
             description:   str,
             items:         list[str] | dict,
-            default_text:  str       | None = None,
-            default_value: object           = None
+            default_text:  str | None = None,
+            default_value: object     = None
         ) -> None:
 
         super().__init__()
@@ -549,8 +677,8 @@ class SelectorWithLabel(Widgets.BaseControlContainer):
     def setup_strip(
             self,
             items:         list[str] | dict,
-            default_text:  str       | None,
-            default_value: object    | None
+            default_text:  str | None,
+            default_value: object | None
         ) -> None:
 
         self.strip = SegmentedStrip(
@@ -561,6 +689,8 @@ class SelectorWithLabel(Widgets.BaseControlContainer):
 
         self.strip.selectionChanged.connect(self.selectionChanged.emit)
         self.inner_layout.addWidget(self.strip)
+
+    # State Access and Helpers
 
     def current_index(self) -> int:
         return self.strip.current_index()
@@ -576,3 +706,7 @@ class SelectorWithLabel(Widgets.BaseControlContainer):
 
     def set_current_data(self, key: object) -> None:
         self.strip.select_data(key, animated = False, emit = False)
+
+    def setFont(self, font: QFont) -> None:
+        self.strip.setFont(font)
+        super().setFont(font)

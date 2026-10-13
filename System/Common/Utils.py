@@ -257,8 +257,6 @@ class StreamToLogger:
     def flush(self) -> None:
         pass
 
-# Utils.py
-
 def setup_exe_logging(folder_name: str = "Logs", file_name: str = "app.log") -> str:
     if getattr(sys, "frozen", False):
         base_dir = os.path.dirname(sys.executable)
@@ -513,42 +511,72 @@ def run_hidden(cmd: list[str]) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, **kwargs)
 
 class UpdateChecker(QObject):
-    update_info_received  = pyqtSignal(dict)
-    songs_info_receiver   = pyqtSignal(str)
+    resource_loaded      = pyqtSignal(str, object)
+    error_occurred       = pyqtSignal(str)
 
-    error_occurred        = pyqtSignal(str)
+    DEFAULT_RESOURCES: dict[str, tuple[str, bool]] = {
+        "release": ("https://api.github.com/repos/chips047/Cassette/releases", True),
+        "songs":   ("https://raw.githubusercontent.com/chips047/Cassette/main/System/Assets/Songs.txt", False),
+        "about":   ("https://raw.githubusercontent.com/chips047/Cassette/main/System/Assets/About.txt", False)
+    }
 
     def __init__(self) -> None:
         super().__init__()
+
         self.manager = QNetworkAccessManager(self)
         self.manager.finished.connect(self.on_request_finished)
 
-    def fetch_latest_release(self) -> None:
-        url     = QUrl("https://api.github.com/repos/chips047/CSTTest/releases")
-        request = QNetworkRequest(url)
-        
-        request.setAttribute(QNetworkRequest.Attribute.User, "get_release")
+    def fetch(
+            self,
+            resource_id: str,
+            url:         str | None = None,
+            is_json:     bool | None = None
+        ) -> None:
+
+        if url is None:
+            configuration = self.DEFAULT_RESOURCES.get(resource_id)
+
+            if not configuration:
+                logger.error(f"Unknown resource identifier: {resource_id}")
+                return
+
+            target_url, json_mode = configuration
+
+        else:
+            target_url = url
+            json_mode  = bool(is_json)
+
+        request = QNetworkRequest(QUrl(target_url))
+        request.setAttribute(QNetworkRequest.Attribute.User, resource_id)
+        request.setAttribute(QNetworkRequest.Attribute.UserMax, json_mode)
         request.setRawHeader(b"User-Agent", b"Cassette-Updater-Script")
 
         self.manager.get(request)
+
+    def fetch_all(self, resource_ids: list[str] | None = None) -> None:
+        targets = resource_ids if resource_ids is not None else list(self.DEFAULT_RESOURCES.keys())
+
+        for resource_id in targets:
+            self.fetch(resource_id)
+
+    def fetch_latest_release(self) -> None:
+        self.fetch("release")
 
     def fetch_latest_songs_strings(self) -> None:
-        url     = QUrl("https://raw.githubusercontent.com/chips047/Cassette/main/System/Assets/Songs.txt")
-        request = QNetworkRequest(url)
-        
-        request.setAttribute(QNetworkRequest.Attribute.User, "get_source_file")
-        request.setRawHeader(b"User-Agent", b"Cassette-Updater-Script")
+        self.fetch("songs")
 
-        self.manager.get(request)
+    def fetch_latest_about_strings(self) -> None:
+        self.fetch("about")
 
     def on_request_finished(self, reply) -> None:
         reply.deleteLater()
-        
-        request_type = reply.request().attribute(QNetworkRequest.Attribute.User)
-        
+
+        resource_id = reply.request().attribute(QNetworkRequest.Attribute.User)
+        is_json     = reply.request().attribute(QNetworkRequest.Attribute.UserMax)
+
         if reply.error() != reply.NetworkError.NoError:
-            logger.error(f"Network error [{request_type}]: {reply.errorString()}")
-            self.error_occurred.emit(request_type)
+            logger.error(f"Network error [{resource_id}]: {reply.errorString()}")
+            self.error_occurred.emit(str(resource_id))
 
             return
 
@@ -556,21 +584,23 @@ class UpdateChecker(QObject):
             raw_bytes = bytes(reply.readAll())
 
             if not raw_bytes:
-                logger.error(f"Empty data received for {request_type}")
-                self.error_occurred.emit(request_type)
+                logger.error(f"Empty data received for {resource_id}")
+                self.error_occurred.emit(str(resource_id))
 
                 return
 
-            if request_type == "get_release":
-                data = json.loads(raw_bytes)
-                self.update_info_received.emit(data[0])
-                
-            elif request_type == "get_source_file":
-                self.songs_info_receiver.emit(raw_bytes.decode('utf-8'))
+            if is_json:
+                parsed_json = json.loads(raw_bytes)
+                data        = parsed_json[0] if isinstance(parsed_json, list) and parsed_json else parsed_json
+
+            else:
+                data = raw_bytes.decode("utf-8")
+
+            self.resource_loaded.emit(str(resource_id), data)
 
         except Exception:
-            logger.exception(f"Failed to parse data for {request_type}")
-            self.error_occurred.emit(request_type)
+            logger.exception(f"Failed to parse data for {resource_id}")
+            self.error_occurred.emit(str(resource_id))
 
 def check_dynamic_library(module: object) -> None:
     file = module.__file__

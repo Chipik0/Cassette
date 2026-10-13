@@ -656,7 +656,7 @@ def process_ui_sound_interp(
 
     return out_block, float(current_pos), active
 
-# Envelope And Modulation
+# Envelope and Modulation
 
 def generate_three_stage_envelope(
         frames:         int,

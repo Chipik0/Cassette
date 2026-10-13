@@ -29,7 +29,6 @@ from PyQt6.QtWidgets import (
 
 from System.Common import (
     Dev,
-    Styles,
     Constants
 )
 
@@ -115,7 +114,7 @@ class ElasticScrollArea(QScrollArea):
     def __init__(
             self,
             parent:      QWidget | None = None,
-            fade_color:  QColor | None  = None,
+            fade_color:  QColor  | None = None,
             fade_height: int            = 40
         ) -> None:
 
@@ -150,16 +149,16 @@ class ElasticScrollArea(QScrollArea):
 
     def setup_timers(self) -> None:
         self.idle_timer = Timing.Timer(
-            Constants.USER_SCROLL_IDLE_TIMEOUT,
-            self.handle_scroll_finished,
+            interval    = Constants.USER_SCROLL_IDLE_TIMEOUT,
+            callback    = self.handle_scroll_finished,
             single_shot = True,
             parent      = self
         )
 
         self.animation_timer = Timing.Timer(
-            Constants.ANIMATION_TICK_INTERVAL,
-            self.process_animation_tick,
-            parent = self
+            interval    = Constants.ANIMATION_TICK_INTERVAL,
+            callback    = self.process_animation_tick,
+            parent      = self
         )
 
     # Widget Management
@@ -373,11 +372,11 @@ class ElasticScrollArea(QScrollArea):
             return
 
         stiffness_setting = Constants.current_settings.get("scroll_spring_stiffness", 4) / 100.0
-        damping_setting   = Constants.current_settings.get("scroll_spring_damping", 40)  / 100.0
+        damping_setting   = Constants.current_settings.get("scroll_spring_damping",  40) / 100.0
 
-        spring_force        = -overshoot_px * stiffness_setting
-        damping_force       = -self.velocity_speed * damping_setting
-        self.velocity_speed += spring_force + damping_force
+        spring_force         = -overshoot_px        * stiffness_setting
+        damping_force        = -self.velocity_speed * damping_setting
+        self.velocity_speed += spring_force         + damping_force
 
     def calculate_position(
             self,

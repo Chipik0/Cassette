@@ -241,42 +241,42 @@ class FloatingWindowGPU(Lifecycle.LoomAnimationMixin, QOpenGLWidget):
 
         self.x_offset_property = LoomEngine.ui_engine.bind(
             owner      = self,
-            name       = "xOffset",
+            name       = "x_offset",
             base_value = 0.0,
             mix_mode   = LoomEngine.MixMode.ADD
         )
 
         self.y_offset_property = LoomEngine.ui_engine.bind(
             owner      = self,
-            name       = "yOffset",
+            name       = "y_offset",
             base_value = 0.0,
             mix_mode   = LoomEngine.MixMode.ADD
         )
 
         self.z_offset_property = LoomEngine.ui_engine.bind(
             owner      = self,
-            name       = "zOffset",
+            name       = "z_offset",
             base_value = 0.0,
             mix_mode   = LoomEngine.MixMode.ADD
         )
 
         self.rotation_x_property = LoomEngine.ui_engine.bind(
             owner      = self,
-            name       = "rotationX",
+            name       = "rotation_x",
             base_value = 0.0,
             mix_mode   = LoomEngine.MixMode.ADD
         )
 
         self.rotation_y_property = LoomEngine.ui_engine.bind(
             owner      = self,
-            name       = "rotationY",
+            name       = "rotation_y",
             base_value = 0.0,
             mix_mode   = LoomEngine.MixMode.ADD
         )
 
         self.rotation_z_property = LoomEngine.ui_engine.bind(
             owner      = self,
-            name       = "rotationZ",
+            name       = "rotation_z",
             base_value = 0.0,
             mix_mode   = LoomEngine.MixMode.ADD
         )
@@ -291,14 +291,14 @@ class FloatingWindowGPU(Lifecycle.LoomAnimationMixin, QOpenGLWidget):
 
         self.opacity_background_property = LoomEngine.ui_engine.bind(
             owner      = self,
-            name       = "opacityBackground",
+            name       = "opacity_background",
             base_value = 1.0,
             mix_mode   = LoomEngine.MixMode.MULTIPLY
         )
 
         self.opacity_content_property = LoomEngine.ui_engine.bind(
             owner      = self,
-            name       = "opacityContent",
+            name       = "opacity_content",
             base_value = 1.0,
             mix_mode   = LoomEngine.MixMode.MULTIPLY,
             on_change  = self.on_opacity_content_changed
@@ -347,9 +347,9 @@ class FloatingWindowGPU(Lifecycle.LoomAnimationMixin, QOpenGLWidget):
 
     def setup_timers(self) -> None:
         self.shake_timer = Timing.Timer(
-            self.shake_frequency_ms,
-            self.apply_shake_step,
-            parent = self
+            interval = self.shake_frequency_ms,
+            callback = self.apply_shake_step,
+            parent   = self
         )
 
         if not self.bpm_animations_enabled:
@@ -1130,7 +1130,7 @@ class FloatingWindowGPU(Lifecycle.LoomAnimationMixin, QOpenGLWidget):
 
         logger.debug(f"Scale property was restricted to {final_scale}")
 
-        return final_scale
+        return max(1.05, final_scale)
 
     def really_close(self) -> None:
         self.makeCurrent()

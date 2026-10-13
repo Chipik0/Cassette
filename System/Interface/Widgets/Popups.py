@@ -66,15 +66,15 @@ class ValuePopup(Lifecycle.LoomAnimationMixin, QWidget):
         )
 
         self.manual_hide_timer = Timing.Timer(
-            1500,
-            self.hide,
+            interval    = 1500,
+            callback    = self.hide,
             single_shot = True,
             parent      = self
         )
 
         self.final_hide_timer = Timing.Timer(
-            300,
-            self.on_hide_finished,
+            interval    = 300,
+            callback    = self.on_hide_finished,
             single_shot = True,
             parent      = self
         )
@@ -142,7 +142,7 @@ class ValuePopup(Lifecycle.LoomAnimationMixin, QWidget):
     def on_hide_finished(self) -> None:
         super().hide()
 
-    # Api
+    # API
 
     def show_text(
             self,
@@ -230,13 +230,13 @@ class Tooltip(ValuePopup):
 
         return viewport.mapToGlobal(QPoint(int(view_x_px), int(view_y_px)))
 
-    # Api
+    # API
 
     def show_tooltip_at(
             self,
             text:        str,
-            target_item       = None,
-            plan_hide:   bool = False
+            target_item: object = None,
+            plan_hide:   bool   = False
         ) -> None:
 
         self.is_hide_planned = plan_hide

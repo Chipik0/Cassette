@@ -30,37 +30,38 @@ class Tutorial(FloatingWindowGPU):
             conductor:  object | None = None,
             parent:     QWidget | None = None
         ) -> None:
+
         self.conductor  = conductor
         self.audio_path = path
         self.player     = Player.player
 
         super().__init__("Tutorial", parent = parent, enable_audioplayer_effects = False)
 
-        self.stage                  = 0
-        self.audio_enabled          = False
-        self.audio_wind_down_sent   = False
+        self.stage                     = 0
+        self.audio_enabled             = False
+        self.audio_wind_down_sent      = False
 
-        self.active_signal          = None
-        self.active_signal_slot     = None
-        self.play_pause_pause_slot  = None
-        self.feedback_connections   = []
-        self.loop_watchdog          = None
+        self.active_signal             = None
+        self.active_signal_slot        = None
+        self.play_pause_pause_slot     = None
+        self.feedback_connections      = []
+        self.loop_watchdog             = None
 
-        self.progress_connections = []
-        self.progress_steps       = {}
-        self.progress_total       = 0.0
+        self.progress_connections      = []
+        self.progress_steps            = {}
+        self.progress_total            = 0.0
 
-        self.progress_speed_current = 0.0
-        self.progress_speed_target  = 0.0
+        self.progress_speed_current    = 0.0
+        self.progress_speed_target     = 0.0
 
-        self.playhead_progress_last = None
+        self.playhead_progress_last    = None
 
         self.active_cancel_hint_signal = None
         self.active_cancel_hint_slot   = None
 
-        self.driving_speed_until     = 0.0
-        self.user_took_speed_control = False
-        self.user_baseline_speed     = 1.0
+        self.driving_speed_until       = 0.0
+        self.user_took_speed_control   = False
+        self.user_baseline_speed       = 1.0
 
         self.build_pages()
         self.initialize_ui()
@@ -464,6 +465,7 @@ class Tutorial(FloatingWindowGPU):
                 amount_function: object          = amount_function,
                 identifier:      str             = identifier
             ) -> None:
+
             if predicate and not predicate(*arguments):
                 return
 
@@ -497,6 +499,7 @@ class Tutorial(FloatingWindowGPU):
                 live_scale:     float           = live_scale,
                 identifier:     str             = identifier
             ) -> None:
+
             if live_predicate and not live_predicate(*arguments):
                 return
 
@@ -586,8 +589,10 @@ class Tutorial(FloatingWindowGPU):
             signal: object,
             slot:   object
         ) -> None:
+
         try:
             signal.disconnect(slot)
+        
         except (TypeError, RuntimeError):
             pass
 
@@ -700,6 +705,7 @@ class Tutorial(FloatingWindowGPU):
             on_finish:   object | None = None,
             **keywords:  object
         ) -> None:
+
         guard_until              = time.monotonic() + (duration_ms / 1000.0) + 0.05
         self.driving_speed_until = max(self.driving_speed_until, guard_until)
 
@@ -723,8 +729,12 @@ class Tutorial(FloatingWindowGPU):
         self.animate_speed(self.target_speed_baseline(), Constants.INTRO_RAMP_MS)
         self.player.set_passes([Constants.UNDERWATER_FREQUENCY_HZ], mix = 0.0, duration_ms = Constants.INTRO_RAMP_MS)
 
-        self.loop_watchdog = Timing.Timer(Constants.LOOP_WATCHDOG_MS, self.check_audio_loop, parent = self)
-        self.loop_watchdog.start()
+        self.loop_watchdog = Timing.Timer(
+            interval   = Constants.LOOP_WATCHDOG_MS,
+            callback   = self.check_audio_loop,
+            parent     = self,
+            auto_start = True
+        )
 
     def check_audio_loop(self) -> None:
         if not self.player.is_playing:

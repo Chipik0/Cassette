@@ -11,20 +11,17 @@ from PyQt6.QtWidgets import (
     QApplication
 )
 
-from System.Common import Dev
-
 from System.Services import (
     Player,
     Workers
 )
 
-from System.Interface import Widgets
+from System.Interface           import Widgets
+from System.Interface.Windows   import FloatingWindowGPU
 from System.Interface.Animation import LoomEngine
-from System.Interface.Windows import FloatingWindowGPU
 
 # Error Window
 
-@Dev.track_ram
 class ErrorWindow(FloatingWindowGPU):
     def __init__(
             self,
@@ -125,7 +122,7 @@ class ErrorWindow(FloatingWindowGPU):
     def setup_audio_animations(self) -> None:
         self.sound_speed_handle = LoomEngine.ui_engine.bind(
             owner      = self,
-            name       = "transmitSoundSpeed",
+            name       = "transmit_sound_speed",
             base_value = 1.0,
             mix_mode   = LoomEngine.MixMode.REPLACE,
             on_change  = self.handle_transmit_sound_speed_changed

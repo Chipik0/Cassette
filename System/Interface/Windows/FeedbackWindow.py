@@ -3,8 +3,7 @@ from __future__ import annotations
 import random
 import platform
 
-from PyQt6.QtCore import QTimer
-
+from PyQt6.QtCore    import QTimer
 from PyQt6.QtWidgets import QWidget
 
 from System.Common import Dev
@@ -126,7 +125,7 @@ class FeedbackWindow(FloatingWindowGPU):
     def setup_audio_animations(self) -> None:
         self.sound_speed_handle = LoomEngine.ui_engine.bind(
             owner      = self,
-            name       = "transmitSoundSpeed",
+            name       = "transmit_sound_speed",
             base_value = 1.0,
             mix_mode   = LoomEngine.MixMode.REPLACE,
             on_change  = self.handle_transmit_sound_speed_changed

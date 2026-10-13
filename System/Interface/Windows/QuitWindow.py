@@ -15,14 +15,13 @@ from PyQt6.QtCore import (
 from PyQt6.QtWidgets import QApplication
 
 from System.Common    import Constants
+from System.Services  import Player
 from System.Interface import Widgets
 
 from System.Interface.Windows             import FloatingWindowGPU
 from System.Interface.Windows.ErrorWindow import ErrorWindow
 
 from System.Interface.Animation import LoomEngine
-
-from System.Services import Player
 
 SETTING_BREAKDOWN_SEEN_KEY   = "_breakdown_seen"
 SETTING_COLLAPSE_PENDING_KEY = "_breakdown_collapse_pending"
@@ -269,7 +268,7 @@ class QuitWindow(FloatingWindowGPU):
 
         self.inactivity_timer = QTimer(self)
         self.inactivity_timer.setSingleShot(True)
-        self.inactivity_timer.timeout.connect(self._on_inactivity_timeout)
+        self.inactivity_timer.timeout.connect(self.on_inactivity_timeout)
 
         if is_collapse_pending():
             set_collapse_pending(False)
@@ -351,8 +350,7 @@ class QuitWindow(FloatingWindowGPU):
         else:
             self.player.set_passes([random.randint(100, 3000)], duration_ms = 500)
 
-    def _on_inactivity_timeout(self) -> None:
-        """Срабатывает через 2 секунды бездействия при смене фраз боли."""
+    def on_inactivity_timeout(self) -> None:
         if self.is_angry and INACTIVITY_TEXTS:
             self.phrase_label.setText(random.choice(INACTIVITY_TEXTS))
 
@@ -369,6 +367,7 @@ class QuitWindow(FloatingWindowGPU):
         for window in self.error_windows:
             try:
                 window.close()
+            
             except Exception:
                 pass
 

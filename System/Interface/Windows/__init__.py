@@ -26,6 +26,7 @@ from System.Interface.Windows.UpdateWindow             import UpdateWindow
 from System.Interface.Windows.AboutWindow              import AboutWindow
 from System.Interface.Windows.WalterWindow             import WalterWindow
 from System.Interface.Windows.ByteBeatWindow           import ByteBeatWindow
+from System.Interface.Windows.ParryGameWindow          import ParryGameWindow
 from System.Interface.Windows.AudioSetupDialog         import AudioSetupDialog
 from System.Interface.Windows.ExistingAudioSetupDialog import ExistingAudioSetupDialog
 from System.Interface.Windows.GlyphtoneEditor          import GlyphtoneEditor
@@ -34,3 +35,4 @@ from System.Interface.Windows.Playground               import Playground
 from System.Interface.Windows.Tutorial                 import Tutorial
 from System.Interface.Windows.GlyphVisualizer          import GlyphVisualizer
 from System.Interface.Windows.FeedbackWindow           import FeedbackWindow
+from System.Interface.Windows.DeviceStatusWindow       import DeviceStatusWindow

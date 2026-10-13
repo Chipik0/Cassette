@@ -191,9 +191,10 @@ class ScheduledSegmentedBar(BaseSegmentedBar):
         self.elapsed_timer = QElapsedTimer()
 
         self.timer = Timing.Timer(
-            Constants.FPS_60,
-            self.tick,
-            parent = self
+            interval    = Constants.FPS_60,
+            callback    = self.tick,
+            parent      = self,
+            fps_managed = True
         )
 
     # Override

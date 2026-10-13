@@ -74,6 +74,7 @@ class TextGlitchMixin:
             i for i, char in enumerate(self.glitch_original_text)
             if char not in " `\n"
         ]
+
         total_glitchable = len(glitchable_indices)
 
         progress = min(self.glitch_current_tick / self.glitch_total_ticks, 1.0)
@@ -81,6 +82,7 @@ class TextGlitchMixin:
         if total_glitchable == 0 or progress >= 1.0:
             self.setText(self.glitch_original_text)
             self.glitch_timer.stop()
+            
             return
 
         expected_solved = round(total_glitchable * progress)
@@ -92,6 +94,7 @@ class TextGlitchMixin:
 
         if needed > 0:
             unsolved = list(set(glitchable_indices) - self.glitch_solved_indices)
+            
             if unsolved:
                 to_solve = random.sample(unsolved, min(needed, len(unsolved)))
                 self.glitch_solved_indices.update(to_solve)
@@ -210,12 +213,13 @@ class TitleLabel(Lifecycle.LoomAnimationMixin, TextGlitchMixin, TransformAnimati
     def __init__(self, text: str) -> None:
         super().__init__(text)
 
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.init_glitch(text)
         self.init_transform_animation()
 
         self.setContentsMargins(0, 0, 0, 4)
         self.setFont(Utils.NType(12))
-        self.setStyleSheet(Styles.Other.Font)
+        self.setStyleSheet(Styles.Other.Font + Styles.Other.Transparent)
 
     def paintEvent(self, event: QEvent) -> None:
         self.paint_transformed(self.draw_content)
@@ -253,10 +257,14 @@ class DescriptionLabel(TextGlitchMixin, TransformAnimationMixin, QLabel):
         self.setMaximumWidth(maximum_width)
 
     def formatted(self, text: str) -> str:
-        text = re.sub(r"`([^`]*)`", r'<span style="color:white;">\1</span>', text)
+        text = re.sub(
+            r"`([^`]*)`", 
+            r'<span style="color: #ffffff; font-weight: bold;">\1</span>', 
+            text
+        )
         text = text.replace("\n", "<br>")
-        
-        return text
+
+        return f'<span style="color: {Styles.Colors.FontColor};">{text}</span>'
 
     def setText(self, text: str) -> None:
         super().setText(self.formatted(text))

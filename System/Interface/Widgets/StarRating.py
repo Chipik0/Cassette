@@ -70,7 +70,7 @@ class StarRatingWidget(Lifecycle.LoomAnimationMixin, QWidget):
                 name       = f"star_fill_{star_index}",
                 base_value = initial_fill,
                 mix_mode   = LoomEngine.MixMode.REPLACE,
-                on_change  = lambda value: self.update()
+                on_change  = self.on_property_update
             )
             self.fill_handles.append(fill_handle)
 
@@ -79,9 +79,12 @@ class StarRatingWidget(Lifecycle.LoomAnimationMixin, QWidget):
                 name       = f"star_scale_{star_index}",
                 base_value = 1.0,
                 mix_mode   = LoomEngine.MixMode.REPLACE,
-                on_change  = lambda value: self.update()
+                on_change  = self.on_property_update
             )
             self.scale_handles.append(scale_handle)
+
+    def on_property_update(self, value: object):
+        self.update()
 
     # Geometry Calculation
 
@@ -111,6 +114,7 @@ class StarRatingWidget(Lifecycle.LoomAnimationMixin, QWidget):
             current_angle  = start_angle + step_index * angle_step
             point_x        = center_x + current_radius * math.cos(current_angle)
             point_y        = center_y + current_radius * math.sin(current_angle)
+            
             path.lineTo(point_x, point_y)
 
         path.closeSubpath()

@@ -10,9 +10,7 @@ from System.Common import (
     Constants
 )
 
-from loguru  import logger
-
-# Timer
+from loguru import logger
 
 @Dev.track_ram
 class Timer(QTimer):

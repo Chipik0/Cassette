@@ -39,7 +39,7 @@ class OcclusionController(QObject):
 
         sorted_items = sorted(
             glyph_items,
-            key     = lambda item: (item.zValue(), item.glyph_id),
+            key     = lambda item: (item.isSelected(), item.zValue(), item.glyph_id),
             reverse = True
         )
 
@@ -48,9 +48,14 @@ class OcclusionController(QObject):
         for item in sorted_items:
             glyph_id = item.glyph_id
 
-            if expanded_stack and glyph_id in expanded_stack:
+            if item.isSelected() or (expanded_stack and glyph_id in expanded_stack):
                 self.occluded_glyphs.discard(glyph_id)
                 item.set_is_occluded(False)
+
+                start_ms = float(item.start_ms)
+                end_ms   = start_ms + float(item.duration_ms)
+                self.insert_and_merge(merged_intervals, start_ms, end_ms)
+
                 continue
 
             start_ms = float(item.start_ms)
@@ -59,6 +64,7 @@ class OcclusionController(QObject):
             if self.is_interval_covered(start_ms, end_ms, merged_intervals):
                 self.occluded_glyphs.add(glyph_id)
                 item.set_is_occluded(True)
+
                 continue
 
             self.occluded_glyphs.discard(glyph_id)

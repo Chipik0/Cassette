@@ -31,10 +31,9 @@ from System.Common import (
 from System.Interface import Timing
 
 from System.Interface.Animation import LoomEngine
+from System.Interface.Windows   import FloatingWindowGPU
 
-from System.Interface.Windows import FloatingWindowGPU
-
-# GlyphVisualizer
+# Glyph Visualizer
 
 @Dev.track_ram
 class GlyphVisualizer(FloatingWindowGPU):
@@ -63,26 +62,26 @@ class GlyphVisualizer(FloatingWindowGPU):
         self.target_scale               = 1.0
         self.scale_smoothing            = 0.15
 
-        # Контент свободно и плавно масштабируется вместе с окном
         self.content_widget.setSizePolicy(
             QSizePolicy.Policy.Expanding,
             QSizePolicy.Policy.Expanding
         )
         self.layout().setAlignment(self.content_widget, Qt.AlignmentFlag(0))
 
-        self.glyphs_gpu                 = []
-        self.total_segments             = 0
+        self.glyphs_gpu       = []
+        self.total_segments   = 0
 
-        self.is_playing                 = False
-        self.last_scrubbed_ms           = 0
+        self.is_playing       = False
+        self.last_scrubbed_ms = 0
 
         self.initialize_geometry()
 
-    # Sizing & Expansion Animation
+    # Sizing and Expansion Animation
 
     def get_content_target_size(self) -> tuple[int, int]:
         target_w = int(self.map_width * self.target_scale) + 80
         target_h = int(self.map_height * self.target_scale) + 80
+
         return target_w, target_h
 
     def get_window_size(self) -> tuple[int, int]:
@@ -99,8 +98,8 @@ class GlyphVisualizer(FloatingWindowGPU):
         available_width  = screen_geometry.width()
         available_height = screen_geometry.height()
 
-        # Авто-подгон под экран, если карта слишком большая
         max_possible_h = available_height - 120 - (self.target_margin * 2)
+
         if target_h > max_possible_h and self.map_height > 0:
             self.target_scale = max(0.2, (max_possible_h - 80) / self.map_height)
             self.visual_scale = self.target_scale
@@ -122,7 +121,6 @@ class GlyphVisualizer(FloatingWindowGPU):
         final_width  = target_w + (self.margin_x * 2)
         final_height = target_h + (self.margin_y * 2)
 
-        # Компактный начальный размер (откуда окно начнет плавно расти)
         start_w = min(final_width, 380)
         start_h = min(final_height, 130)
 
@@ -182,7 +180,6 @@ class GlyphVisualizer(FloatingWindowGPU):
 
         super().showEvent(event)
 
-        # Тот самый запуск анимации расширения при первом появлении
         if is_first_show:
             target_w, target_h = self.get_content_target_size()
             self.animate_resize(target_w, target_h, duration_ms = 650)
@@ -192,7 +189,6 @@ class GlyphVisualizer(FloatingWindowGPU):
         delta             = 0.07 if event.angleDelta().y() > 0 else -0.07
         self.target_scale = numpy.clip(self.target_scale + delta, 0.3, 4.0)
 
-        # Мягкое масштабирование колесиком без скачков
         self.resize_timer.start()
 
     # Setup
@@ -201,21 +197,20 @@ class GlyphVisualizer(FloatingWindowGPU):
         super().setup_timers()
 
         self.resize_timer = Timing.Timer(
-            200,
-            self.sync_size_delayed,
+            interval    = 200,
+            callback    = self.sync_size_delayed,
             single_shot = True,
             parent      = self
         )
 
         self.timer = Timing.Timer(
-            Constants.FPS_30,
-            self.process_schedule,
-            parent = self
+            interval = Constants.FPS_30,
+            callback = self.process_schedule,
+            parent   = self
         )
 
         self.elapsed = QElapsedTimer()
 
-        # Привязка плавной инерции масштаба к движку анимаций
         LoomEngine.ui_engine.updated.connect(self.update_visual_scale)
 
     def initialize_geometry(self) -> None:
@@ -272,7 +267,7 @@ class GlyphVisualizer(FloatingWindowGPU):
 
                 points.append(
                     [
-                        point.x() + position_x - self.map_width / 2,
+                        point.x()   + position_x  - self.map_width  / 2,
                         -(point.y() + position_y) + self.map_height / 2
                     ]
                 )
@@ -393,6 +388,7 @@ class GlyphVisualizer(FloatingWindowGPU):
         if not self.animations_active:
             if cleanup:
                 self.really_close()
+            
             return
 
         self.scale_property.play_curve(
@@ -502,6 +498,7 @@ class GlyphVisualizer(FloatingWindowGPU):
         if abs(self.target_scale - self.visual_scale) > 0.001:
             self.visual_scale += (self.target_scale - self.visual_scale) * self.scale_smoothing
             self.update()
+        
         else:
             self.visual_scale = self.target_scale
 
@@ -590,6 +587,7 @@ class GlyphVisualizer(FloatingWindowGPU):
         if self.animations_active:
             try:
                 LoomEngine.ui_engine.updated.disconnect(self.update_visual_scale)
+            
             except (TypeError, RuntimeError):
                 pass
 

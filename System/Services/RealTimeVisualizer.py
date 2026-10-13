@@ -22,7 +22,8 @@ from PyQt6.QtCore import (
 
 from System.Common import Utils
 
-from System.Services import Player
+from System.Services  import Player
+from System.Interface import Timing
 
 RECEIVER_TCP_PORT = 7777
 RECEIVER_UDP_PORT = 7778
@@ -36,7 +37,7 @@ elif sys.platform == "darwin":
 else:
     ADB_PATH = "System/ADB/adb-linux"
 
-# Enrichment Section
+# Enrichment
 
 def create_enriched_glyph_data(
         glyph_identifier: str,
@@ -57,12 +58,11 @@ def create_enriched_glyph_data(
 # Glyph Syncer
 
 class GlyphSyncer(QObject):
+    ping_updated       = pyqtSignal(float)
     high_ping_detected = pyqtSignal(float)
     error_occurred     = pyqtSignal(str, str)
     device_changed     = pyqtSignal(list)
     status_changed     = pyqtSignal(str, str)
-
-    # Lifecycle Section
 
     def __init__(
             self,
@@ -75,6 +75,7 @@ class GlyphSyncer(QObject):
         self.composition:          object                  = None
         self.connected_model:      str | None              = None
         self.client_socket:        socket.socket | None    = None
+        self.last_ping_ms:         float                   = 0.0
 
         self.devices:              list[str]               = []
         self.blocked_devices:      list[str]               = []
@@ -90,17 +91,21 @@ class GlyphSyncer(QObject):
         self.send_queue:           queue.Queue             = queue.Queue()
         self.sender_thread:        threading.Thread | None = None
 
-        self.udp_socket: socket.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         self.udp_socket.setblocking(False)
 
-        self.scan_timer: QTimer = QTimer(self)
-        self.scan_timer.setInterval(1500)
-        self.scan_timer.timeout.connect(self.scan_devices)
+        self.scan_timer = Timing.Timer(
+            interval = 1500,
+            callback = self.scan_devices,
+            parent   = self
+        )
 
-        self.heartbeat_timer: QTimer = QTimer(self)
-        self.heartbeat_timer.setInterval(1000)
-        self.heartbeat_timer.timeout.connect(self.send_heartbeat_ping)
+        self.heartbeat_timer = Timing.Timer(
+            interval = 1000,
+            callback = self.send_heartbeat_ping,
+            parent   = self
+        )
 
     def set_composition(self, composition: object) -> None:
         self.composition = composition
@@ -121,7 +126,7 @@ class GlyphSyncer(QObject):
 
         self.scan_timer.stop()
 
-    # Process Section
+    # Process
 
     def run_command_async(
             self,
@@ -168,7 +173,7 @@ class GlyphSyncer(QObject):
 
         return process
 
-    # Discovery Section
+    # Discovery
 
     def scan_devices(self) -> None:
         if self.client_socket is not None:
@@ -271,7 +276,7 @@ class GlyphSyncer(QObject):
             self.initialize_adb_device(device)
             break
 
-    # Device Initialization Section
+    # Device Initialization
 
     def initialize_adb_device(self, device_identifier: str) -> None:
         if self.client_socket is not None or self.is_connecting:
@@ -347,7 +352,7 @@ class GlyphSyncer(QObject):
             on_error    = lambda process, code, error: step_finished(process, "", error)
         )
 
-    # Connection Section
+    # Connection
 
     def connect_asynchronous(
             self,
@@ -425,7 +430,7 @@ class GlyphSyncer(QObject):
 
         threading.Thread(target = connection_worker, daemon = True).start()
 
-    # Heartbeat & Ping Section
+    # Heartbeat and Ping
 
     def send_heartbeat_ping(self) -> None:
         if self.client_socket is None:
@@ -451,7 +456,10 @@ class GlyphSyncer(QObject):
             send_timestamp = payload.get("timestamp", 0.0)
 
             if send_timestamp > 0.0:
-                latency_ms = (time.time() - send_timestamp) * 1000.0
+                latency_ms        = (time.time() - send_timestamp) * 1000.0
+                self.last_ping_ms = latency_ms
+
+                self.ping_updated.emit(latency_ms)
 
                 if latency_ms > 120.0 and not self.has_warned_high_ping:
                     self.has_warned_high_ping = True
@@ -459,7 +467,7 @@ class GlyphSyncer(QObject):
 
                     Player.ui_player.play_sound("Signals/Error/HighPing")
 
-    # Socket Worker Section
+    # Socket Worker
 
     def socket_sender_thread(self, target_socket: socket.socket) -> None:
         while self.is_sender_active:
@@ -546,7 +554,7 @@ class GlyphSyncer(QObject):
         self.status_changed.emit("disconnected", "")
         self.start_scanning_loop()
 
-    # Payload Dispatch Section
+    # Payload Dispatch
 
     def send_payload(self, payload_dictionary: dict) -> None:
         if self.client_socket is None:
@@ -554,7 +562,7 @@ class GlyphSyncer(QObject):
 
         self.send_queue.put(payload_dictionary)
 
-    # Ringtone Transfer Section
+    # Ringtone Transfer
 
     def push_ringtone(self, file_path: str) -> None:
         if not os.path.exists(file_path):
@@ -620,7 +628,7 @@ class GlyphSyncer(QObject):
             except Exception as exception:
                 logger.error(f"Failed to send ringtone over socket: {exception}")
 
-    # Synchronization Section
+    # Synchronization
 
     def sync(self, current_glyphs: dict) -> None:
         if current_glyphs is None:
@@ -719,7 +727,7 @@ class GlyphSyncer(QObject):
         self.send_payload({"action": "load", "glyphs": enriched_list})
         self.last_synced = copy.deepcopy({str(key): value for key, value in glyphs_dictionary.items()})
 
-    # Playback Control Section
+    # Playback Control
 
     def play(self, milliseconds: int) -> None:
         self.send_payload({"action": "play", "from_ms": milliseconds})
@@ -738,7 +746,7 @@ class GlyphSyncer(QObject):
         self.handle_disconnection()
         self.stop_scanning_loop()
 
-    # Cleanup Section
+    # Cleanup
 
     def cleanup(self) -> None:
         self.heartbeat_timer.stop()

@@ -25,9 +25,6 @@ from System.Interface.Windows import (
 # Existing Audio Setup Dialog
 
 class ExistingAudioSetupDialog(BPMEditorBase):
-
-    # Setup And Initialization
-
     def __init__(
             self,
             composition: ProjectSaver.Composition,

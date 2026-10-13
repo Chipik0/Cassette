@@ -10,7 +10,8 @@ from PyQt6.QtCore import (
 from PyQt6.QtGui import (
     QAction,
     QHideEvent,
-    QShowEvent
+    QShowEvent,
+    QMouseEvent
 )
 
 from PyQt6.QtWidgets import (
@@ -57,56 +58,57 @@ class ContextMenu(QMenu):
         menu.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground)
 
         menu.setWindowFlags(
-            menu.windowFlags()                   |
-            Qt.WindowType.FramelessWindowHint    |
+            menu.windowFlags()                |
+            Qt.WindowType.FramelessWindowHint |
             Qt.WindowType.NoDropShadowWindowHint
         )
 
+    # Menu Construction
+
     def populate(
-        self,
-        menu:    QMenu,
-        entries: list
-    ) -> None:
-        
+            self,
+            menu:    QMenu,
+            entries: list
+        ) -> None:
+
         for label, handler in entries:
             self.add_entry(menu, label, handler)
 
     def add_entry(
-        self,
-        menu:    QMenu,
-        label:   str,
-        handler: object
-    ) -> None:
+            self,
+            menu:    QMenu,
+            label:   str,
+            handler: object
+        ) -> None:
 
         if label == "-":
             menu.addSeparator()
-
             return
 
         if isinstance(handler, list):
             submenu = menu.addMenu(label)
             self.apply_styling(submenu)
             self.populate(submenu, handler)
-
             return
 
         if isinstance(handler, QWidget):
             action = QWidgetAction(menu)
             action.setDefaultWidget(handler)
             menu.addAction(action)
-
             return
 
         action = QAction(label, menu)
 
         if callable(handler):
             action.triggered.connect(handler)
-        
+
         else:
             action.setEnabled(False)
 
         menu.addAction(action)
-    
+
+    # Audio Feedback
+
     def close_sound(self) -> None:
         Player.ui_player.play_sound(
             "Menu/Close",
@@ -116,15 +118,15 @@ class ContextMenu(QMenu):
 
 @Dev.track_ram
 class EffectPreviewWidget(QWidget):
-    apply_requested: pyqtSignal = pyqtSignal(str, dict)
+    apply_requested = pyqtSignal(str, dict)
 
     def __init__(
-        self,
-        effect_name: str,
-        config:      dict,
-        glyph:       dict,
-        parent:      QWidget | None = None
-    ) -> None:
+            self,
+            effect_name: str,
+            config:      dict,
+            glyph:       dict,
+            parent:      QWidget | None = None
+        ) -> None:
 
         super().__init__(parent)
 
@@ -134,22 +136,24 @@ class EffectPreviewWidget(QWidget):
         self.controls    = {}
         self.effect_info = GlyphEffects.EffectsConfig.get(self.effect_name, {})
 
-        self.setup_ui()
+        self.setup_user_interface()
         self.populate_controls()
         self.on_control_changed()
 
-    def setup_ui(self) -> None:
+    def setup_user_interface(self) -> None:
+        self.setAttribute(Qt.WidgetAttribute.WA_NoMousePropagation, True)
         self.setFixedWidth(550)
         self.setStyleSheet(Styles.Controls.EffectSetupper)
 
         self.main_layout = QVBoxLayout(self)
+
         self.main_layout.setContentsMargins(8, 8, 8, 8)
         self.main_layout.setSpacing(12)
 
         self.live_preview_bar = Widgets.ScheduledSegmentedBar(30, loop = True)
-        self.main_layout.addWidget(self.live_preview_bar)
+        self.apply_button     = Widgets.NothingButton("Apply")
 
-        self.apply_button = Widgets.NothingButton("Apply")
+        self.main_layout.addWidget(self.live_preview_bar)
         self.apply_button.clicked.connect(self.on_apply)
 
     def populate_controls(self) -> None:
@@ -160,7 +164,7 @@ class EffectPreviewWidget(QWidget):
         }
 
         for item in self.effect_info["settings"]:
-            item_type = item.get("type")
+            item_type                 = item.get("type")
             widget_class, signal_name = types_map[item_type]
 
             if item_type == "slider":
@@ -171,7 +175,7 @@ class EffectPreviewWidget(QWidget):
 
             elif item_type == "checkbox":
                 widget = widget_class(item["title"], item["default"])
-            
+
             change_signal = getattr(widget, signal_name)
             change_signal.connect(self.on_control_changed)
 
@@ -179,6 +183,8 @@ class EffectPreviewWidget(QWidget):
             self.controls[item["key"]] = widget
 
         self.main_layout.addWidget(self.apply_button)
+
+    # State and Track Generation
 
     def get_settings(self) -> dict:
         settings = {}
@@ -196,11 +202,12 @@ class EffectPreviewWidget(QWidget):
         return settings
 
     def generate_effect_track(self) -> None:
-        settings = self.get_settings()
+        settings   = self.get_settings()
+        brightness = self.glyph["brightness"] if "brightness" in self.glyph else 100
 
         glyph = GlyphEffects.generate_glyph_dict(
             duration   = max(self.glyph["duration"], 3000),
-            brightness = self.glyph["brightness"]
+            brightness = brightness
         )
 
         track_data = GlyphEffects.effect_to_glyph(
@@ -211,7 +218,18 @@ class EffectPreviewWidget(QWidget):
 
         self.live_preview_bar.set_schedule(track_data)
 
-    def on_control_changed(self, *args) -> None:
+    # Event Handlers
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:
+        event.accept()
+
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+        event.accept()
+
+    def mouseDoubleClickEvent(self, event: QMouseEvent) -> None:
+        event.accept()
+
+    def on_control_changed(self, *arguments: object) -> None:
         self.apply_button.setText("Apply")
         self.apply_button.setDisabled(False)
 

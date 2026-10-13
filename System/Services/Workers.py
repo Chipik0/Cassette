@@ -11,7 +11,8 @@ from urllib.request import (
     urlopen
 )
 
-from PyQt6.QtGui import QImage
+from PyQt6.QtGui     import QImage
+from PyQt6.QtWidgets import QWidget
 
 from PyQt6.QtCore import (
     QObject,
@@ -19,8 +20,6 @@ from PyQt6.QtCore import (
     QRunnable,
     pyqtSignal
 )
-
-from PyQt6.QtWidgets import QWidget
 
 from System.Common import (
     Dev,
