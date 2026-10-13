@@ -25,6 +25,7 @@ from PyQt6.QtGui import (
     QShowEvent,
     QFocusEvent,
     QMouseEvent,
+    QDragMoveEvent,
     QDragEnterEvent,
     QDragLeaveEvent
 )
@@ -51,6 +52,8 @@ from System.Interface import (
     Widgets,
     Windows
 )
+
+from System.Interface.Animation import WindowAnimator
 
 from System.Interface.Widgets.ScrollArea import ElasticScrollArea
 
@@ -315,6 +318,8 @@ class MainMenu(QWidget):
         self.track_widgets:   dict[str, TrackItemWidget]   = {}
         self.search_box:      Widgets.SearchTextbox | None = None
         self.drag_loop_sound: Player.UISound | None        = None
+
+        self.window_animator = WindowAnimator.WindowAnimator.get()
 
         self.container = QFrame(self)
         self.container.setObjectName("container")
@@ -605,6 +610,12 @@ class MainMenu(QWidget):
                 setting_key = "drag_drop_sounds"
             )
 
+        self.window_animator.start_visual_transformation(200)
+        self.window_animator.scale_handle.set_target(0.97, 200)
+
+        event.acceptProposedAction()
+
+    def dragMoveEvent(self, event: QDragMoveEvent) -> None:
         event.acceptProposedAction()
 
     def dragLeaveEvent(self, event: QDragLeaveEvent) -> None:
@@ -618,12 +629,18 @@ class MainMenu(QWidget):
             self.drag_loop_sound.stop()
             self.drag_loop_sound = None
 
+        self.window_animator.start_visual_transformation(200)
+        self.window_animator.scale_handle.set_target(1.0, 200)
+
         event.accept()
 
     def dropEvent(self, event: QDropEvent) -> None:
         if self.drag_loop_sound:
             self.drag_loop_sound.stop()
             self.drag_loop_sound = None
+
+        self.window_animator.start_visual_transformation(160)
+        self.window_animator.scale_handle.set_target(1.0, 160)
 
         file_to_process = None
 

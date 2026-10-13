@@ -7,28 +7,32 @@ from PyQt6.QtCore import (
     QTimer,
     QElapsedTimer
 )
+
 from PyQt6.QtGui import (
     QPixmap,
     QKeyEvent,
     QMouseEvent
 )
+
 from PyQt6.QtWidgets import (
     QLabel,
     QWidget
 )
-from System.Common import Utils
+
+from System.Common   import Utils
 from System.Services import Player
+
 from System.Interface import (
     Timing,
     Widgets
 )
+
 from System.Interface.Animation import (
     LoomEngine,
     WindowAnimator
 )
-from System.Interface.Windows.FloatingWindowGPU import FloatingWindowGPU
 
-# Window
+from System.Interface.Windows.FloatingWindowGPU import FloatingWindowGPU
 
 class ParryGameWindow(FloatingWindowGPU):
     def __init__(self, parent: QWidget | None = None) -> None:

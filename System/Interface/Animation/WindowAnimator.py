@@ -1,15 +1,10 @@
 from __future__ import annotations
 
-import random
-
-from PyQt6.QtOpenGLWidgets import QOpenGLWidget
-
 from PyQt6.QtCore import (
     Qt,
     QEvent,
     QPoint,
     QRectF,
-    QTimer,
     QObject,
     pyqtSignal
 )
@@ -18,13 +13,10 @@ from PyQt6.QtGui import (
     QColor,
     QPixmap,
     QPainter,
-    QKeyEvent,
     QVector4D,
     QMatrix4x4,
-    QWheelEvent,
-    QMouseEvent,
-    QPaintEvent,
-    QResizeEvent
+    QTransform,
+    QPaintEvent
 )
 
 from PyQt6.QtWidgets import (
@@ -53,12 +45,10 @@ class WindowAnimationOverlay(QWidget):
         self.animator = animator
 
         self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
-        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
-        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
 
         self.hide()
-
-    # Painting
 
     def paintEvent(self, event: QPaintEvent) -> None:
         if self.animator.live_updates_enabled:
@@ -90,26 +80,6 @@ class WindowAnimationOverlay(QWidget):
 
         painter.end()
 
-    # Event Absorption
-
-    def mousePressEvent(self, event: QMouseEvent) -> None:
-        event.accept()
-
-    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
-        event.accept()
-
-    def mouseMoveEvent(self, event: QMouseEvent) -> None:
-        event.accept()
-
-    def wheelEvent(self, event: QWheelEvent) -> None:
-        event.accept()
-
-    def keyPressEvent(self, event: QKeyEvent) -> None:
-        event.accept()
-
-    def keyReleaseEvent(self, event: QKeyEvent) -> None:
-        event.accept()
-
 # Window Animator
 
 class WindowAnimator(QObject):
@@ -126,12 +96,11 @@ class WindowAnimator(QObject):
         self.static_frame_pixmap   = None
         self.is_visual_animating   = False
         self.live_updates_enabled  = True
-        self.last_live_render_time = 0.0
         self.focal_length          = 1100.0
 
         self.background_color      = QColor(Styles.Colors.Background)
 
-        self.overlay = WindowAnimationOverlay(self, self.target_window)
+        self.overlay               = WindowAnimationOverlay(self, self.target_window)
 
         self.setup_animation_handles()
         self.setup_idle_watchdog()
@@ -214,7 +183,7 @@ class WindowAnimator(QObject):
 
     # 3D Matrix Projection
 
-    def calculate_projection_transform(self):
+    def calculate_projection_transform(self) -> QTransform:
         width_px  = float(self.target_window.width())
         height_px = float(self.target_window.height())
 
@@ -225,18 +194,18 @@ class WindowAnimator(QObject):
         offset_y_px = float(self.offset_y_handle.value)
         scale_ratio = max(0.60, min(1.35, float(self.scale_handle.value)))
 
-        rot_x = max(-35.0, min(35.0, float(self.rotation_x_handle.value)))
-        rot_y = max(-35.0, min(35.0, float(self.rotation_y_handle.value)))
-        rot_z = max(-30.0, min(30.0, float(self.rotation_z_handle.value)))
+        rotation_x  = max(-35.0, min(35.0, float(self.rotation_x_handle.value)))
+        rotation_y  = max(-35.0, min(35.0, float(self.rotation_y_handle.value)))
+        rotation_z  = max(-30.0, min(30.0, float(self.rotation_z_handle.value)))
 
         matrix = QMatrix4x4()
 
         matrix.translate(center_x_px + offset_x_px, center_y_px + offset_y_px, 0.0)
         matrix.setRow(3, QVector4D(0.0, 0.0, -1.0 / self.focal_length, 1.0))
 
-        matrix.rotate(rot_x, 1.0, 0.0, 0.0)
-        matrix.rotate(rot_y, 0.0, 1.0, 0.0)
-        matrix.rotate(rot_z, 0.0, 0.0, 1.0)
+        matrix.rotate(rotation_x, 1.0, 0.0, 0.0)
+        matrix.rotate(rotation_y, 0.0, 1.0, 0.0)
+        matrix.rotate(rotation_z, 0.0, 0.0, 1.0)
 
         matrix.scale(scale_ratio, scale_ratio, 1.0)
         matrix.translate(-center_x_px, -center_y_px, 0.0)
@@ -329,7 +298,6 @@ class WindowAnimator(QObject):
             self.overlay.setGeometry(self.target_window.rect())
             self.overlay.show()
             self.overlay.raise_()
-            self.overlay.setFocus()
 
             LoomEngine.ui_engine.acquire()
 
