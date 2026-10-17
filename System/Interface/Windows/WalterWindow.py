@@ -65,7 +65,7 @@ class WalterWindow(FloatingWindowGPU):
             self.stop_timer.stop()
             return
 
-        Player.ui_player.play_sound("Packs/NOK/HEVCharger", speed = 1.0, enable_tone_randomizer = False)
+        Player.ui_player.play_sound(".vault/NOK/HEVCharger", speed = 1.0, enable_tone_randomizer = False)
         self.label.setText("Such a good boy.")
         self.chaos_timer.start()
         self.stop_timer.start()

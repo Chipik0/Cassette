@@ -65,6 +65,14 @@ SETTING_WIDGET_REGISTRY: dict[str, tuple[Callable[[object, dict[str, object]], Q
             default_ms  = int(configuration["default"]) if value is None or str(value) == "" else int(value)
         ),
         lambda widget: widget.current_value()
+    ),
+
+    "tutorial_reset": (
+        lambda value, configuration: Widgets.TutorialResetter(
+            description = str(configuration["description"]),
+            button_text = str(configuration.get("button_text", "Reset"))
+        ),
+        lambda widget: widget.current_value()
     )
 }
 

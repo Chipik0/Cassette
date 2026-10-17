@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+import time
+import random
+
+from collections.abc import Callable
+
 from PyQt6.QtCore import (
     Qt,
     QEvent,
@@ -25,8 +30,8 @@ from PyQt6.QtWidgets import (
     QGraphicsView
 )
 
-from System.Common import Styles
-
+from System.Common    import Styles
+from System.Services  import Player
 from System.Interface import Timing
 
 from System.Interface.Animation import LoomEngine
@@ -98,9 +103,9 @@ class WindowAnimator(QObject):
         self.live_updates_enabled  = True
         self.focal_length          = 1100.0
 
-        self.background_color      = QColor(Styles.Colors.Background)
+        self.background_color = QColor(Styles.Colors.Background)
 
-        self.overlay               = WindowAnimationOverlay(self, self.target_window)
+        self.overlay = WindowAnimationOverlay(self, self.target_window)
 
         self.setup_animation_handles()
         self.setup_idle_watchdog()
@@ -160,9 +165,16 @@ class WindowAnimator(QObject):
             on_change  = self.handle_visual_property_changed
         )
 
+        self.collapse_timer = Timing.Timer(
+            interval    = 45,
+            callback    = self.process_corrupt_collapse_step,
+            single_shot = False,
+            parent      = self
+        )
+
     def setup_idle_watchdog(self) -> None:
         self.idle_watchdog_timer = Timing.Timer(
-            interval    = 600,
+            interval    = 80,
             callback    = self.evaluate_animation_idle_state,
             single_shot = True,
             parent      = self
@@ -194,9 +206,9 @@ class WindowAnimator(QObject):
         offset_y_px = float(self.offset_y_handle.value)
         scale_ratio = max(0.60, min(1.35, float(self.scale_handle.value)))
 
-        rotation_x  = max(-35.0, min(35.0, float(self.rotation_x_handle.value)))
-        rotation_y  = max(-35.0, min(35.0, float(self.rotation_y_handle.value)))
-        rotation_z  = max(-30.0, min(30.0, float(self.rotation_z_handle.value)))
+        rotation_x = max(-35.0, min(35.0, float(self.rotation_x_handle.value)))
+        rotation_y = max(-35.0, min(35.0, float(self.rotation_y_handle.value)))
+        rotation_z = max(-30.0, min(30.0, float(self.rotation_z_handle.value)))
 
         matrix = QMatrix4x4()
 
@@ -291,19 +303,19 @@ class WindowAnimator(QObject):
 
         painter.end()
 
-    def start_visual_transformation(self, duration_ms: int = 500) -> None:
-        if not self.is_visual_animating:
-            self.capture_content_buffer()
+    def activate_visual_transformation(self) -> None:
+        if self.is_visual_animating:
+            return
 
-            self.overlay.setGeometry(self.target_window.rect())
-            self.overlay.show()
-            self.overlay.raise_()
+        self.capture_content_buffer()
 
-            LoomEngine.ui_engine.acquire()
+        self.overlay.setGeometry(self.target_window.rect())
+        self.overlay.show()
+        self.overlay.raise_()
 
-            self.is_visual_animating = True
+        LoomEngine.ui_engine.acquire()
 
-        self.idle_watchdog_timer.start(duration_ms + 120)
+        self.is_visual_animating = True
 
     def finish_visual_transformation(self) -> None:
         if not self.is_visual_animating:
@@ -320,12 +332,12 @@ class WindowAnimator(QObject):
 
     def is_transform_busy(self) -> bool:
         return (
-            abs(self.rotation_x_handle.value) > 0.04 or
-            abs(self.rotation_y_handle.value) > 0.04 or
-            abs(self.rotation_z_handle.value) > 0.04 or
-            abs(self.scale_handle.value - 1.0) > 0.008 or
-            abs(self.offset_x_handle.value) > 0.3 or
-            abs(self.offset_y_handle.value) > 0.3
+            abs(self.rotation_x_handle.value) > 0.05       or
+            abs(self.rotation_y_handle.value) > 0.05       or
+            abs(self.rotation_z_handle.value) > 0.05       or
+            abs(self.scale_handle.value - 1.0) > 0.005     or
+            abs(self.offset_x_handle.value) > 0.5          or
+            abs(self.offset_y_handle.value) > 0.5
         )
 
     def evaluate_animation_idle_state(self) -> None:
@@ -333,7 +345,7 @@ class WindowAnimator(QObject):
             return
 
         if self.is_transform_busy():
-            self.idle_watchdog_timer.start(100)
+            self.idle_watchdog_timer.start(80)
 
             return
 
@@ -342,8 +354,16 @@ class WindowAnimator(QObject):
     # Callbacks
 
     def handle_visual_property_changed(self, value: float) -> None:
-        if self.is_visual_animating:
+        if self.is_transform_busy():
+            if not self.is_visual_animating:
+                self.activate_visual_transformation()
+
             self.overlay.update()
+            self.idle_watchdog_timer.start(80)
+
+        elif self.is_visual_animating:
+            if not self.idle_watchdog_timer.isActive():
+                self.idle_watchdog_timer.start(80)
 
         self.transformed.emit()
 
@@ -362,6 +382,118 @@ class WindowAnimator(QObject):
         self.offset_y_handle.set_target(0.0, duration_ms, LoomEngine.Easing.ease_out_cubic)
 
         self.idle_watchdog_timer.start(duration_ms + 40)
+
+    # Corrupt Glitch Collapse
+
+    def start_corrupt_collapse(
+            self,
+            duration_ms: int = 5000,
+            on_finished: Callable[[], object] | None = None
+        ) -> None:
+
+        if duration_ms <= 0:
+            raise ValueError("Collapse duration must be greater than zero")
+
+        if self.captured_pixmap is None:
+            self.activate_visual_transformation()
+
+        self.collapse_duration_ms       = float(duration_ms)
+        self.collapse_start_time_sec    = time.perf_counter()
+        self.collapse_finished_callback = on_finished
+
+        self.collapse_timer.start()
+
+    def process_corrupt_collapse_step(self) -> None:
+        if self.captured_pixmap is None or self.captured_pixmap.isNull():
+            self.stop_corrupt_collapse()
+            return
+
+        elapsed_time_ms = (time.perf_counter() - self.collapse_start_time_sec) * 1000.0
+        progress_ratio  = max(0.0, min(1.0, elapsed_time_ms / self.collapse_duration_ms))
+
+        eased_progress = progress_ratio ** 1.7
+
+        current_chunk_size = max(2, int(round(20.0 - (18.0 * eased_progress))))
+        next_interval_ms   = max(12, int(round(45.0 - (33.0 * eased_progress))))
+        self.collapse_timer.setInterval(next_interval_ms)
+
+        pixmap_width  = self.captured_pixmap.width()
+        pixmap_height = self.captured_pixmap.height()
+
+        painter = QPainter(self.captured_pixmap)
+
+        slices_per_tick = int(25 + (650 * eased_progress))
+
+        darkness_alpha = int(round(255.0 * eased_progress))
+
+        for _ in range(slices_per_tick):
+            source_x = random.randint(0, max(0, pixmap_width - current_chunk_size))
+            source_y = random.randint(0, max(0, pixmap_height - current_chunk_size))
+
+            target_x = random.randint(0, max(0, pixmap_width - current_chunk_size))
+            target_y = random.randint(0, max(0, pixmap_height - current_chunk_size))
+
+            copied_fragment = self.captured_pixmap.copy(
+                source_x,
+                source_y,
+                current_chunk_size,
+                current_chunk_size
+            )
+
+            painter.drawPixmap(target_x, target_y, copied_fragment)
+
+            if darkness_alpha > 0:
+                painter.fillRect(
+                    target_x,
+                    target_y,
+                    current_chunk_size,
+                    current_chunk_size,
+                    QColor(0, 0, 0, darkness_alpha)
+                )
+
+                if random.random() < (darkness_alpha / 255.0):
+                    painter.fillRect(
+                        target_x,
+                        target_y,
+                        current_chunk_size,
+                        current_chunk_size,
+                        QColor(0, 0, 0, 255)
+                    )
+
+        dot_spacing = 18
+        dot_radius  = max(1, int(round((dot_spacing * 0.85) * eased_progress)))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(0, 0, 0, darkness_alpha))
+
+        for dot_y in range(-dot_spacing // 2, pixmap_height + dot_spacing // 2, dot_spacing):
+            for dot_x in range(-dot_spacing // 2, pixmap_width + dot_spacing // 2, dot_spacing):
+                painter.drawEllipse(
+                    dot_x - dot_radius,
+                    dot_y - dot_radius,
+                    dot_radius * 2,
+                    dot_radius * 2
+                )
+
+        if progress_ratio >= 1.0:
+            painter.fillRect(self.captured_pixmap.rect(), QColor(0, 0, 0, 255))
+
+        painter.end()
+
+        self.overlay.update()
+
+        if progress_ratio >= 1.0:
+            self.stop_corrupt_collapse()
+
+    def stop_corrupt_collapse(self) -> None:
+        if self.collapse_timer is not None:
+            self.collapse_timer.stop()
+            self.collapse_timer.deleteLater()
+            self.collapse_timer = None
+
+        if self.collapse_finished_callback is not None:
+            callback = self.collapse_finished_callback
+            self.collapse_finished_callback = None
+            callback()
 
     # Static Registry
 

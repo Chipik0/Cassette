@@ -93,70 +93,70 @@ class KeyboardController(QObject):
 
     def bind(
             self,
-            key:    QKeySequence | Qt.Key | int,
-            action: object
+            key:         QKeySequence | Qt.Key | int,
+            action:      object,
+            auto_repeat: bool = True
         ) -> None:
 
         shortcut = QShortcut(QKeySequence(key), self.conductor)
+        shortcut.setAutoRepeat(auto_repeat)
         shortcut.activated.connect(action)
 
         self.shortcuts.append(shortcut)
 
     # Setup
 
-    # Hotkey Setup
-
     def setup_hotkeys(self) -> None:
         base_shortcuts = [
-            (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_Z,                                     self.undo_requested.emit),
-            (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_Y,                                     self.redo_requested.emit),
-            (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier | Qt.Key.Key_Z, self.redo_requested.emit),
+            (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_Z,                                     self.undo_requested.emit,               True),
+            (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_Y,                                     self.redo_requested.emit,               True),
+            (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier | Qt.Key.Key_Z, self.redo_requested.emit,               True),
 
-            (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_C,   self.copy_requested.emit),
-            (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_V,   self.paste_requested.emit),
-            (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_X,   self.cut_requested.emit),
-            (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_D,   self.handle_duplicate),
-            (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_F11, self.playground_requested.emit),
+            (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_C,   self.copy_requested.emit,      False),
+            (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_V,   self.paste_requested.emit,     True),
+            (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_X,   self.cut_requested.emit,        False),
+            (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_D,   self.handle_duplicate,         False),
+            (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_F11, self.playground_requested.emit, False),
 
-            (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_A,                                     self.select_all_requested.emit),
-            (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier | Qt.Key.Key_A, self.select_track_requested.emit),
+            (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_A,                                     self.select_all_requested.emit,   False),
+            (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier | Qt.Key.Key_A, self.select_track_requested.emit, False),
 
-            (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_Equal, lambda: self.scale_requested.emit(100.0)),
-            (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_Minus, lambda: self.scale_requested.emit(-100.0)),
+            (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_Equal, lambda: self.scale_requested.emit(100.0),  True),
+            (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_Minus, lambda: self.scale_requested.emit(-100.0), True),
 
-            (Qt.Key.Key_F,                                     self.zoom_fit_requested.emit),
-            (Qt.KeyboardModifier.ShiftModifier | Qt.Key.Key_F, self.handle_zoom_selection),
+            (Qt.Key.Key_F,                                     self.handle_zoom_fit,       False),
+            (Qt.KeyboardModifier.ShiftModifier | Qt.Key.Key_F, self.handle_zoom_selection, False),
 
-            (Qt.Key.Key_Up,   self.handle_move_track_up),
-            (Qt.Key.Key_Down, self.handle_move_track_down),
+            (Qt.Key.Key_Up,   self.handle_move_track_up,   True),
+            (Qt.Key.Key_Down, self.handle_move_track_down, True),
 
-            (Qt.Key.Key_Space,                                     self.handle_playback_toggle),
-            (Qt.Key.Key_Left,                                      self.handle_arrow_left),
-            (Qt.Key.Key_Right,                                     self.handle_arrow_right),
-            (Qt.KeyboardModifier.ShiftModifier | Qt.Key.Key_Left,  self.handle_shift_arrow_left),
-            (Qt.KeyboardModifier.ShiftModifier | Qt.Key.Key_Right, self.handle_shift_arrow_right),
+            (Qt.Key.Key_Space,                                     self.handle_playback_toggle,    False),
+            (Qt.Key.Key_Left,                                      self.handle_arrow_left,         True),
+            (Qt.Key.Key_Right,                                     self.handle_arrow_right,        True),
+            (Qt.KeyboardModifier.ShiftModifier | Qt.Key.Key_Left,  self.handle_shift_arrow_left,   True),
+            (Qt.KeyboardModifier.ShiftModifier | Qt.Key.Key_Right, self.handle_shift_arrow_right,  True),
 
-            (Qt.Key.Key_Delete,    self.handle_deletion),
-            (Qt.Key.Key_Backspace, self.handle_deletion),
+            (Qt.Key.Key_Delete,    self.handle_deletion, True),
+            (Qt.Key.Key_Backspace, self.handle_deletion, True),
 
-            (Qt.Key.Key_S,            self.speed_cycle_requested.emit),
-            (Qt.Key.Key_B,            self.open_brightness_editor),
-            (Qt.Key.Key_D,            self.open_duration_editor),
-            (Qt.Key.Key_BracketLeft,  lambda: self.adjust_brightness_by_step(-1)),
-            (Qt.Key.Key_BracketRight, lambda: self.adjust_brightness_by_step(1)),
+            (Qt.Key.Key_S,            self.speed_cycle_requested.emit,            False),
+            (Qt.Key.Key_B,            self.open_brightness_editor,                False),
+            (Qt.Key.Key_D,            self.open_duration_editor,                  False),
+            (Qt.Key.Key_BracketLeft,  lambda: self.adjust_brightness_by_step(-1), True),
+            (Qt.Key.Key_BracketRight, lambda: self.adjust_brightness_by_step(1),  True),
 
-            (Qt.Key.Key_Escape, self.escape_requested.emit),
+            (Qt.Key.Key_Escape, self.escape_requested.emit, False),
 
-            (Qt.Key.Key_Home, self.go_to_start),
-            (Qt.Key.Key_End,  self.go_to_end)
+            (Qt.Key.Key_Home, self.go_to_start, False),
+            (Qt.Key.Key_End,  self.go_to_end,   False)
         ]
 
-        for key_combination, callback in base_shortcuts:
-            self.bind(key_combination, callback)
+        for key_combination, callback, auto_repeat in base_shortcuts:
+            self.bind(key_combination, callback, auto_repeat = auto_repeat)
 
     def setup_track_hotkeys(self) -> None:
         for key, track_identifier in self.TRACK_KEY_MAPPINGS.items():
-            self.bind(key, partial(self.spawn_track_glyph_requested.emit, track_identifier))
+            self.bind(key, partial(self.spawn_track_glyph_requested.emit, track_identifier), auto_repeat = False)
 
     # Event Filter
 
@@ -303,7 +303,7 @@ class KeyboardController(QObject):
         pan  = self.calculate_playhead_pan()
 
         Player.ui_player.play_sound(
-            "Feedback/PlayheadMove",
+            "Controls/Playhead/Move",
             speed       = tone,
             volume      = 0.2,
             pan         = pan,
@@ -349,16 +349,16 @@ class KeyboardController(QObject):
         self.conductor.scroll_to_playhead()
 
     def go_to_start(self) -> None:
-        self.jump_to_position(0.0, "Feedback/PlayheadForward", "playhead_home")
+        self.jump_to_position(0.0, "Controls/Playhead/Forward", "playhead_home")
 
     def go_to_end(self) -> None:
-        self.jump_to_position(self.playback_manager.duration_ms, "Feedback/PlayheadBackward", "playhead_end")
+        self.jump_to_position(self.playback_manager.duration_ms, "Controls/Playhead/Backward", "playhead_end")
 
     # Glyph Actions
 
     def handle_deletion(self) -> None:
         self.delete_requested.emit()
-        Player.ui_player.play_sound("Glyphs/Delete", setting_key = "glyph_deletion_sound", lock_tag = "glyph_deletion")
+        Player.ui_player.play_sound("Controls/Glyphs/Delete", setting_key = "glyph_deletion_sound", lock_tag = "glyph_deletion")
 
     def handle_move_track_up(self) -> None:
         if not self.ensure_selection("warning_move_track"):
@@ -384,6 +384,9 @@ class KeyboardController(QObject):
 
         self.zoom_selection_requested.emit()
 
+    def handle_zoom_fit(self) -> None:
+        self.zoom_fit_requested.emit()
+
     def open_brightness_editor(self) -> None:
         if not self.ensure_selection("warning_brightness"):
             return
@@ -407,7 +410,7 @@ class KeyboardController(QObject):
             warning_index = random.randint(1, 4)
 
             Player.ui_player.play_sound(
-                f"Signals/Warning/Warning{warning_index}",
+                f"Alerts/Warnings/Warning{warning_index}",
                 lock_tag = lock_tag
             )
 

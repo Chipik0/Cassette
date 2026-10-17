@@ -529,7 +529,7 @@ class BPMEditorBase(AudioEditorBase):
             self.bpm_remove_timer.start(100)
 
             if random.randint(1, 500) == 500:
-                Player.ui_player.play_sound("Packs/NOK/Gambling")
+                Player.ui_player.play_sound(".vault/NOK/Gambling")
 
             return
 

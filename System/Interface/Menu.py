@@ -111,7 +111,7 @@ class ContextMenu(QMenu):
 
     def close_sound(self) -> None:
         Player.ui_player.play_sound(
-            "Menu/Close",
+            "Controls/ContextMenu/Close",
             pan         = self.pan,
             setting_key = "context_menu_sounds"
         )

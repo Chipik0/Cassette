@@ -138,7 +138,7 @@ class Checkbox(Lifecycle.LoomAnimationMixin, QCheckBox):
         super().nextCheckState()
 
         tone = 1.1 if self.isChecked() else 0.82
-        Player.ui_player.play_sound("Click/Checkbox", setting_key = "checkbox_sounds", speed = tone)
+        Player.ui_player.play_sound("Controls/Checkbox/Toggle", setting_key = "checkbox_sounds", speed = tone)
 
         self.indicator_scale.set_base(1.5)
         self.indicator_radius.set_base(0.0)

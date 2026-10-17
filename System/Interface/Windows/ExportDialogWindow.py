@@ -52,7 +52,7 @@ class ExportDialogWindow(FloatingWindowGPU):
         self.content_layout.addLayout(button_row)
 
     def export(self) -> None:
-        Player.ui_player.play_sound("App/ExportStart")
+        Player.ui_player.play_sound("Controls/Export/Start")
 
         model            = self.combobox.current_text()
         watermark        = self.watermark_textbox.text() or "Cassette"

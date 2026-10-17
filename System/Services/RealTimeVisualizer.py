@@ -465,7 +465,7 @@ class GlyphSyncer(QObject):
                     self.has_warned_high_ping = True
                     self.high_ping_detected.emit(latency_ms)
 
-                    Player.ui_player.play_sound("Signals/Error/HighPing")
+                    Player.ui_player.play_sound("Alerts/HighPing")
 
     # Socket Worker
 

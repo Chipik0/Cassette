@@ -556,7 +556,7 @@ class BaseComposition:
 
         if open_folder:
             Utils.open_file(Utils.get_user_path(str(self.id), "Cassette/Songs"))
-            Player.ui_player.play_sound("App/Export")
+            Player.ui_player.play_sound("Controls/Export/Short")
 
     def export_all(
             self,
@@ -564,7 +564,7 @@ class BaseComposition:
             send_to_ringtone: bool = False
         ) -> None:
 
-        Player.ui_player.play_sound("App/ExportLong")
+        Player.ui_player.play_sound("Controls/Export/Long")
 
         self.export(
             watermark        = watermark,

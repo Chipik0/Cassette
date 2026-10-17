@@ -45,6 +45,8 @@ from System.Services.Player import (
     bpm_informer
 )
 
+from System.Interface import Timing
+
 from System.Interface.Animation import (
     Lifecycle,
     LoomEngine
@@ -127,12 +129,12 @@ class BaseButton(Lifecycle.LoomAnimationMixin, QPushButton):
 
     def animate_punch(self) -> None:
         self.press_scale_handle.play_curve(
-            [
+            keyframes   = [
                 (0.0, 1.2),
                 (1.0, 1.0)
             ],
-            100,
-            LoomEngine.Easing.ease_out_cubic
+            duration_ms     = 100,
+            easing_function = LoomEngine.Easing.ease_out_cubic
         )
 
     def on_glitch_frame_changed(self, frame: tuple[str, QPoint, QSize]) -> None:
@@ -170,7 +172,7 @@ class BaseButton(Lifecycle.LoomAnimationMixin, QPushButton):
 
     def start_glitch(self) -> None:
         if not self.glitch_sound_locked:
-            ui_player.play_sound("Reject")
+            ui_player.play_sound("Alerts/Refuse")
 
         self.glitch_started.emit()
 
@@ -392,7 +394,7 @@ class ConfirmButton(ButtonWithOutline):
             on_change  = self.on_border_pulse_changed
         )
 
-        self.confirmation_timer = LoomEngine.Timing.Timer(
+        self.confirmation_timer = Timing.Timer(
             interval    = self.confirm_timeout_ms,
             callback    = self.reset_confirmation,
             single_shot = True,
@@ -454,8 +456,6 @@ class ConfirmButton(ButtonWithOutline):
         self.stop_confirmation_pulse()
         self.setText(self.idle_text)
 
-        ui_player.play_sound("Feedback/ConfirmTick", speed = 0.7)
-
     def stop_confirmation_pulse(self) -> None:
         if self.is_connected_to_beat:
             bpm_informer.beat_4.disconnect(self.pulse_border)
@@ -471,16 +471,15 @@ class ConfirmButton(ButtonWithOutline):
         duration_ms = bpm_informer.get_interval(4)
 
         self.border_pulse_handle.play_curve(
-            [
+            keyframes   = [
                 (0.0, 1.0),
                 (1.0, 0.0)
             ],
-            duration_ms,
-            LoomEngine.Easing.ease_out_cubic
+            duration_ms     = duration_ms,
+            easing_function = LoomEngine.Easing.ease_out_cubic
         )
 
         tone = (self.elapsed_timer.elapsed() / self.confirmation_timer.interval()) + 0.7
-        ui_player.play_sound("Feedback/ConfirmTick", speed = tone)
 
     def paintEvent(self, event: QPaintEvent) -> None:
         super().paintEvent(event)

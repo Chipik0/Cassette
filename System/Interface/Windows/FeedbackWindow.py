@@ -232,7 +232,7 @@ class FeedbackWindow(FloatingWindowGPU):
         self.pulse_status_widget.set_loading_speed_ratio(loading_ratio, duration_ms = 500)
 
         self.transmit_sound = Player.ui_player.play_sound(
-            "Feedback/TransmitLoop",
+            "Alerts/Transmit/Loop",
             loop  = True,
             speed = initial_sound_speed
         )
@@ -266,4 +266,4 @@ class FeedbackWindow(FloatingWindowGPU):
         self.start_shake()
         QTimer.singleShot(260, self.stop_shake)
 
-        Player.ui_player.play_sound("Signals/Error/TransmitFailed")
+        Player.ui_player.play_sound("Alerts/Transmit/Fail")

@@ -59,6 +59,12 @@ class ScrollController(QObject):
             parent      = self
         )
 
+        self.scrub_timer = Timing.Timer(
+            callback    = self.on_scrub_completed,
+            single_shot = True,
+            parent      = self
+        )
+
         self.flight_progress_handle = LoomEngine.ui_engine.bind(
             owner      = self,
             name       = "flight_progress",
@@ -102,6 +108,9 @@ class ScrollController(QObject):
 
         if self.is_flying:
             self.stop_camera_flight()
+
+        if self.is_scrubbing:
+            self.stop_scrubbing()
 
         self.inactivity_timer.start(3000)
 
@@ -196,10 +205,10 @@ class ScrollController(QObject):
             sound_speed = min(max(abs(self.drag_velocity / 14.0), 0.5), 1.7)
 
             if not self.drag_is_active:
-                Player.ui_player.play_sound("Rewind/Start", setting_key = "rewind_sounds")
+                Player.ui_player.play_sound("Controls/Rewind/Start", setting_key = "rewind_sounds")
 
                 self.rewind_sound = Player.ui_player.play_sound(
-                    "Rewind/Rewind2",
+                    "Controls/Rewind/Loop",
                     True,
                     sound_speed,
                     setting_key = "rewind_sounds"
@@ -223,7 +232,7 @@ class ScrollController(QObject):
             return
 
         if not silent:
-            Player.ui_player.play_sound("Rewind/Stop", setting_key = "rewind_sounds")
+            Player.ui_player.play_sound("Controls/Rewind/Stop", setting_key = "rewind_sounds")
 
         self.rewind_sound.stop()
         self.rewind_sound = None
@@ -320,14 +329,20 @@ class ScrollController(QObject):
 
         horizontal_bar.setValue(clamped)
 
+    def on_scrub_completed(self) -> None:
+        self.is_scrubbing = False
+
     def stop_scrubbing(self) -> None:
         self.is_scrubbing = False
+        self.scrub_timer.stop()
         self.scrub_playhead_handle.stop_targeting()
         self.scrub_camera_handle.stop_targeting()
 
     # Camera Flight
 
     def start_camera_flight(self) -> None:
+        self.inactivity_timer.stop()
+
         self.is_auto_scroll_active  = False
         self.is_flying              = True
         self.flight_start_scroll_px = float(self.conductor.horizontalScrollBar().value())
@@ -381,8 +396,12 @@ class ScrollController(QObject):
 
         if progress >= 1.0:
             horizontal_bar.setValue(int(round(target_scroll_px)))
+
             self.is_flying             = False
             self.is_auto_scroll_active = True
+
+            self.inactivity_timer.stop()
+            self.sync_scroll_to_playhead()
 
     # Playhead Tracking
 
@@ -427,6 +446,9 @@ class ScrollController(QObject):
     # Playback State
 
     def on_playback_started(self) -> None:
+        self.stop_scrubbing()
+        self.inactivity_timer.stop()
+
         horizontal_bar       = self.conductor.horizontalScrollBar()
         current_scroll       = float(horizontal_bar.value())
         playhead_x           = self.conductor.get_playhead_position_px()
@@ -446,6 +468,7 @@ class ScrollController(QObject):
 
             return
 
+        self.sync_scroll_to_playhead()
         self.is_auto_scroll_active = True
 
     def on_playback_stopped(self) -> None:
@@ -492,6 +515,7 @@ class ScrollController(QObject):
         camera_duration_ms   = int(min(450, max(200, playhead_duration_ms + 120)))
 
         self.is_scrubbing = True
+        self.scrub_timer.start(camera_duration_ms)
 
         self.scrub_playhead_handle.set_target(
             value                      = target_playhead_px,
@@ -521,11 +545,3 @@ class ScrollController(QObject):
     def cleanup(self) -> None:
         self.stop_smooth_scroll()
         self.stop_drag(silent = True)
-        self.stop_camera_flight()
-        self.stop_scrubbing()
-        self.inactivity_timer.stop()
-        self.is_auto_scroll_active = False
-
-        self.flight_progress_handle.release()
-        self.scrub_playhead_handle.release()
-        self.scrub_camera_handle.release()

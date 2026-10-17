@@ -226,7 +226,7 @@ class Textbox(Lifecycle.LoomAnimationMixin, QLineEdit):
             cursor_position = self.get_cursor_global_position()
 
             Player.ui_player.play_sound(
-                "Textbox/ArrowTick",
+                "Controls/Textbox/CursorMove",
                 speed       = tone,
                 setting_key = "textbox_sounds",
                 pan         = self.calculate_screen_pan(cursor_position)
@@ -449,7 +449,7 @@ class Textbox(Lifecycle.LoomAnimationMixin, QLineEdit):
         current_pan            = self.calculate_screen_pan(cursor_global_position)
 
         Player.ui_player.play_sound(
-            "Textbox/Tick",
+            "Controls/Textbox/Symbol",
             speed       = tone,
             setting_key = "textbox_sounds",
             volume      = 0.6,
@@ -495,7 +495,7 @@ class Textbox(Lifecycle.LoomAnimationMixin, QLineEdit):
             cursor_position = self.get_cursor_global_position()
 
             Player.ui_player.play_sound(
-                "Reject",
+                "Alerts/Refuse",
                 setting_key = "textbox_sounds",
                 pan         = self.calculate_screen_pan(cursor_position)
             )
@@ -780,11 +780,11 @@ class SearchTextbox(Textbox):
 
         if self.search_box_glitch_count == 60:
             self.setText("That's slightly illogical.")
-            Player.ui_player.play_sound("Packs/NOK/Illogical")
+            Player.ui_player.play_sound(".vault/NOK/Illogical")
 
         elif self.search_box_glitch_count == 150:
             self.setText("0.0004%...")
-            Player.ui_player.play_sound("Packs/NOK/ZZZ")
+            Player.ui_player.play_sound(".vault/NOK/ZZZ")
 
         elif self.search_box_glitch_count == 250:
             from System.Interface.Windows import ErrorWindow

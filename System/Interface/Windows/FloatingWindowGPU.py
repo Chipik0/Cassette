@@ -86,8 +86,9 @@ class FloatingWindowGPU(Lifecycle.LoomAnimationMixin, QOpenGLWidget):
             start_position:                  QPoint  | None = None
         ) -> None:
 
-        super().__init__(parent)
+        super().__init__(None)
 
+        self.logical_parent                  = parent
         self.player                          = Player.player
         self.enable_tilt                     = enable_tilt
         self.max_tilt_angle                  = max_tilt_angle
@@ -895,13 +896,13 @@ class FloatingWindowGPU(Lifecycle.LoomAnimationMixin, QOpenGLWidget):
         elif sys.platform != "linux" and not self.content_widget.geometry().contains(event.pos()):
             return
 
+        self.drag_position = event.globalPosition().toPoint() - self.pos()
+
         if sys.platform == "linux":
             handle = self.windowHandle()
 
             if handle is not None:
                 handle.startSystemMove()
-
-        self.drag_position = event.globalPosition().toPoint() - self.pos()
 
         self.move_start_animation()
         event.accept()
@@ -921,6 +922,9 @@ class FloatingWindowGPU(Lifecycle.LoomAnimationMixin, QOpenGLWidget):
             self.move_end_animation()
 
         self.drag_position = None
+
+        if self.logical_parent is not None:
+            self.logical_parent.update()
 
     # Utilities
 
@@ -1038,7 +1042,7 @@ class FloatingWindowGPU(Lifecycle.LoomAnimationMixin, QOpenGLWidget):
             self.setGeometry(final_rectangle)
             return final_rectangle
 
-        window        = QApplication.activeWindow()
+        window        = self.logical_parent.window() if self.logical_parent else QApplication.activeWindow()
         window_center = window.geometry().center() if window else QApplication.primaryScreen().geometry().center()
 
         final_rectangle = QRect(

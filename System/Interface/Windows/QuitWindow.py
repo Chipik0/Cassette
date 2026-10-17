@@ -381,7 +381,7 @@ class QuitWindow(FloatingWindowGPU):
 
     def handle_angry_attempt(self) -> None:
         Player.ui_player.play_sound(
-            "Packs/NOK/Scratch",
+            ".vault/NOK/Scratch",
             speed  = max(0.35, 1.0 - (0.06 * self.angry_attempts)),
             volume = min(1.0, 0.75 + (0.03 * self.angry_attempts))
         )
@@ -430,7 +430,7 @@ class QuitWindow(FloatingWindowGPU):
         self.phrase_label.setText("FINE.")
 
         cut_sound_index = random.randint(1, 5)
-        Player.ui_player.play_sound(f"Packs/NOK/Cut{cut_sound_index}", speed = 1.0)
+        Player.ui_player.play_sound(f".vault/NOK/Cut{cut_sound_index}", speed = 1.0)
 
         if not self.enable_close_animation:
             self.really_close()
@@ -470,8 +470,8 @@ class QuitWindow(FloatingWindowGPU):
     def execute_final_collapse_show(self) -> None:
         cut_sound_index = random.randint(1, 5)
 
-        Player.ui_player.play_sound(f"Packs/NOK/Cut{cut_sound_index}", speed = 1.0)
-        Player.ui_player.play_sound("Packs/NOK/Cut6", speed = 1.0)
+        Player.ui_player.play_sound(f".vault/NOK/Cut{cut_sound_index}", speed = 1.0)
+        Player.ui_player.play_sound(".vault/NOK/Cut6", speed = 1.0)
 
         self.player.set_speed(0.01, duration_ms = 3600)
         self.player.set_passes([40], q = 1.0, mix = 1.0, duration_ms = 3200)

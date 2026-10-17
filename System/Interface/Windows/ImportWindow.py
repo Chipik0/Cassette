@@ -151,14 +151,14 @@ class ImportWindow(BPMEditorBase):
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
         Player.ui_player.play_sound(
-            "DragDrop/DragDrop",
+            "Controls/DragDrop/Drop",
             speed       = 1.03,
             setting_key = "drag_drop_sounds"
         )
 
         if not self.drag_loop_sound:
             self.drag_loop_sound = Player.ui_player.play_sound(
-                "DragDrop/Loop",
+                "Controls/DragDrop/Loop",
                 loop        = True,
                 setting_key = "drag_drop_sounds"
             )
@@ -170,7 +170,7 @@ class ImportWindow(BPMEditorBase):
 
     def dragLeaveEvent(self, event: object) -> None:
         Player.ui_player.play_sound(
-            "DragDrop/DragDrop",
+            "Controls/DragDrop/Drop",
             speed       = 0.94,
             setting_key = "drag_drop_sounds"
         )
@@ -184,7 +184,7 @@ class ImportWindow(BPMEditorBase):
 
     def dropEvent(self, event: QDropEvent) -> None:
         Player.ui_player.play_sound(
-            "DragDrop/DragDrop",
+            "Controls/DragDrop/Drop",
             speed       = 0.94,
             setting_key = "drag_drop_sounds"
         )
@@ -220,7 +220,7 @@ class ImportWindow(BPMEditorBase):
                 found_valid_file = True
 
         if not found_valid_file:
-            Player.ui_player.play_sound("Signals/Error/MegaCritical")
+            Player.ui_player.play_sound("Alerts/Errors/MegaCritical")
             self.title_label.setText(
                 random.choice(
                     [

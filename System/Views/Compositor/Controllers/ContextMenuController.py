@@ -81,7 +81,7 @@ class ContextMenuController(QObject):
             current_pan = self.calculate_window_pan(event.globalPos())
 
             Player.ui_player.play_sound(
-                "Menu/Open",
+                "Controls/ContextMenu/Open",
                 pan         = current_pan,
                 setting_key = "context_menu_sounds"
             )

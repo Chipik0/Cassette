@@ -108,9 +108,9 @@ PAGE_PULSE_SPEED         = 0.8
 PAGE_PULSE_DOWN_MS       = 120
 PAGE_PULSE_UP_MS         = 160
 
-PLAY_PAUSE_ACCEL_RAMP_MS = 900
-PLAY_PAUSE_HOLD_MS       = 1500
-PLAY_PAUSE_STOP_RAMP_MS  = 700
+PLAY_PAUSE_ACCEL_RAMP_MS = 320
+PLAY_PAUSE_HOLD_MS       = 1400
+PLAY_PAUSE_STOP_RAMP_MS  = 400
 PLAY_PAUSE_TEXT_HOLD_MS  = 1600
 
 PLAY_PAUSE_GOOD_TEXT = (
@@ -776,6 +776,13 @@ class SettingsDict(dict, metaclass = SettingsDictionaryMeta):
 
             "User Experience": [
                 {
+                    "type":        "tutorial_reset",
+                    "description": "Interactive Tutorial.\nShow again on next project load.",
+                    "key":         "_tutorial_shown",
+                    "button_text": "Reset",
+                    "default":     False
+                },
+                {
                     "type": "selector",
                     "title": "Mouse Click Behavior",
                     "key": "mouse_click_behavior",
@@ -853,7 +860,7 @@ class SettingsDict(dict, metaclass = SettingsDictionaryMeta):
                         "Return": "return"
                     },
                     "default": "Pause"
-                },
+                }
             ],
 
             "Dev": [

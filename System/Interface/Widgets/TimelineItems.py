@@ -1733,6 +1733,13 @@ class GlyphItem(Lifecycle.LoomAnimationMixin, QGraphicsObject):
 
     # Interaction Helpers
 
+    def reset_interaction_state(self) -> None:
+        self.interaction_mode   = None
+        self.fade_is_dragging   = False
+        self.fade_dragged_index = None
+
+        self.setCursor(Qt.CursorShape.ArrowCursor)
+
     def get_multi_keyframe_targets(self) -> list[GlyphItem]:
         if not self.isSelected():
             return [self]

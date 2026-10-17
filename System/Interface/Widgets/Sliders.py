@@ -221,7 +221,7 @@ class SliderWithLabel(Lifecycle.LoomAnimationMixin, Widgets.BaseControlContainer
             stereo_pan = -stereo_pan
 
         Player.ui_player.play_sound(
-            f"Feedback/Slider/Tick{sound_variant}",
+            f"Controls/Slider/Tick{sound_variant}",
             speed  = playback_speed,
             volume = 0.8,
             pan    = stereo_pan

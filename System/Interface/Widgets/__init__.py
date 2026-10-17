@@ -29,7 +29,7 @@ from .Labels import (
     DescriptionLabel
 )
 
-from .Popups import Tooltip
+from .Popups import Tooltip, ValuePopup
 
 from .ProgressBars import TutorialProgressBar
 
@@ -45,7 +45,10 @@ from .Selectors import (
     SelectorWithLabel
 )
 
-from .Setuppers import DelaySetupper
+from .Setuppers import (
+    DelaySetupper,
+    TutorialResetter
+)
 
 from .Sliders import SliderWithLabel
 

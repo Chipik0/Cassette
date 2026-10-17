@@ -63,13 +63,13 @@ class DialogInputWindow(FloatingWindowGPU):
             return
 
         if self.close_attempt_count == 50:
-            Player.ui_player.play_sound("Packs/NOK/WAYD")
+            Player.ui_player.play_sound(".vault/NOK/WAYD")
 
             if self.title_label:
                 self.title_label.setText("What are you doing?")
 
         if self.close_attempt_count == 70:
-            Player.ui_player.play_sound("Packs/NOK/HCYLWY")
+            Player.ui_player.play_sound(".vault/NOK/HCYLWY")
 
             if self.title_label:
                 self.title_label.setText("???")
@@ -78,12 +78,12 @@ class DialogInputWindow(FloatingWindowGPU):
             self.chaos_mode()
 
         if self.close_attempt_count == 100 and self.title_label:
-            Player.ui_player.play_sound("Packs/NOK/ONYD")
+            Player.ui_player.play_sound(".vault/NOK/ONYD")
             self.title_label.setText("Dividing by zero: 3")
 
             QTimer.singleShot(1000, lambda: self.title_label.setText("Dividing by zero: 2"))
             QTimer.singleShot(2000, lambda: self.title_label.setText("Dividing by zero: 1"))
-            QTimer.singleShot(2100, lambda: Player.ui_player.play_sound("Packs/NOK/Charging"))
+            QTimer.singleShot(2100, lambda: Player.ui_player.play_sound(".vault/NOK/Charging"))
             QTimer.singleShot(2500, lambda: self.title_label.setText("LMAO"))
             QTimer.singleShot(3000, lambda: 1 / 0)
 

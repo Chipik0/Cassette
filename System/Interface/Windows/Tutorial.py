@@ -19,7 +19,8 @@ from System.Interface import (
     Widgets
 )
 
-from System.Interface.Windows import FloatingWindowGPU
+from System.Interface.Animation import LoomEngine
+from System.Interface.Windows   import FloatingWindowGPU
 
 # Tutorial
 
@@ -107,6 +108,38 @@ class Tutorial(FloatingWindowGPU):
                 }
             },
             {
+                "label":    "Switching tracks",
+                "text":     "Press `Up` or `Down` arrow keys to move selected glyphs between tracks.",
+                "bpm_peak": 1.04,
+                "wait":     {
+                    "kind":  "progress",
+                    "steps": [
+                        {
+                            "identifier": "track",
+                            "get":        lambda tutorial: tutorial.conductor.glyph_controller.glyph_property_changed,
+                            "predicate":  lambda key: key == "track",
+                            "target":     3
+                        }
+                    ]
+                }
+            },
+            {
+                "label":    "Nudging position",
+                "text":     "Press `Left` or `Right` arrow keys to nudge selected glyphs along the timeline.",
+                "bpm_peak": 1.04,
+                "wait":     {
+                    "kind":  "progress",
+                    "steps": [
+                        {
+                            "identifier": "nudge",
+                            "get":        lambda tutorial: tutorial.conductor.glyph_controller.glyph_property_changed,
+                            "predicate":  lambda key: key == "start",
+                            "target":     4
+                        }
+                    ]
+                }
+            },
+            {
                 "label":       "Duration",
                 "text":        "Press `D` to open the duration editor and set a new length.",
                 "bpm_peak":    1.04,
@@ -183,6 +216,15 @@ class Tutorial(FloatingWindowGPU):
                 }
             },
             {
+                "label":    "Undo",
+                "text":     f"Made a mistake? Press `{'Cmd' if platform.system() == 'Darwin' else 'Ctrl'} + Z` anytime to undo your last action.",
+                "bpm_peak": 1.04,
+                "wait":     {
+                    "kind": "signal",
+                    "get":  lambda tutorial: tutorial.conductor.keyboard_controller.undo_requested
+                }
+            },
+            {
                 "label": "Deleting a glyph",
                 "text":  "Select a glyph and press `Del` or `Backspace` to delete it.",
                 "wait":  {
@@ -209,6 +251,24 @@ class Tutorial(FloatingWindowGPU):
                             "target":     self.zoom_stage_target()
                         }
                     ]
+                }
+            },
+            {
+                "label":    "Zoom to fit",
+                "text":     "Press `F` to fit the whole timeline in view, or `Shift + F` to zoom straight to your selected glyphs.",
+                "bpm_peak": 1.04,
+                "wait":     {
+                    "kind": "signal",
+                    "get":  lambda tutorial: tutorial.conductor.keyboard_controller.zoom_fit_requested
+                }
+            },
+            {
+                "label":    "Select all",
+                "text":     f"Press `{'Cmd' if platform.system() == 'Darwin' else 'Ctrl'} + A` to select all glyphs on the timeline.",
+                "bpm_peak": 1.04,
+                "wait":     {
+                    "kind": "signal",
+                    "get":  lambda tutorial: tutorial.conductor.keyboard_controller.select_all_requested
                 }
             },
             {
@@ -274,7 +334,11 @@ class Tutorial(FloatingWindowGPU):
         self.max_stage = len(self.pages)
 
     def zoom_stage_target(self) -> float:
-        zoom_step = self.conductor.wheel_controller.zoom_step
+        if self.conductor is not None:
+            zoom_step = float(self.conductor.scroll_controller.zoom_step)
+
+        else:
+            zoom_step = float(Constants.current_settings.get("zoom_step", 20))
 
         return zoom_step * Constants.ZOOM_TARGET_MULTIPLIER
 
@@ -598,6 +662,22 @@ class Tutorial(FloatingWindowGPU):
 
     # Playback
 
+    def prepare_playback_for_pickup(self) -> None:
+        self.disarm_play_pause_watch()
+
+        if self.player.is_playing:
+            self.animate_speed(
+                0.0,
+                duration_ms = Constants.PLAY_PAUSE_STOP_RAMP_MS,
+                on_finish   = self.finish_prepare_pickup
+            )
+
+        else:
+            self.finish_prepare_pickup()
+
+    def finish_prepare_pickup(self) -> None:
+        self.player.stop()
+
     def arm_play_pause_stage(self) -> None:
         self.prepare_playback_for_pickup()
 
@@ -617,54 +697,72 @@ class Tutorial(FloatingWindowGPU):
         self.active_signal      = self.player.playback_state_changed
         self.active_signal_slot = slot
 
-    def prepare_playback_for_pickup(self) -> None:
-        if not self.audio_enabled or not self.player.is_playing:
-            return
-
-        self.animate_speed(0.0, Constants.PLAY_PAUSE_STOP_RAMP_MS, on_finish = self.player.stop)
-
     def on_play_pause_started(self) -> None:
         self.return_focus_to_tutorial()
         self.text_label.setText(Constants.PLAY_PAUSE_GOOD_TEXT)
 
-        if not self.audio_enabled:
-            QTimer.singleShot(Constants.PLAY_PAUSE_TEXT_HOLD_MS, self.on_action_completed)
-            return
-
         baseline = self.target_speed_baseline()
+
+        self.driving_speed_until = time.monotonic() + 5.0
+        self.player.speed_property.set_base(0.0)
+
+        sequence_finished = False
+
+        def finish_play_pause_sequence() -> None:
+            nonlocal sequence_finished
+
+            if sequence_finished:
+                return
+
+            sequence_finished = True
+            self.disarm_play_pause_watch()
+
+            def complete_stop() -> None:
+                self.player.stop()
+                self.player.speed_property.set_base(baseline)
+                self.on_action_completed()
+
+            if self.player.is_playing:
+                self.animate_speed(
+                    0.0,
+                    duration_ms = Constants.PLAY_PAUSE_STOP_RAMP_MS,
+                    easing      = LoomEngine.Easing.ease_out_quad,
+                    on_finish   = complete_stop
+                )
+
+            else:
+                complete_stop()
 
         def early_pause_slot(started: bool) -> None:
             if started:
                 return
 
-            self.disarm_play_pause_watch()
-
-            self.text_label.setText(Constants.PLAY_PAUSE_QUICK_TEXT)
-            self.animate_speed(baseline, Constants.PAGE_PULSE_UP_MS)
-
-            QTimer.singleShot(Constants.PLAY_PAUSE_TEXT_HOLD_MS, self.on_action_completed)
+            finish_play_pause_sequence()
 
         self.player.playback_state_changed.connect(early_pause_slot)
         self.play_pause_pause_slot = early_pause_slot
 
-        def wind_down() -> None:
-            if self.play_pause_pause_slot is not early_pause_slot:
+        def on_hold_finished() -> None:
+            if sequence_finished or self.play_pause_pause_slot is not early_pause_slot:
                 return
 
-            self.disarm_play_pause_watch()
-            self.animate_speed(0.0, Constants.PLAY_PAUSE_STOP_RAMP_MS, on_finish = self.finish_play_pause_stage)
+            finish_play_pause_sequence()
 
-        def hold_then_wind_down() -> None:
-            if self.play_pause_pause_slot is not early_pause_slot:
+        def on_ramp_up_finished() -> None:
+            if sequence_finished or self.play_pause_pause_slot is not early_pause_slot:
                 return
 
-            QTimer.singleShot(Constants.PLAY_PAUSE_HOLD_MS, wind_down)
+            remaining_ms = max(0.0, self.player.duration_ms - self.player.get_position())
+            hold_ms      = min(float(Constants.PLAY_PAUSE_HOLD_MS), max(200.0, remaining_ms - float(Constants.PLAY_PAUSE_STOP_RAMP_MS)))
 
-        self.animate_speed(baseline, Constants.PLAY_PAUSE_ACCEL_RAMP_MS, on_finish = hold_then_wind_down)
+            QTimer.singleShot(int(hold_ms), on_hold_finished)
 
-    def finish_play_pause_stage(self) -> None:
-        self.player.stop()
-        self.on_action_completed()
+        self.animate_speed(
+            baseline,
+            duration_ms = Constants.PLAY_PAUSE_ACCEL_RAMP_MS,
+            easing      = LoomEngine.Easing.ease_out_quad,
+            on_finish   = on_ramp_up_finished
+        )
 
     def disarm_play_pause_watch(self) -> None:
         if self.play_pause_pause_slot is None:
@@ -675,6 +773,9 @@ class Tutorial(FloatingWindowGPU):
 
     def on_external_speed_change(self, new_speed: float) -> None:
         if time.monotonic() < self.driving_speed_until:
+            return
+
+        if new_speed <= 0.05:
             return
 
         self.user_took_speed_control = True
@@ -806,7 +907,7 @@ class Tutorial(FloatingWindowGPU):
         )
 
     def stop_tutorial_audio(self) -> None:
-        if not self.audio_enabled or self.audio_wind_down_sent:
+        if self.audio_wind_down_sent:
             return
 
         self.audio_wind_down_sent = True
@@ -815,9 +916,13 @@ class Tutorial(FloatingWindowGPU):
 
         def finish_stop() -> None:
             self.player.stop()
-            self.player.set_speed(baseline, 0)
+            self.player.speed_property.set_base(baseline)
 
-        self.animate_speed(0.0, Constants.PLAY_PAUSE_STOP_RAMP_MS, on_finish = finish_stop)
+        if self.player.is_playing:
+            self.animate_speed(0.0, Constants.PLAY_PAUSE_STOP_RAMP_MS, on_finish = finish_stop)
+
+        else:
+            finish_stop()
 
     def play_page_transition_pulse(self) -> None:
         if not self.audio_enabled:
@@ -844,7 +949,8 @@ class Tutorial(FloatingWindowGPU):
         for signal in (
             glyph_controller.glyph_spawned,
             glyph_controller.glyph_deleted,
-            glyph_controller.glyph_moved_or_resized
+            glyph_controller.glyph_moved_or_resized,
+            glyph_controller.glyph_property_changed
         ):
             signal.connect(self.underwater_blip)
             self.feedback_connections.append(signal)

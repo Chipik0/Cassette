@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from System.Interface.Windows.FloatingWindowGPU        import FloatingWindowGPU
+from System.Interface.Windows.FloatingWindowGPU import FloatingWindowGPU
 
 from System.Interface.Windows.Helpers import (
     build_column,
@@ -26,7 +26,7 @@ from System.Interface.Windows.UpdateWindow             import UpdateWindow
 from System.Interface.Windows.AboutWindow              import AboutWindow
 from System.Interface.Windows.WalterWindow             import WalterWindow
 from System.Interface.Windows.ByteBeatWindow           import ByteBeatWindow
-from System.Interface.Windows.ParryGameWindow          import ParryGameWindow
+from System.Interface.Windows.TamashikaWindow          import ParryGameWindow
 from System.Interface.Windows.AudioSetupDialog         import AudioSetupDialog
 from System.Interface.Windows.ExistingAudioSetupDialog import ExistingAudioSetupDialog
 from System.Interface.Windows.GlyphtoneEditor          import GlyphtoneEditor

@@ -379,8 +379,8 @@ class GlyphController(QObject):
                 self.elements_changed.emit()
                 self.glyph_property_changed.emit("brightness")
 
-                direction_sound = "Higher" if delta > 0 else "Lower"
-                target_sound    = f"Glyphs/Brightness/{direction_sound}"
+                direction_sound = "Up" if delta > 0 else "Down"
+                target_sound    = f"Controls/Glyphs/Brightness{direction_sound}"
 
                 Player.ui_player.play_sound(target_sound, setting_key = "brightness_adjustment_sounds")
 
@@ -441,6 +441,8 @@ class GlyphController(QObject):
         if self.is_processing:
             return
 
+        self.cancel_drag()
+
         self.is_processing = True
 
         try:
@@ -465,6 +467,8 @@ class GlyphController(QObject):
 
         if self.is_processing:
             return
+
+        self.cancel_drag()
 
         self.is_processing = True
 
@@ -509,9 +513,9 @@ class GlyphController(QObject):
 
             before_state[glyph_id] = copy.deepcopy(glyph_data)
 
-            new_glyph_data         = copy.deepcopy(glyph_data)
+            new_glyph_data          = copy.deepcopy(glyph_data)
             new_glyph_data["start"] = int(new_start)
-            after_state[glyph_id]  = new_glyph_data
+            after_state[glyph_id]   = new_glyph_data
 
         if not after_state:
             return
@@ -527,7 +531,7 @@ class GlyphController(QObject):
             self.glyph_property_changed.emit("start")
             self.refresh_all_occlusion()
 
-            Player.ui_player.play_sound("Click/Toggle3", speed = 1.1 if delta_ms > 0 else 0.9)
+            Player.ui_player.play_sound("Alerts/Clicks/Toggle3", speed = 1.1 if delta_ms > 0 else 0.9)
 
         finally:
             self.composition.stop_batching()
@@ -558,9 +562,9 @@ class GlyphController(QObject):
 
             before_state[glyph_id] = copy.deepcopy(glyph_data)
 
-            new_glyph_data            = copy.deepcopy(glyph_data)
+            new_glyph_data             = copy.deepcopy(glyph_data)
             new_glyph_data["duration"] = int(new_duration)
-            after_state[glyph_id]     = new_glyph_data
+            after_state[glyph_id]      = new_glyph_data
 
         if not after_state:
             return
@@ -576,7 +580,7 @@ class GlyphController(QObject):
             self.glyph_property_changed.emit("duration")
             self.refresh_all_occlusion()
 
-            Player.ui_player.play_sound("Click/Toggle3", speed = 1.2 if delta_ms > 0 else 0.8)
+            Player.ui_player.play_sound("Alerts/Clicks/Toggle3", speed = 1.2 if delta_ms > 0 else 0.8)
 
         finally:
             self.composition.stop_batching()
@@ -700,8 +704,7 @@ class GlyphController(QObject):
             target_index  = current_index + direction
 
             if target_index < 0 or target_index >= len(track_names):
-                Player.ui_player.play_sound("Signals/Warning/Warning1", lock_tag = "warning_track_bounds")
-
+                Player.ui_player.play_sound("Alerts/Warnings/Warning1")
                 return
 
         before_state = {}
@@ -730,10 +733,11 @@ class GlyphController(QObject):
             self.update_glyphs(after_state, animate_movement = True)
 
             self.elements_changed.emit()
+            self.glyph_property_changed.emit("track")
             self.refresh_stack_indicators(force = True)
             self.refresh_all_occlusion()
 
-            Player.ui_player.play_sound("Click/Toggle", speed = 1.1 if direction < 0 else 0.9)
+            Player.ui_player.play_sound("Alerts/Clicks/Toggle1", speed = 1.1 if direction < 0 else 0.9)
 
         finally:
             self.composition.stop_batching()
@@ -752,7 +756,7 @@ class GlyphController(QObject):
 
     def duplicate_selected_glyphs(self) -> None:
         self.copy_glyphs()
-        Player.ui_player.play_sound("Glyphs/Duplicate", setting_key = "glyph_duplication_sound")
+        Player.ui_player.play_sound("Controls/Glyphs/Duplicate", setting_key = "glyph_duplication_sound")
         self.paste_glyphs()
 
     def paste_glyphs(self) -> None:
@@ -866,6 +870,34 @@ class GlyphController(QObject):
         self.conductor.scene.clearSelection()
 
     # Drag Operations
+
+    def cancel_drag(self) -> None:
+        has_drag_session  = bool(self.drag_session)
+        has_keyframe_drag = any(item.fade_is_dragging for item in self.glyph_items.values())
+
+        if not has_drag_session and not has_keyframe_drag:
+            return
+
+        if has_drag_session and self.temp_before_state:
+            self.composition.update_bunch_of_glyphs(self.temp_before_state)
+
+            for item in self.drag_session:
+                item.update_geometry(animate_movement = True)
+
+        for item in self.glyph_items.values():
+            item.reset_interaction_state()
+
+        self.drag_session.clear()
+        self.temp_before_state.clear()
+
+        self.current_drag_mode = None
+
+        if self.composition.batching_mode:
+            self.composition.stop_batching()
+
+        self.conductor.mouse_controller.drag_scroll_stopped.emit()
+        self.conductor.tooltip.hide_tooltip()
+        self.drag_state_changed.emit(False)
 
     def start_drag(self) -> None:
         self.drag_session      = {}
@@ -1215,7 +1247,7 @@ class GlyphController(QObject):
 
         self.animate_stack_items(group, step, direction, group_size)
 
-        Player.ui_player.play_sound("Glyphs/Stack/Expand", setting_key = "glyph_stack_sounds")
+        Player.ui_player.play_sound("Controls/Glyphs/Expand", setting_key = "glyph_stack_sounds")
 
     def collapse_stack_items(self, group: list[int]) -> None:
         collapse_duration = 220
@@ -1250,7 +1282,7 @@ class GlyphController(QObject):
         self.collapse_stack_items(group)
 
         QTimer.singleShot(230, self.finish_stack_collapse)
-        Player.ui_player.play_sound("Glyphs/Stack/Collapse", setting_key = "glyph_stack_sounds")
+        Player.ui_player.play_sound("Controls/Glyphs/Collapse", setting_key = "glyph_stack_sounds")
 
     def finish_stack_collapse(self) -> None:
         self.refresh_stack_indicators()

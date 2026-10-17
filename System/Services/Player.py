@@ -1418,27 +1418,21 @@ class PlaybackManager(QObject):
         if duration_ms > remaining_ms:
             duration_ms = max(20, int(remaining_ms))
 
-        if self.pulse_timer is not None:
-            self.pulse_timer.stop()
-            self.pulse_timer.deleteLater()
-            self.pulse_timer = None
-
         self.is_pulsing = True
         target_base     = self.base_speed
         duration_half   = max(10, duration_ms // 2)
 
-        def return_to_base() -> None:
-            self.pulse_timer = None
+        def on_pulse_completed() -> None:
+            self.is_pulsing = False
 
+        def return_to_base() -> None:
             if not self.is_playing or self.is_stopping:
                 self.is_pulsing = False
+
                 return
 
             return_remaining = max(0.0, self.duration_ms - self.get_position())
             return_duration  = min(duration_half, max(10, int(return_remaining))) if return_remaining > 0 else 0
-
-            def on_pulse_completed() -> None:
-                self.is_pulsing = False
 
             self.set_speed(
                 target_base,
@@ -1449,16 +1443,11 @@ class PlaybackManager(QObject):
                 update_base           = False
             )
 
-        self.pulse_timer = Timing.Timer(
-            callback    = return_to_base,
-            single_shot = True,
-            parent      = self
-        )
-
         self.set_speed(
             pulse_peak_speed,
             duration_ms           = duration_half,
             easing                = easing,
+            on_finish             = return_to_base,
             use_engine_multiplier = False,
             update_base           = False
         )
@@ -1727,6 +1716,12 @@ class UISound:
     def set_volume(self, new_volume: float) -> None:
         self.manager.set_volume(self.sound_id, new_volume)
 
+    def set_pan(self, new_pan: float) -> None:
+        self.manager.set_pan(self.sound_id, new_pan)
+
+    def is_active(self) -> bool:
+        return self.manager.is_sound_active(self.sound_id)
+
     def stop(self) -> None:
         self.manager.stop_sound(self.sound_id)
 
@@ -1887,6 +1882,10 @@ class UISoundManager:
         with self.lock:
             self.active_sounds.pop(sound_id, None)
 
+    def is_sound_active(self, sound_id: int) -> bool:
+        with self.lock:
+            return sound_id in self.active_sounds
+
     def set_speed(
             self,
             sound_id: int,
@@ -1910,6 +1909,21 @@ class UISoundManager:
                 return
 
             self.active_sounds[sound_id]["volume"] = float(new_volume)
+
+    def set_pan(
+            self,
+            sound_id: int,
+            pan:      float
+        ) -> None:
+
+        left_gain, right_gain = self.pan_to_gains(pan)
+
+        with self.lock:
+            if sound_id not in self.active_sounds:
+                return
+
+            self.active_sounds[sound_id]["left_gain"]  = left_gain
+            self.active_sounds[sound_id]["right_gain"] = right_gain
 
     def stop_all(self) -> None:
         with self.lock:
@@ -1994,9 +2008,9 @@ class UISoundManager:
 # Byte Beat Synthesis
 
 def shift_right_unsigned(
-        value:  int,
-        amount: int
-    ) -> int:
+            value:  int,
+            amount: int
+        ) -> int:
 
     return (value % 0x100000000) >> (amount & 0x1F)
 

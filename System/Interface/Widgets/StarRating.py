@@ -194,7 +194,7 @@ class StarRatingWidget(Lifecycle.LoomAnimationMixin, QWidget):
             )
 
         Player.ui_player.play_sound(
-            "Click/Toggle2",
+            "Alerts/Clicks/Toggle2",
             speed  = sound_pitch,
             pan    = sound_pan,
             volume = 0.75

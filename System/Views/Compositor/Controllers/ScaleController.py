@@ -61,6 +61,7 @@ class ScaleController(QObject):
             force_update:      bool         = False,
             anchor_viewport_x: float | None = None
         ) -> None:
+
         if not self.conductor.total_content_width:
             return
 
@@ -99,7 +100,6 @@ class ScaleController(QObject):
 
             self.tile_fade_subframe = 0
             self.tile_fade_alphas.clear()
-            self.frozen_fallback_tiles.clear()
 
             self.scale_started.emit()
 
@@ -116,7 +116,7 @@ class ScaleController(QObject):
             warning_index = random.randint(1, 4)
 
             Player.ui_player.play_sound(
-                f"Signals/Warning/Warning{warning_index}",
+                f"Alerts/Warnings/Warning{warning_index}",
                 lock_tag = "warning_zoom_selection"
             )
 
@@ -124,16 +124,20 @@ class ScaleController(QObject):
 
             return
 
+        total_duration_ms = self.conductor.playback_manager.duration_ms
+        viewport_width    = float(self.conductor.viewport().width())
+        fit_px_per_sec    = viewport_width / (total_duration_ms / 1000.0) if total_duration_ms > 0 else 20.0
+        minimum_scaling   = max(fit_px_per_sec, 20.0)
+
         min_start_ms = min(item.start_ms for item in selected_items)
         max_end_ms   = max(item.start_ms + item.duration_ms for item in selected_items)
         duration_ms  = max(10.0, float(max_end_ms - min_start_ms))
 
-        viewport_width  = float(self.conductor.viewport().width())
         padding_px      = 120.0
         usable_width_px = max(50.0, viewport_width - padding_px)
 
         target_scaling = usable_width_px / (duration_ms / 1000.0)
-        target_scaling = max(20.0, min(3000.0, target_scaling))
+        target_scaling = max(minimum_scaling, min(3000.0, target_scaling))
 
         center_ms = min_start_ms + (duration_ms / 2.0)
 
@@ -150,7 +154,7 @@ class ScaleController(QObject):
             warning_index = random.randint(1, 4)
 
             Player.ui_player.play_sound(
-                f"Signals/Warning/Warning{warning_index}",
+                f"Alerts/Warnings/Warning{warning_index}",
                 lock_tag = "warning_already_zoomed"
             )
 
@@ -176,12 +180,26 @@ class ScaleController(QObject):
         if total_duration_ms <= 0.0:
             return
 
-        viewport_width  = float(self.conductor.viewport().width())
-        padding_px      = 40.0
-        usable_width_px = max(50.0, viewport_width - padding_px)
+        viewport_width     = float(self.conductor.viewport().width())
+        total_duration_sec = total_duration_ms / 1000.0
+        target_scaling     = max(viewport_width / total_duration_sec, 20.0)
 
-        target_scaling = usable_width_px / (total_duration_ms / 1000.0)
-        target_scaling = max(20.0, target_scaling)
+        current_scroll       = float(self.conductor.horizontalScrollBar().value())
+        scale_matches        = abs(self.px_per_sec - target_scaling) < 0.5
+        scroll_matches       = current_scroll <= 2.0
+        is_already_targeting = abs(self.target_px_per_sec - target_scaling) < 0.5
+
+        if (scale_matches and scroll_matches) or (self.scale_anim_active and is_already_targeting):
+            warning_index = random.randint(1, 4)
+
+            Player.ui_player.play_sound(
+                f"Alerts/Warnings/Warning{warning_index}",
+                lock_tag = "warning_already_zoomed"
+            )
+
+            self.conductor.tooltip.show_tooltip_at("Already zoomed to fit.", plan_hide = True)
+
+            return
 
         self.target_px_per_sec      = target_scaling
         self.scale_anim_anchor_ms   = total_duration_ms / 2.0
@@ -196,27 +214,39 @@ class ScaleController(QObject):
             self.waveform_anim_timer.start()
 
     def set_frozen_tiles(self, tiles: dict[int, QPixmap]) -> None:
-        self.frozen_tiles = tiles
+        if tiles:
+            self.frozen_tiles                  = dict(tiles)
+            self.frozen_px_per_sec             = self.px_per_sec
+            self.frozen_fallback_tiles.clear()
+
+            return
+
+        if self.frozen_fallback_tiles:
+            self.frozen_tiles      = dict(self.frozen_fallback_tiles)
+            self.frozen_px_per_sec = self.frozen_fallback_px_per_sec
 
     def on_tile_ready(
             self,
             tile_index: int,
             pixmap:     QPixmap
         ) -> None:
+
         if self.scale_anim_active:
             self.frozen_tiles.setdefault(tile_index, pixmap)
 
-        if self.frozen_fallback_tiles:
-            self.tile_fade_alphas[tile_index] = 0.0
+            return
 
-            if not self.waveform_anim_timer.isActive():
-                self.waveform_anim_timer.start()
+        self.tile_fade_alphas[tile_index] = 0.0
+
+        if not self.waveform_anim_timer.isActive():
+            self.waveform_anim_timer.start()
 
     # Animation Updates
 
     def on_waveform_anim_tick(self) -> None:
         if self.scale_anim_active:
             self.step_scale_animation()
+
             return
 
         self.tile_fade_subframe += 1
@@ -279,6 +309,7 @@ class ScaleController(QObject):
     def step_tile_fade(self) -> bool:
         if not self.tile_fade_alphas:
             self.frozen_fallback_tiles.clear()
+
             return True
 
         completed_indices = [
@@ -294,7 +325,13 @@ class ScaleController(QObject):
             self.tile_fade_alphas[index] = min(1.0, self.tile_fade_alphas[index] + 0.09)
 
         self.conductor.viewport().update()
-        return not self.tile_fade_alphas
+
+        if not self.tile_fade_alphas:
+            self.frozen_fallback_tiles.clear()
+
+            return True
+
+        return False
 
     def update_scroll_to_anchor(self) -> None:
         new_anchor_scene_px = (self.scale_anim_anchor_ms / 1000.0) * self.px_per_sec

@@ -283,7 +283,7 @@ An error encountered!
         self.pulse_status_widget.set_loading_speed_ratio(loading_ratio, duration_ms = 500)
 
         self.transmit_sound = Player.ui_player.play_sound(
-            "Feedback/TransmitLoop",
+            "Alerts/Transmit/Loop",
             loop  = True,
             speed = initial_sound_speed
         )
@@ -317,7 +317,7 @@ An error encountered!
         self.start_shake()
         QTimer.singleShot(260, self.stop_shake)
 
-        Player.ui_player.play_sound("Signals/Error/TransmitFailed")
+        Player.ui_player.play_sound("Alerts/Transmit/Fail")
 
     # Window Lifecycle
 
@@ -331,7 +331,7 @@ An error encountered!
 
         self.is_ready = True
 
-        Player.ui_player.play_sound("Packs/NOK/Death")
+        Player.ui_player.play_sound(".vault/NOK/Death")
 
         self.title_label.start_glitch(4000)
 

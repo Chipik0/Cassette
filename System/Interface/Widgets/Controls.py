@@ -221,7 +221,7 @@ class DraggableValueControl(BaseControlWidget):
 
         self.last_sound_timestamp_seconds = current_timestamp_seconds
 
-        Player.ui_player.play_sound("Click/Toggle3")
+        Player.ui_player.play_sound("Alerts/Clicks/Toggle3")
 
     # Value Management
 
@@ -508,8 +508,6 @@ class CycleButton(BaseControlWidget):
 
             return
 
-        Player.ui_player.play_sound("Click/Toggle3")
-
         self.next_state()
         event.accept()
 
@@ -521,6 +519,8 @@ class CycleButton(BaseControlWidget):
     def next_state(self) -> None:
         self.cycle_state()
         self.show_state(emit = True, animated = True)
+
+        Player.ui_player.play_sound("Alerts/Clicks/Toggle3")
 
     def show_state(
             self,

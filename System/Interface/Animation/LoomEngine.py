@@ -1884,6 +1884,9 @@ class AnimationEngine:
         self.tracks[key].clear_clips(tag)
     
     def stop_property_targeting(self, key: str) -> None:
+        if key not in self.tracks:
+            return
+
         self.tracks[key].stop_target()
 
     def forget_property(self, key: str) -> None:

@@ -15,8 +15,13 @@ from PyQt6.QtWidgets import (
     QApplication
 )
 
-from System.Common    import Dev
-from System.Services  import Player
+from System.Common import (
+    Dev,
+    Constants
+)
+
+from System.Services import Player
+
 from System.Interface import (
     Timing,
     Widgets
@@ -107,7 +112,7 @@ class DelaySetupper(Widgets.BaseControlContainer):
         )
 
         QTimer.singleShot(580, self.on_delay_reset)
-        Player.ui_player.play_sound("Signals/Success/DelayFound")
+        Player.ui_player.play_sound("Alerts/AudioCalibrate/Found")
 
     def on_delay_reset(self) -> None:
         self.delay_textbox.setText("0")
@@ -129,7 +134,7 @@ class DelaySetupper(Widgets.BaseControlContainer):
 
         self.calibrate_button.setText("Press Space")
 
-        Player.player.load_audio("System/Assets/Sounds/Feedback/DelayTick.wav")
+        Player.player.load_audio("System/Assets/Sounds/Alerts/AudioCalibrate/Tick.wav")
 
         self.play_click()
         self.beat_timer.start()
@@ -233,11 +238,11 @@ class DelaySetupper(Widgets.BaseControlContainer):
         self.calibrate_button.setText("Calibrated")
 
         QTimer.singleShot(580, self.on_delay_set)
-        Player.ui_player.play_sound("Signals/Success/DelayFound")
+        Player.ui_player.play_sound("Alerts/AudioCalibrate/Found")
 
     def on_delay_set(self) -> None:
         self.delay_textbox.pulse_scale(1.5, 200)
-        Player.ui_player.play_sound("Signals/Success/DelayFoundFinal")
+        Player.ui_player.play_sound("Alerts/AudioCalibrate/FoundEnd")
 
     def calculate_average_offset(self) -> int | None:
         relevant_taps = self.tap_timestamps[self.warmup_tap_count :]
@@ -277,3 +282,65 @@ class DelaySetupper(Widgets.BaseControlContainer):
             return 0
 
         return int(value)
+
+@Dev.track_ram
+class TutorialResetter(Widgets.BaseControlContainer):
+    def __init__(
+            self,
+            description: str,
+            button_text: str = "Reset"
+        ) -> None:
+
+        super().__init__(inner_layout_type = QHBoxLayout)
+
+        self.is_reset_requested = False
+
+        self.setup_ui(description, button_text)
+
+    # Setup
+
+    def setup_ui(
+            self,
+            description: str,
+            button_text: str
+        ) -> None:
+
+        self.inner_layout.setContentsMargins(10, 10, 10, 10)
+        self.inner_layout.setSpacing(10)
+
+        self.label        = Widgets.DescriptionLabel(description, 500)
+        self.reset_button = Widgets.ButtonWithOutline(button_text)
+
+        self.label.setWordWrap(False)
+
+        self.reset_button.setMinimumWidth(100)
+        self.reset_button.clicked.connect(self.handle_reset_clicked)
+
+        self.inner_layout.addWidget(self.label)
+        self.inner_layout.addStretch()
+        self.inner_layout.addWidget(self.reset_button)
+
+    # Actions
+
+    def handle_reset_clicked(self) -> None:
+        if not Constants.current_settings.get("_tutorial_shown"):
+            self.reset_button.start_glitch()
+
+            return
+
+        self.is_reset_requested = True
+
+        Constants.current_settings.set_value("_tutorial_shown", False)
+
+        self.reset_button.setText("Scheduled")
+        self.reset_button.animate_punch()
+
+        Player.ui_player.play_sound("Controls/Selector/Select", speed = 1.1)
+
+    # Value
+
+    def current_value(self) -> bool:
+        if self.is_reset_requested:
+            return False
+
+        return bool(Constants.current_settings.get("_tutorial_shown", False))

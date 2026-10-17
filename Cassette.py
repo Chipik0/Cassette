@@ -58,15 +58,16 @@ from System.Interface import (
     Windows
 )
 
-from System.Interface.Animation.WindowAnimator import WindowAnimator
-
 from System.Services import (
     Player,
     ProjectSaver
 )
 
+from System.Interface.Animation.WindowAnimator import WindowAnimator
+
+from System.Views.Editor      import AuditContainerWidget
+from System.Views.Compositor  import CompositorWidget
 from System.Views.ProjectMenu import MainMenu
-from System.Views.Compositor import CompositorWidget
 
 if getattr(sys, "frozen", False):
     base_directory = sys._MEIPASS
@@ -80,6 +81,7 @@ sys.path.insert(0, base_directory)
 # Exception Handling
 
 is_processing_exception = False
+
 
 def handle_exception(
         exception_type:      type[BaseException],
@@ -131,10 +133,12 @@ def handle_exception(
     finally:
         is_processing_exception = False
 
+
 def handle_thread_exception(arguments: threading.ExceptHookArgs) -> None:
     logger.opt(
         exception = (arguments.exc_type, arguments.exc_value, arguments.exc_traceback)
     ).critical(f"Fatal crash in background thread '{arguments.thread.name}'")
+
 
 sys.excepthook       = handle_exception
 threading.excepthook = handle_thread_exception
@@ -157,7 +161,7 @@ class WindowEffectManager:
         {
             "name":     "anomaly_img",
             "content":  "System/Assets/Image/Anomaly.png",
-            "sound":    "Packs/NOK/Anomaly",
+            "sound":    ".vault/NOK/Anomaly",
             "duration": 7500,
             "fade":     200,
         },
@@ -181,7 +185,7 @@ class WindowEffectManager:
         {
             "name":    "please_text",
             "content": "Please",
-            "sound":   "Packs/NOK/ThreeTone",
+            "sound":   ".vault/NOK/ThreeTone",
         },
     ]
 
@@ -195,12 +199,12 @@ class WindowEffectManager:
         self.shake_direction_changes        = 0
         self.last_shake_time                = 0.0
 
-        self.last_window_area               = window.width() * window.height()
-        self.resize_direction               = 0
-        self.direction_changes              = 0
-        self.last_change_time               = 0.0
-        self.last_accordion_time            = 0.0
-        self.is_accordion_active            = False
+        self.last_window_area    = window.width() * window.height()
+        self.resize_direction    = 0
+        self.direction_changes   = 0
+        self.last_change_time    = 0.0
+        self.last_accordion_time = 0.0
+        self.is_accordion_active = False
 
         self.accordion_stop_timer = Timing.Timer(
             interval    = 2000,
@@ -252,7 +256,7 @@ class WindowEffectManager:
             sound_index = random.randint(1, 5)
 
         Player.ui_player.play_sound(
-            f"Packs/NOK/Shake{sound_index}",
+            f".vault/NOK/Shake{sound_index}",
             tone_spread = 0.35
         )
 
@@ -270,7 +274,7 @@ class WindowEffectManager:
 
         current_time = time.time()
         current_area = width * height
-        delta_time   = (current_time - self.last_accordion_time) if self.last_accordion_time > 0 else 0.01
+        delta_time   = (current_time - self.last_accordion_time) if self.last_accordion_time > 0.0 else 0.01
 
         area_difference = current_area - self.last_window_area
         velocity        = abs(area_difference) / delta_time
@@ -313,7 +317,7 @@ class WindowEffectManager:
         sound_type = "Out" if current_direction > 0 else "In"
 
         Player.ui_player.play_sound(
-            f"Packs/NOK/Accordion{sound_type}",
+            f".vault/NOK/Accordion{sound_type}",
             volume = volume
         )
 
@@ -380,12 +384,12 @@ class StartupFadeOverlay(QWidget):
 
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
 
-        self.background_opacity        = 1.0
-        self.current_pixmap            = None
+        self.background_opacity  = 1.0
+        self.current_pixmap      = None
 
-        self.main_text                 = None
-        self.main_text_rectangle       = None
-        self.main_font                 = None
+        self.main_text           = None
+        self.main_text_rectangle = None
+        self.main_font           = None
 
         self.easter_egg_text           = None
         self.easter_egg_text_rectangle = None
@@ -558,11 +562,11 @@ class StartupFadeOverlay(QWidget):
 
         if self.main_text and self.main_text_rectangle:
             painter.setFont(self.main_font)
-            painter.drawText(self.main_text_rectangle, Qt.AlignmentFlag.AlignCenter, self.main_text)
+            painter.drawText(self.main_text_rectangle, int(Qt.AlignmentFlag.AlignCenter), self.main_text)
 
         if self.easter_egg_text and self.easter_egg_text_rectangle:
             painter.setFont(self.easter_egg_font)
-            painter.drawText(self.easter_egg_text_rectangle, Qt.AlignmentFlag.AlignCenter, self.easter_egg_text)
+            painter.drawText(self.easter_egg_text_rectangle, int(Qt.AlignmentFlag.AlignCenter), self.easter_egg_text)
 
 # Main Window
 
@@ -582,8 +586,9 @@ class ApplicationWindow(QMainWindow):
 
         self.animator = WindowAnimator(self)
 
-        self.main_menu_widget  = MainMenu(self)
-        self.compositor_widget = CompositorWidget(self)
+        self.main_menu_widget       = MainMenu(self)
+        self.compositor_widget      = CompositorWidget(self)
+        self.audit_container_widget = None
 
         for widget, opacity in (
             (self.main_menu_widget, 1.0),
@@ -649,10 +654,6 @@ class ApplicationWindow(QMainWindow):
         self.screenshot_shortcut.activated.connect(self.capture_4k_screenshot)
 
     def capture_4k_screenshot(self) -> None:
-        animator = WindowAnimator.get()
-        animator.error_strike()
-        return
-
         target_width  = 3840
         source_width  = self.width()
         source_height = self.height()
@@ -662,7 +663,7 @@ class ApplicationWindow(QMainWindow):
 
             return
 
-        scale_factor  = target_width / source_width
+        scale_factor  = target_width / float(source_width)
         target_height = round(source_height * scale_factor)
 
         pixmap = QPixmap(target_width, target_height)
@@ -750,8 +751,8 @@ class ApplicationWindow(QMainWindow):
         self.entry_move_animation = QPropertyAnimation(None, b"geometry")
         self.entry_fade_animation = QPropertyAnimation(None, b"opacity")
 
-        self.main_menu_fadeout    = self.create_fadeout_animation(self.main_menu_widget.graphicsEffect())
-        self.compositor_fadeout   = self.create_fadeout_animation(self.compositor_widget.graphicsEffect())
+        self.main_menu_fadeout  = self.create_fadeout_animation(self.main_menu_widget.graphicsEffect())
+        self.compositor_fadeout = self.create_fadeout_animation(self.compositor_widget.graphicsEffect())
 
         self.entry_move_animation.setDuration(1000)
         self.entry_move_animation.setEasingCurve(QEasingCurve.Type.OutElastic)
@@ -762,6 +763,21 @@ class ApplicationWindow(QMainWindow):
         self.compositor_fadeout.finished.connect(self.handle_compositor_fadeout_finished)
 
     # View Transitions
+
+    def handle_resource_loaded(
+            self,
+            resource_identifier: str,
+            data:                object
+        ) -> None:
+
+        if resource_identifier == "release" and isinstance(data, dict):
+            self.show_update_info(data)
+
+        elif resource_identifier == "songs":
+            self.process_new_songs_data(str(data))
+
+        elif resource_identifier == "about":
+            self.process_new_about_data(str(data))
 
     @pyqtSlot(ProjectSaver.Composition)
     def show_compositor_view(self, composition: ProjectSaver.Composition) -> None:
@@ -790,7 +806,7 @@ class ApplicationWindow(QMainWindow):
         self.main_menu_widget.setEnabled(True)
         self.animate_widget_entry(self.main_menu_widget)
 
-        Player.ui_player.play_sound(f"Signals/Error/Critical{random.randint(1, 3)}")
+        Player.ui_player.play_sound(f"Alerts/Errors/Critical{random.randint(1, 3)}")
 
     @pyqtSlot()
     def show_compositor_view_after_transition(self) -> None:
@@ -852,20 +868,36 @@ class ApplicationWindow(QMainWindow):
         self.update_thread.resource_loaded.connect(self.handle_resource_loaded)
         self.update_thread.fetch_all()
 
-    def handle_resource_loaded(
-            self,
-            resource_identifier: str,
-            data:                object
-        ) -> None:
+        is_backrooms_seen = bool(Constants.current_settings.get("_backrooms_seen", False))
 
-        if resource_identifier == "release" and isinstance(data, dict):
-            self.show_update_info(data)
+        if not is_backrooms_seen and random.random() < 0.008:
+            Constants.current_settings.set_value("_backrooms_seen", True)
+            QTimer.singleShot(1000, self.trigger_audit_collapse_easter_egg)
 
-        elif resource_identifier == "songs":
-            self.process_new_songs_data(str(data))
+    def trigger_audit_collapse_easter_egg(self) -> None:
+        animator = WindowAnimator.get()
 
-        elif resource_identifier == "about":
-            self.process_new_about_data(str(data))
+        if animator is None:
+            return
+
+        Player.ui_player.play_sound(
+            name                   = ".vault/Anomaly/Connection",
+            enable_tone_randomizer = False
+        )
+
+        QTimer.singleShot(500, lambda: animator.start_corrupt_collapse(4500, on_finished = self.switch_to_audit_view))
+
+    def switch_to_audit_view(self) -> None:
+        self.audit_container_widget = AuditContainerWidget(self)
+        self.stack.addWidget(self.audit_container_widget)
+        self.stack.setCurrentWidget(self.audit_container_widget)
+
+        animator = WindowAnimator.get()
+
+        if animator is not None:
+            animator.finish_visual_transformation()
+
+        self.audit_container_widget.setFocus()
 
     # Application Lifecycle
 
@@ -1040,6 +1072,7 @@ def main() -> None:
     main_window.intro_overlay.start_overlay(200)
 
     sys.exit(application.exec())
+
 
 if __name__ == "__main__":
     logger.debug("Hello.")

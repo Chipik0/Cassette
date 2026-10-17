@@ -13,8 +13,9 @@ from PyQt6.QtGui import (
 
 from PyQt6.QtCore import (
     Qt,
-    QPointF,
+    QThread,
     QObject,
+    QPointF,
     pyqtSignal,
     QThreadPool
 )
@@ -44,6 +45,12 @@ class WaveformController(QObject):
         self.tile_generation_id  = 0
         self.global_waveform_max = 0.000001
 
+        self.visible_start_tile  = 0
+        self.visible_end_tile    = 0
+
+        self.thread_pool = QThreadPool(self)
+        self.thread_pool.setMaxThreadCount(max(1, min(4, QThread.idealThreadCount() // 2)))
+
     # Audio
 
     def prepare_audio(self) -> None:
@@ -55,6 +62,33 @@ class WaveformController(QObject):
 
         maximum_sample           = float(numpy.max(numpy.abs(audio_data.astype(numpy.float32))))
         self.global_waveform_max = max(maximum_sample, 0.000001)
+
+    # Visibility and Culling
+
+    def set_visible_range(
+            self,
+            start_tile_index: int,
+            end_tile_index:   int
+        ) -> None:
+
+        self.visible_start_tile = start_tile_index
+        self.visible_end_tile   = end_tile_index
+
+    def is_tile_needed(
+            self,
+            tile_index: int,
+            generation: int
+        ) -> bool:
+
+        if generation != self.tile_generation_id:
+            return False
+
+        margin_tiles = 3
+
+        return (self.visible_start_tile - margin_tiles) <= tile_index <= (self.visible_end_tile + margin_tiles)
+
+    def discard_pending_tile(self, tile_index: int) -> None:
+        self.pending_tiles.discard(tile_index)
 
     # Tile Management
 
@@ -73,7 +107,7 @@ class WaveformController(QObject):
             self.on_tile_ready(index, image, gen)
         )
 
-        QThreadPool.globalInstance().start(worker)
+        self.thread_pool.start(worker)
 
     def on_tile_ready(
             self,
@@ -94,7 +128,11 @@ class WaveformController(QObject):
         self.waveform_tiles[tile_index] = pixmap
 
         self.tile_ready.emit(tile_index, pixmap)
-        self.conductor.viewport().update()
+
+        is_currently_visible = self.visible_start_tile <= tile_index <= self.visible_end_tile
+
+        if is_currently_visible:
+            self.conductor.viewport().update()
 
     def advance_generation_and_clear(self) -> None:
         self.tile_generation_id += 1

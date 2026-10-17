@@ -22,6 +22,7 @@ from PyQt6.QtCore import (
 from PyQt6.QtGui import (
     QIcon,
     QDropEvent,
+    QHideEvent,
     QShowEvent,
     QFocusEvent,
     QMouseEvent,
@@ -66,6 +67,7 @@ from System.Services import (
 
 def normalize_text(text: str) -> str:
     return " ".join(text.casefold().split())
+
 
 def get_search_score(
         search_query:       str,
@@ -537,7 +539,13 @@ class MainMenu(QWidget):
         self.scroll_area.update_canvas_geometry()
 
     def refocus_search_box(self) -> None:
+        if not self.isVisible():
+            return
+
         if not self.search_box:
+            return
+
+        if not self.search_box.isVisible():
             return
 
         active_modal_widget = QApplication.activeModalWidget()
@@ -559,7 +567,18 @@ class MainMenu(QWidget):
             event:          QEvent
         ) -> bool:
 
-        if watched_object is self.search_box and event.type() == QEvent.Type.FocusOut:
+        if watched_object is not self.search_box:
+            return super().eventFilter(watched_object, event)
+
+        if event.type() == QEvent.Type.FocusIn and not self.isVisible():
+            self.search_box.clearFocus()
+
+            return True
+
+        if event.type() == QEvent.Type.FocusOut:
+            if not self.isVisible():
+                return super().eventFilter(watched_object, event)
+
             focus_event = event
 
             if isinstance(focus_event, QFocusEvent):
@@ -573,15 +592,26 @@ class MainMenu(QWidget):
 
         return super().eventFilter(watched_object, event)
 
+    def hideEvent(self, event: QHideEvent) -> None:
+        super().hideEvent(event)
+
+        if self.search_box:
+            self.search_box.clearFocus()
+
     def changeEvent(self, event: QEvent) -> None:
         super().changeEvent(event)
+
+        if not self.isVisible():
+            return
 
         if event.type() == QEvent.Type.ActivationChange and self.isActiveWindow():
             self.refocus_search_box()
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         super().mousePressEvent(event)
-        self.refocus_search_box()
+
+        if self.isVisible():
+            self.refocus_search_box()
 
     def process_new_composition(self, file_path: str) -> None:
         audio_dialog = Windows.AudioSetupDialog(file_path)
@@ -599,18 +629,17 @@ class MainMenu(QWidget):
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
         if not self.drag_loop_sound:
             Player.ui_player.play_sound(
-                "DragDrop/DragDrop",
+                "Controls/DragDrop/Drop",
                 speed       = 1.1,
                 setting_key = "drag_drop_sounds"
             )
 
             self.drag_loop_sound = Player.ui_player.play_sound(
-                "DragDrop/Loop",
+                "Controls/DragDrop/Loop",
                 loop        = True,
                 setting_key = "drag_drop_sounds"
             )
 
-        self.window_animator.start_visual_transformation(200)
         self.window_animator.scale_handle.set_target(0.97, 200)
 
         event.acceptProposedAction()
@@ -621,7 +650,7 @@ class MainMenu(QWidget):
     def dragLeaveEvent(self, event: QDragLeaveEvent) -> None:
         if self.drag_loop_sound:
             Player.ui_player.play_sound(
-                "DragDrop/DragDrop",
+                "Controls/DragDrop/Drop",
                 speed       = 0.9,
                 setting_key = "drag_drop_sounds"
             )
@@ -629,7 +658,6 @@ class MainMenu(QWidget):
             self.drag_loop_sound.stop()
             self.drag_loop_sound = None
 
-        self.window_animator.start_visual_transformation(200)
         self.window_animator.scale_handle.set_target(1.0, 200)
 
         event.accept()
@@ -639,7 +667,6 @@ class MainMenu(QWidget):
             self.drag_loop_sound.stop()
             self.drag_loop_sound = None
 
-        self.window_animator.start_visual_transformation(160)
         self.window_animator.scale_handle.set_target(1.0, 160)
 
         file_to_process = None
@@ -657,7 +684,7 @@ class MainMenu(QWidget):
                 break
 
         if not file_to_process:
-            Player.ui_player.play_sound("Signals/Error/MegaCritical")
+            Player.ui_player.play_sound("Alerts/Errors/MegaCritical")
             self.title_label.setText(
                 random.choice(
                     [
@@ -677,7 +704,7 @@ class MainMenu(QWidget):
             return
 
         Player.ui_player.play_sound(
-            "DragDrop/DragDrop",
+            "Controls/DragDrop/Drop",
             speed       = 0.9,
             setting_key = "drag_drop_sounds"
         )

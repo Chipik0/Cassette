@@ -271,7 +271,7 @@ class SegmentedStrip(Lifecycle.LoomAnimationMixin, QWidget):
         pan          = self.pan_ratio(button_index, button_count)
 
         Player.ui_player.play_sound(
-            "Click/Selector/Hover",
+            "Controls/Selector/Hover",
             speed       = tone,
             pan         = pan,
             setting_key = "selector_sounds",
@@ -373,7 +373,7 @@ class SegmentedStrip(Lifecycle.LoomAnimationMixin, QWidget):
         pan        = self.pan_ratio(index, count)
 
         Player.ui_player.play_sound(
-            "Click/Selector/Confirm",
+            "Controls/Selector/Select",
             speed       = tone,
             pan         = pan,
             setting_key = "selector_sounds",

@@ -455,7 +455,7 @@ class UpdateWindow(FloatingWindowGPU):
 
         QTimer.singleShot(150, lambda: self.pulse_status_widget.set_amplitude(0.0, 500))
 
-        Player.ui_player.play_sound("Feedback/UpdateReady")
+        Player.ui_player.play_sound("Alerts/UpdateReady")
 
     def handle_download_failure(self, error_message: str) -> None:
         self.is_downloading = False
@@ -471,7 +471,7 @@ class UpdateWindow(FloatingWindowGPU):
         self.pulse_status_widget.flatten(duration_ms = 400)
         self.pulse_status_widget.simulate_cardiac_arrest()
 
-        Player.ui_player.play_sound("Signals/Error/TransmitFailed")
+        Player.ui_player.play_sound("Alerts/Transmit/Fail")
 
     def handle_insufficient_disk_space(self) -> None:
         self.status_label.setText("Update blocked: Less than 1 GB of free disk space available.")
@@ -484,7 +484,7 @@ class UpdateWindow(FloatingWindowGPU):
         self.pulse_status_widget.flatten(duration_ms = 400)
         self.pulse_status_widget.simulate_cardiac_arrest()
 
-        Player.ui_player.play_sound("Signals/Error/TransmitFailed")
+        Player.ui_player.play_sound("Alerts/Transmit/Fail")
 
         ErrorWindow(
             "Insufficient Disk Space",
@@ -503,7 +503,7 @@ class UpdateWindow(FloatingWindowGPU):
         self.pulse_status_widget.flatten(duration_ms = 400)
         self.pulse_status_widget.simulate_cardiac_arrest()
 
-        Player.ui_player.play_sound("Signals/Error/TransmitFailed")
+        Player.ui_player.play_sound("Alerts/Transmit/Fail")
 
         ErrorWindow(
             "Write Permission Denied",

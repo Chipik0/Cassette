@@ -386,7 +386,7 @@ class SegmentedBar(BaseSegmentedBar):
         tone_speed  = index / self.amount_of_segments + 0.5
         tone_speed += 0.05 if self.active[index] else 0.0
 
-        Player.ui_player.play_sound("Click/Toggle3" if alternate else "Click/Toggle", speed = tone_speed)
+        Player.ui_player.play_sound("Alerts/Clicks/Toggle3" if alternate else "Alerts/Clicks/Toggle1", speed = tone_speed)
 
     # Events
 
@@ -429,16 +429,16 @@ class SegmentedBar(BaseSegmentedBar):
         self.active = [True] * self.amount_of_segments
         self.segment_changed.emit()
 
-        Player.ui_player.play_sound("Click/Toggle", speed = 1.0, enable_tone_randomizer = False)
+        Player.ui_player.play_sound("Alerts/Clicks/Toggle1", speed = 1.0, enable_tone_randomizer = False)
 
     def disable_all(self) -> None:
         self.active = [False] * self.amount_of_segments
         self.segment_changed.emit()
 
-        Player.ui_player.play_sound("Click/Toggle", speed = 0.7, enable_tone_randomizer = False)
+        Player.ui_player.play_sound("Alerts/Clicks/Toggle1", speed = 0.7, enable_tone_randomizer = False)
 
     def zebra(self) -> None:
         self.active = [index % 2 == 0 for index in range(self.amount_of_segments)]
         self.segment_changed.emit()
 
-        Player.ui_player.play_sound("Click/Toggle3")
+        Player.ui_player.play_sound("Alerts/Clicks/Toggle3")
