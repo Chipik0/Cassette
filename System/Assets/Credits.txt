@@ -6,4 +6,6 @@
 - Sounds from `Casualties: Unknown` by `Orson`.
 - Sounds from `Pacific Drive` by `Ironwood Studios`.
 
-- Cassette model by `https://sketchfab.com/tonoy787`
+- Cassette model by `https://sketchfab.com/tonoy787`.
+
+- Code, design, optimizations by `chips047`.

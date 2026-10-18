@@ -1,1 +1,4 @@
-The best open - source compositor. Made with care, way too much profiling, and a genuine love for smooth interfaces.
+The best open - source compositor. Made with care, way too much profiling, and a genuine love for smooth interfaces. 
+Powered by PyQt6 and my dumb brain.
+
+Not affiliated with, endorsed, or sponsored by Nothing Technology Limited.
