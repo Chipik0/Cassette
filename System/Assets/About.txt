@@ -1,11 +1,1 @@
-The best open - source compositor. Currently in active development!
-
-`Inspirations and credits`
-- Sounds from `R.E.P.O.` by `semiwork`.
-- Sounds from `The Upturned` by `Zeekers`.
-- Sounds from `Simulacra` by `Kaigan Games`.
-- Sounds from `Tamashika` by `quicktequila`.
-- Sounds from `Casualties: Unknown` by `Orson`.
-- Sounds from `Pacific Drive` by `Ironwood Studios`.
-
-Made with care, way too much profiling, and a genuine love for smooth interfaces.
+The best open - source compositor. Made with care, way too much profiling, and a genuine love for smooth interfaces.
