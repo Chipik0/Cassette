@@ -1,4 +1,6 @@
-The best open - source compositor. Made with care, way too much profiling, and a genuine love for smooth interfaces. 
-Powered by PyQt6 and my dumb brain.
+The best open - source compositor. Made with care, way too much profiling, and a genuine love for smooth interfaces. Not affiliated with, endorsed, or sponsored by Nothing Technology Limited.
 
-Not affiliated with, endorsed, or sponsored by Nothing Technology Limited.
+- Powered by `PyQt6` and my dumb brain.
+- `16+` Mild profanity & stupid humor inside.
+
+- Do you like cheese?
