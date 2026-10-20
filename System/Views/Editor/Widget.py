@@ -199,6 +199,7 @@ class AuditSimulationWidget(QOpenGLWidget):
         self.decal_atlas_texture_id:      int | None = None
         self.scanner_display_texture_id:  int | None = None
         self.paintings_atlas_texture_id:  int | None = None
+        self.chips_texture_id:            int | None = None
         self.memory_atlas_texture_id:     int | None = None
         self.television_atlas_texture_id: int | None = None
         self.procedural_noise_texture_id: int | None = None
@@ -794,6 +795,39 @@ class AuditSimulationWidget(QOpenGLWidget):
 
         return texture_id
 
+    def create_chips_texture(self) -> tuple[int, float]:
+        source_image_path = os.path.join("System", "Assets", "Image", "Chips.png")
+        image_reader = QImageReader(source_image_path)
+        source_image = image_reader.read()
+
+        if source_image.isNull():
+            raise RuntimeError(f"Failed to load sprite image {source_image_path}: {image_reader.errorString()}")
+
+        aspect_ratio = source_image.width() / source_image.height()
+        source_image = source_image.convertToFormat(QImage.Format.Format_RGBA8888)
+        raw_bits = source_image.constBits()
+        raw_bits.setsize(source_image.sizeInBytes())
+
+        texture_id = GL.glGenTextures(1)
+        GL.glBindTexture(GL.GL_TEXTURE_2D, texture_id)
+        GL.glTexImage2D(
+            GL.GL_TEXTURE_2D,
+            0,
+            GL.GL_RGBA,
+            source_image.width(),
+            source_image.height(),
+            0,
+            GL.GL_RGBA,
+            GL.GL_UNSIGNED_BYTE,
+            bytes(raw_bits)
+        )
+        GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MIN_FILTER, GL.GL_LINEAR)
+        GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MAG_FILTER, GL.GL_LINEAR)
+        GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_S, GL.GL_CLAMP_TO_EDGE)
+        GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_T, GL.GL_CLAMP_TO_EDGE)
+
+        return texture_id, aspect_ratio
+
     # OpenGL Lifecycle
 
     def initializeGL(self) -> None:
@@ -841,6 +875,7 @@ class AuditSimulationWidget(QOpenGLWidget):
                     "emergencyRed",
                     "lampPositions",
                     "activeLampCount",
+                    "chipsTexture",
                     "paintingsAtlas",
                     "televisionAtlas",
                     "proceduralNoiseTexture",
@@ -897,6 +932,7 @@ class AuditSimulationWidget(QOpenGLWidget):
 
         self.television_atlas_texture_id = self.create_broadcast_atlas_texture()
         self.paintings_atlas_texture_id  = self.create_paintings_atlas_texture()
+        self.chips_texture_id, sprite_aspect_ratio = self.create_chips_texture()
         self.memory_atlas_texture_id     = self.create_memory_atlas_texture()
         self.decal_atlas_texture_id      = self.create_decal_atlas_texture()
         self.procedural_noise_texture_id = self.create_procedural_noise_texture()
@@ -905,7 +941,7 @@ class AuditSimulationWidget(QOpenGLWidget):
         self.lamp_renderer.initialize_lamps(self.lamp_world_positions, self.wall_height_units)
         self.item_renderer.build_televisions_mesh(self.cell_scale_units, self.maze_dimension, self.world_grid_array)
         self.item_renderer.build_scanner_mesh(self.device_world_position)
-        self.item_renderer.build_sprite_mesh()
+        self.item_renderer.build_sprite_mesh(sprite_aspect_ratio)
         self.item_renderer.build_monster_mesh()
         self.item_renderer.build_falling_paintings(self.available_paintings_count, self.maze_dimension, self.cell_scale_units, self.world_grid_array, self.camera_position)
 
@@ -1128,6 +1164,11 @@ class AuditSimulationWidget(QOpenGLWidget):
         GL.glActiveTexture(GL.GL_TEXTURE6)
         GL.glBindTexture(GL.GL_TEXTURE_2D, self.procedural_noise_texture_id)
         GL.glUniform1i(self.scene_uniform_locations["proceduralNoiseTexture"], 6)
+
+        GL.glActiveTexture(GL.GL_TEXTURE7)
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.chips_texture_id)
+        GL.glUniform1i(self.scene_uniform_locations["chipsTexture"], 7)
+        GL.glActiveTexture(GL.GL_TEXTURE0)
 
         if self.render_profiler_enabled:
             self._record_render_profile("scene_textures", (time.perf_counter() - texture_bind_start_time) * 1000.0)
@@ -1745,11 +1786,6 @@ class AuditSimulationWidget(QOpenGLWidget):
         QTimer.singleShot(4000, self.terminate_application)
 
     def terminate_application(self) -> None:
-        application = QApplication.instance()
-
-        if application is not None:
-            application.quit()
-
         os._exit(0)
 
     # User Input Events

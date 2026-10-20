@@ -41,8 +41,8 @@ class ItemRenderer:
     def build_scanner_mesh(self, device_world_position: numpy.ndarray) -> None:
         self.scanner.build_mesh(device_world_position)
 
-    def build_sprite_mesh(self) -> None:
-        self.sprite.build_mesh()
+    def build_sprite_mesh(self, aspect_ratio: float) -> None:
+        self.sprite.build_mesh(aspect_ratio)
 
     def build_monster_mesh(self) -> None:
         self.monster.build_mesh()

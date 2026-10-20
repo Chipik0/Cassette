@@ -29,6 +29,7 @@ from PyQt6.QtWidgets import (
 
 from System.Common import (
     Dev,
+    Styles,
     Constants
 )
 
@@ -126,7 +127,7 @@ class ElasticScrollArea(QScrollArea):
         self.fade_height         = fade_height
         self.animations          = {}
 
-        self.setStyleSheet("background: transparent;")
+        self.setStyleSheet(Styles.Other.Transparent)
         self.setFrameShape(QFrame.Shape.NoFrame)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)

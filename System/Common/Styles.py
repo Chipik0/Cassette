@@ -173,41 +173,43 @@ class Other:
         }}
     """
 
-    Font = f"""color: {Colors.TitleFontColor};"""
-    Label = f"""color: {Colors.FontColor}; background-color: transparent; padding: 0; border: none;"""
-    SecondFont = f"""color: {Colors.SubtleFontColor};"""
-
-    Tooltip = f"""
-        color: {Colors.FontColor};
-        background-color: {Colors.SecondaryBackground};
-        border-radius: {Roundings.Button};
-        border: {Metrics.GlassBorderThick}px solid {Colors.GlassBorder}
-    """
-
-    GlassBorder = f"""
-        border: {Metrics.GlassBorderThick}px solid {Colors.GlassBorder};
-    """
+    Font             = f"""color: {Colors.TitleFontColor};"""
+    Label            = f"""color: {Colors.FontColor}; background-color: transparent; padding: 0; border: none;"""
+    SecondFont       = f"""color: {Colors.SubtleFontColor};"""
+    DescriptionLabel = f"""color: {Colors.SubtleFontColor}; padding: 0px; border: none;"""
 
 class Controls:
-    SegmentedButton = f"""
-        QWidget {{ background-color: transparent; border-radius: 8px; }}
+    ContainerCard = f"""
+        QFrame {{
+            background-color: {Colors.SecondaryBackground};
+            border-radius: 20px;
+        }}
+    """
 
+    TrackCard = f"""
+        QFrame {{
+            background-color: {Colors.SecondaryBackground};
+            border-radius: 24px;
+        }}
+    """
+
+    TitleCard = f"""
+        QFrame {{
+            background-color: {Colors.Background};
+            border-radius: 32px;
+        }}
+    """
+
+    SelectorButton = f"""
         QPushButton#segmentedButton {{
-            color: {Colors.FontColor};
-            background-color: {Colors.EffectMenu.Standard};
-            border: none;
-            padding: 0;
-            border-radius: {Roundings.Button - 5}px;
-            outline: none;
+            background: transparent;
         }}
 
-        QPushButton#segmentedButton:hover {{
-            background-color: {Colors.EffectMenu.Hover};
-        }}
-
-        QPushButton#segmentedButton:checked {{
-            background-color: {Colors.NothingAccent};
-            color: #ffffff;
+        QPushButton#segmentedButton,
+        QPushButton#segmentedButton:checked,
+        QPushButton#segmentedButton:hover,
+        QPushButton#segmentedButton:hover:checked {{
+            background-color: transparent;
         }}
     """
 
@@ -230,13 +232,6 @@ class Controls:
         QPushButton#segmentedButton:hover {{
             background-color: {Colors.ThirdBackground};
         }}
-    """
-
-    TextBoxNoBorder = f"""
-        background-color: {Colors.Floating.Background};
-        color: #fff;
-        padding: 6px 10px;
-        border-radius: {Roundings.Button}px;
     """
 
     FloatingTextBox = f"""
@@ -263,62 +258,6 @@ class Controls:
         border: 1.2px solid {Colors.GlassBorder}
     """
 
-    AudioSetupper = f"""
-        QDialog {{
-            background-color: {Colors.ThirdBackground};
-        }}
-
-        QLabel {{
-            background: transparent;
-            color: {Colors.FontColor};
-        }}
-
-        QLabel#settingsLabel {{
-            color: #8A8A8A;
-        }}
-
-        QSpinBox {{
-            background-color: transparent;
-            border: none;
-            padding: 4px;
-            color: {Colors.FontColor};
-        }}
-        
-        QComboBox {{
-            background-color: {Colors.SecondaryBackground};
-            color: {Colors.FontColor};
-            border: none;
-            padding: 4px;
-        }}
-
-        QComboBox::down-arrow {{ image: none; }}
-        QComboBox::drop-down {{ width: 0px; border: none; }}
-
-        QComboBox QAbstractItemView::item:focus {{
-            outline: none;
-        }}
-
-        QComboBox QAbstractItemView {{
-            background: #2b2b2b;
-            border: none;
-            margin: 2px;
-            color: #dddddd;
-            selection-background-color: #1f1f1f;
-            selection-color: #ffffff;
-            outline: none;
-        }}
-
-        QComboBox::item:selected {{
-            background: #1f1f1f;
-            color: #ffffff;
-        }}
-
-        QPushButton#play_button {{
-            background-color: transparent;
-            border: none;
-        }}
-    """
-
     EffectSetupper = f"""
         QWidget {{background-color: {Colors.EffectMenu.Standard}; color: {Colors.FontColor}}}
         QLabel {{padding: 4px}}
@@ -334,36 +273,36 @@ class Controls:
         """
 
     Slider = f"""
-    QSlider {{
-        border: none;
-    }}
+        QSlider {{
+            border: none;
+        }}
 
-    QSlider::groove:horizontal {{
-        height: {Metrics.SliderHeight}px;
-        background: {Colors.EffectMenu.Hover};
-        border: 1px solid #555;
-        border-radius: {Roundings.Slider}px;
-    }}
+        QSlider::groove:horizontal {{
+            height: {Metrics.SliderHeight}px;
+            background: {Colors.EffectMenu.Hover};
+            border: 1px solid #555;
+            border-radius: {Roundings.Slider}px;
+        }}
 
-    QSlider::sub-page:horizontal {{
-        background: {Colors.NothingAccent};
-        border: none;
-        border-radius: {Roundings.Slider}px;
-    }}
+        QSlider::sub-page:horizontal {{
+            background: {Colors.NothingAccent};
+            border: none;
+            border-radius: {Roundings.Slider}px;
+        }}
 
-    QSlider::add-page:horizontal {{
-        background: transparent;
-        border: none;
-    }}
+        QSlider::add-page:horizontal {{
+            background: transparent;
+            border: none;
+        }}
 
-    QSlider::handle:horizontal {{
-        width: 0px;
-        height: 0px;
-        margin: 0px;
-        border: none;
-        background: transparent;
-    }}
-"""
+        QSlider::handle:horizontal {{
+            width: 0px;
+            height: 0px;
+            margin: 0px;
+            border: none;
+            background: transparent;
+        }}
+    """
 
     ValueControl = f"""
         DraggableValueControl {{
@@ -402,65 +341,7 @@ class Controls:
         }}
     """
 
-    Checkbox = f"""
-        QCheckBox {{
-            spacing: 6px;
-            color: {Colors.FontColor};
-            border: none;
-        }}
-
-        QCheckBox::indicator {{
-            width: {Metrics.CheckboxSize};
-            height: {Metrics.CheckboxSize};
-            border-radius: 4px;
-            background-color: {Colors.EffectMenu.Hover};
-            border: {Metrics.GlassBorderThick} solid #555;
-        }}
-
-        QCheckBox::indicator:hover {{
-            border: {Metrics.GlassBorderThick} solid {Colors.NothingAccentPressed};
-        }}
-
-        QCheckBox::indicator:checked {{
-            background-color: {Colors.NothingAccent};
-            border: {Metrics.GlassBorderThick} solid {Colors.NothingAccent};
-        }}
-        """
-
-    DialogBackground = """
-        background-color: rgba(20, 20, 20, 220);
-        border-radius: 13px;
-    """
-
-
 class Menus:
-    RmbElement = f"""
-        QMenu {{
-            background-color: {Colors.EffectMenu.Standard};
-            color: {Colors.FontColor};
-            border: {Metrics.GlassBorderThick} solid {Colors.GlassBorder};
-            border-radius: {Roundings.RmbMenu}px;
-            padding: 3px;
-        }}
-
-        QMenu::item {{
-            {Other.Transparent}
-            padding: 4px 12px;
-            margin: 2px;
-            border-radius: {Roundings.RmbMenuItem}px;
-        }}
-
-        QMenu::item:selected {{
-            background-color: {Colors.EffectMenu.Hover};
-        }}
-
-        QMenu::separator {{
-            height: {Metrics.GlassBorderThick};
-            background-color: {Colors.GlassBorder};
-            margin: 3px 12px;
-        }}
-    """
-
     ContextMenu = f"""
         QMenu {{
             background-color: {Colors.EffectMenu.Standard};

@@ -186,7 +186,7 @@ class ScheduledSegmentedBar(BaseSegmentedBar):
         self.color_on         = QColor("#ffffff")
 
         self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent)
-        self.setStyleSheet("background-color: transparent;")
+        self.setStyleSheet(Styles.Other.Transparent)
 
         self.elapsed_timer = QElapsedTimer()
 

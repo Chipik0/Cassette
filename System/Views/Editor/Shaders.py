@@ -35,6 +35,13 @@ void main() {
         calculatedPosition += attributeNormal * jitterX + vec3(0.0, jitterY, jitterZ);
     }
 
+    if (abs(attributeWallType - 301.0) < 0.1) {
+        float animationStep = floor(time * 12.0);
+        float compressionStep = mod(animationStep, 14.0);
+        float heightScale = compressionStep < 7.0 ? 0.965 : 1.0;
+        calculatedPosition.y *= heightScale;
+    }
+
     FragmentPosition = vec3(model * vec4(calculatedPosition, 1.0));
     SurfaceNormal = mat3(model) * attributeNormal;
     TextureCoordinates = attributeTextureCoordinates;
@@ -67,6 +74,7 @@ uniform int activeLampCount;
 
 uniform sampler2D decalAtlas;
 uniform sampler2D paintingsAtlas;
+uniform sampler2D chipsTexture;
 uniform sampler2D memoryAtlas;
 uniform sampler2D televisionAtlas;
 uniform sampler2D cctvTexture;
@@ -206,6 +214,16 @@ void main() {
     else if (abs(WallType - 300.0) < 0.1) {
         vec2 atlasCoordinates = vec2(TextureCoordinates.x / 4.0, TextureCoordinates.y / 4.0);
         vec4 spriteSample = texture(paintingsAtlas, atlasCoordinates);
+
+        if (spriteSample.a < 0.2) {
+            discard;
+        }
+
+        baseSurfaceColor = spriteSample.rgb * (1.1 - 0.2 * madness);
+    }
+
+    else if (abs(WallType - 301.0) < 0.1) {
+        vec4 spriteSample = texture(chipsTexture, TextureCoordinates);
 
         if (spriteSample.a < 0.2) {
             discard;

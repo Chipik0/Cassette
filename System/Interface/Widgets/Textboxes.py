@@ -744,6 +744,7 @@ class SearchTextbox(Textbox):
         )
 
         self.search_box_glitch_count = 0
+        self.random_quote_enabled: bool = True
 
         self.setStyleSheet(Styles.Controls.FloatingSearchTextBox)
 
@@ -766,6 +767,9 @@ class SearchTextbox(Textbox):
             QTimer.singleShot(30000, self.set_random_quote)
 
     def set_random_quote(self) -> None:
+        if not self.random_quote_enabled:
+            return
+
         quotes = open("System/Assets/Songs.txt", "r").read().split("\n")
         quote  = random.choice(quotes)
 
@@ -839,7 +843,6 @@ class SearchTextbox(Textbox):
         easter_eggs = {
             "subject106": lambda: self.random_title_timer.start(),
             "chips047":   lambda: webbrowser.open("https://github.com/chips047"),
-            "hello":      lambda: self.setText("well uhH hello Hi Hello Hello Hellliio hiiii"),
             "tamashika":  self.open_parry_game
         }
 

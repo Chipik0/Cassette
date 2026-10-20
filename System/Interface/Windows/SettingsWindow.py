@@ -96,8 +96,8 @@ class AnimatedPageTrack(Lifecycle.LoomAnimationMixin, QWidget):
         self.page_width_px      = 0
         self.page_height_px     = 360
 
-        self.canvas.setStyleSheet("background: transparent;")
-        self.setStyleSheet("background: transparent;")
+        self.canvas.setStyleSheet(Styles.Other.Transparent)
+        self.setStyleSheet(Styles.Other.Transparent)
         self.setFixedHeight(self.page_height_px)
 
         self.scroll_handle = LoomEngine.ui_engine.bind(
@@ -138,7 +138,7 @@ class AnimatedPageTrack(Lifecycle.LoomAnimationMixin, QWidget):
 
         self.scroll_handle.set_target(
             value           = target_x_px,
-            duration_ms     = 300,
+            duration_ms     = 250,
             easing_function = LoomEngine.Easing.ease_out_quint
         )
 
@@ -262,7 +262,12 @@ class SettingsWindow(FloatingWindowGPU):
             self.content_layout.removeWidget(self.page_selector)
             self.page_selector.deleteLater()
 
-        self.page_selector = Widgets.Selector(page_names, default_index = 0)
+        self.page_selector = Widgets.Selector(
+            items         = page_names,
+            default_index = 0,
+            switch_sound  = "Controls/Selector/Page"
+        )
+
         self.page_selector.setFont(Utils.NType(10))
         self.page_selector.selectionChanged.connect(self.on_page_selection_changed)
 

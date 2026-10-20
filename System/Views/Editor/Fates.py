@@ -478,10 +478,6 @@ class SilentHelpFate(FateScenario):
 # Registry
 
 AVAILABLE_FATE_REGISTRY: dict[str, type[FateScenario]] = {
-    "STANDARD": StandardFate,
-    "BURNOUT":  BurnoutFate,
-    "GRAVITY":  GravityFate,
-    "RADAR_GLITCH": RadarGlitchFate,
     "SILENT_HELP": SilentHelpFate
 }
 

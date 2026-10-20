@@ -241,6 +241,128 @@ void main() {
 }
 """
 
+CASSETTE_VERTEX_SHADER_SOURCE   = """#version 330 core
+layout (location = 0) in vec3 attribute_position;
+layout (location = 1) in vec3 attribute_normal;
+layout (location = 2) in vec2 attribute_texture_coordinate;
+layout (location = 3) in vec4 attribute_tangent;
+
+uniform mat4 projection_matrix;
+uniform mat4 view_matrix;
+uniform mat4 model_matrix;
+
+out vec3 fragment_position;
+out vec2 fragment_texture_coordinate;
+out mat3 fragment_tangent_basis;
+
+void main() {
+    mat3 normal_matrix = mat3(transpose(inverse(model_matrix)));
+    vec4 world_position = model_matrix * vec4(attribute_position, 1.0);
+
+    fragment_position = vec3(world_position);
+    fragment_texture_coordinate = attribute_texture_coordinate;
+
+    vec3 normal_vector = normalize(normal_matrix * attribute_normal);
+    vec3 tangent_vector = normalize(normal_matrix * attribute_tangent.xyz);
+    tangent_vector = normalize(tangent_vector - dot(tangent_vector, normal_vector) * normal_vector);
+    vec3 bitangent_vector = cross(normal_vector, tangent_vector) * attribute_tangent.w;
+
+    fragment_tangent_basis = mat3(tangent_vector, bitangent_vector, normal_vector);
+
+    gl_Position = projection_matrix * view_matrix * world_position;
+}
+"""
+
+CASSETTE_FRAGMENT_SHADER_SOURCE = """#version 330 core
+in vec3 fragment_position;
+in vec2 fragment_texture_coordinate;
+in mat3 fragment_tangent_basis;
+
+uniform vec3 camera_position;
+uniform vec3 accent_color;
+uniform vec3 button_light_position;
+uniform float global_alpha;
+
+uniform sampler2D base_color_sampler;
+uniform sampler2D normal_sampler;
+uniform sampler2D metallic_roughness_sampler;
+uniform sampler2D emissive_sampler;
+
+uniform int has_base_color_texture;
+uniform int has_normal_texture;
+uniform int has_metallic_roughness_texture;
+uniform int has_emissive_texture;
+
+out vec4 output_color;
+
+void main() {
+    vec4 base_sample = vec4(0.25, 0.25, 0.27, 1.0);
+
+    if (has_base_color_texture == 1) {
+        base_sample = texture(base_color_sampler, fragment_texture_coordinate);
+    }
+
+    if (base_sample.a < 0.1 || global_alpha < 0.001) {
+        discard;
+    }
+
+    vec3 normal_vector = normalize(fragment_tangent_basis[2]);
+
+    if (has_normal_texture == 1) {
+        vec3 normal_map_sample = texture(normal_sampler, fragment_texture_coordinate).rgb * 2.0 - 1.0;
+        normal_vector = normalize(fragment_tangent_basis * normal_map_sample);
+    }
+
+    float roughness_factor = 0.55;
+    float metallic_factor = 0.15;
+
+    if (has_metallic_roughness_texture == 1) {
+        vec4 metallic_roughness_sample = texture(metallic_roughness_sampler, fragment_texture_coordinate);
+        roughness_factor = clamp(metallic_roughness_sample.g, 0.04, 1.0);
+        metallic_factor = clamp(metallic_roughness_sample.b, 0.0, 1.0);
+    }
+
+    vec3 emissive_color = vec3(0.0);
+
+    if (has_emissive_texture == 1) {
+        emissive_color = texture(emissive_sampler, fragment_texture_coordinate).rgb;
+    }
+
+    vec3 view_direction = normalize(camera_position - fragment_position);
+
+    vec3 key_light_direction = normalize(vec3(0.7, 1.1, 1.4));
+    vec3 fill_light_direction = normalize(vec3(-1.0, -0.4, 0.9));
+    vec3 top_light_direction = normalize(vec3(0.0, 1.5, 0.2));
+
+    float key_diffuse = max(dot(normal_vector, key_light_direction), 0.0);
+    float fill_diffuse = max(dot(normal_vector, fill_light_direction), 0.0);
+    float top_diffuse = max(dot(normal_vector, top_light_direction), 0.0);
+
+    vec3 key_half_vector = normalize(key_light_direction + view_direction);
+    float specular_power = mix(96.0, 4.0, roughness_factor);
+    float specular_strength = pow(max(dot(normal_vector, key_half_vector), 0.0), specular_power);
+    vec3 specular_tint = mix(vec3(0.04), base_sample.rgb, metallic_factor);
+    vec3 specular_component = specular_tint * specular_strength * (1.2 - roughness_factor * 0.5);
+
+    vec3 diffuse_albedo = base_sample.rgb * (1.0 - metallic_factor);
+    vec3 button_light_vector = button_light_position - fragment_position;
+    float button_light_distance = length(button_light_vector);
+    vec3 button_light_direction = button_light_vector / max(button_light_distance, 0.0001);
+    float button_light_diffuse = max(dot(normal_vector, button_light_direction), 0.0);
+    float button_light_falloff = 1.0 - smoothstep(0.08, 1.15, button_light_distance);
+    vec3 button_light_component = diffuse_albedo * accent_color
+        * (0.12 + button_light_diffuse * 1.25)
+        * pow(button_light_falloff, 1.6);
+
+    vec3 ambient_component = diffuse_albedo * 0.52;
+    vec3 diffuse_component = diffuse_albedo * (key_diffuse * 0.85 + fill_diffuse * 0.35 + top_diffuse * 0.25);
+
+    vec3 resolved_rgb = (ambient_component + diffuse_component + specular_component + button_light_component + emissive_color * 1.6) * 0.78;
+
+    output_color = vec4(resolved_rgb, base_sample.a * global_alpha);
+}
+"""
+
 # SettingsSchema
 
 class SettingsDictionaryMeta(type):
@@ -1052,3 +1174,35 @@ NO_TEXTS = [
     "Not now",
     "No thanks"
 ]
+
+CLOSE_BUTTON_RATING_TEXTS = {
+    1: [
+        "You don't like Cassette :(",
+        "I remember that one star...",
+        "Why do you keep me."
+    ],
+
+    2: [
+        "Meh.",
+        "One day you rated me... 2 stars...",
+        "I'm sad."
+    ],
+    
+    3: [
+        "Close",
+        "3 stars",
+        "3"
+    ],
+
+    4: [
+        "Cassette is cool.",
+        "You gave me 4 stars!!! :)",
+        "Good app."
+    ],
+
+    5: [
+        "Peak app.",
+        "I luv it!!!",
+        "#cassette"
+    ]
+}

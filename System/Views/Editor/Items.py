@@ -496,16 +496,16 @@ class ChipsaEntityManager:
     def __init__(self) -> None:
         self.mesh: GLMesh | None = None
 
-    def build_mesh(self) -> None:
-        half_width  = 0.65
-        height_span = 2.1
+    def build_mesh(self, aspect_ratio: float) -> None:
+        height_span = 0.8
+        half_width  = height_span * aspect_ratio * 0.5
         sprite_data = numpy.array([
-            -half_width, 0.0,         0.0, 0.0, 0.0, 1.0, 0.0, 1.0, 300.0,
-             half_width, 0.0,         0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 300.0,
-             half_width, height_span, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 300.0,
-            -half_width, 0.0,         0.0, 0.0, 0.0, 1.0, 0.0, 1.0, 300.0,
-             half_width, height_span, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 300.0,
-            -half_width, height_span, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 300.0
+            -half_width, 0.0,         0.0, 0.0, 0.0, 1.0, 0.0, 1.0, 301.0,
+             half_width, 0.0,         0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 301.0,
+             half_width, height_span, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 301.0,
+            -half_width, 0.0,         0.0, 0.0, 0.0, 1.0, 0.0, 1.0, 301.0,
+             half_width, height_span, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 301.0,
+            -half_width, height_span, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 301.0
         ], dtype = numpy.float32)
 
         layout    = [(0, 3), (1, 3), (2, 2), (3, 1)]

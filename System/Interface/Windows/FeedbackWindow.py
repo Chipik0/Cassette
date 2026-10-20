@@ -6,7 +6,10 @@ import platform
 from PyQt6.QtCore    import QTimer
 from PyQt6.QtWidgets import QWidget
 
-from System.Common import Dev
+from System.Common import (
+    Constants,
+    Dev
+)
 
 from System.Services import (
     Player,
@@ -17,6 +20,8 @@ from System.Interface           import Widgets
 from System.Interface.Animation import LoomEngine
 
 from .FloatingWindowGPU import FloatingWindowGPU
+
+SETTING_FEEDBACK_RATING_KEY = "_feedback_rating"
 
 # Feedback Window
 
@@ -246,6 +251,10 @@ class FeedbackWindow(FloatingWindowGPU):
 
     def handle_request_success(self) -> None:
         self.request_in_progress = False
+        Constants.current_settings.set_value(
+            SETTING_FEEDBACK_RATING_KEY,
+            int(self.star_rating_widget.value())
+        )
 
         self.pulse_status_widget.flatten(duration_ms = 400)
         self.stop_transmission_sound(duration_ms = 350)

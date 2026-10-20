@@ -4,20 +4,12 @@ import os
 import json
 import shutil
 import random
+import time
 import difflib
 import mimetypes
 import webbrowser
 
 from loguru import logger
-
-from PyQt6.QtCore import (
-    Qt,
-    QSize,
-    QEvent,
-    QTimer,
-    QObject,
-    pyqtSignal
-)
 
 from PyQt6.QtGui import (
     QIcon,
@@ -26,9 +18,19 @@ from PyQt6.QtGui import (
     QShowEvent,
     QFocusEvent,
     QMouseEvent,
+    QResizeEvent,
     QDragMoveEvent,
     QDragEnterEvent,
     QDragLeaveEvent
+)
+
+from PyQt6.QtCore import (
+    Qt,
+    QSize,
+    QEvent,
+    QTimer,
+    QObject,
+    pyqtSignal
 )
 
 from PyQt6.QtWidgets import (
@@ -55,7 +57,6 @@ from System.Interface import (
 )
 
 from System.Interface.Animation import WindowAnimator
-
 from System.Interface.Widgets.ScrollArea import ElasticScrollArea
 
 from System.Services import (
@@ -63,7 +64,7 @@ from System.Services import (
     ProjectSaver
 )
 
-# Search Helpers
+# Search Calculation
 
 def normalize_text(text: str) -> str:
     return " ".join(text.casefold().split())
@@ -181,6 +182,7 @@ def get_projects_info(songs_folder: str) -> dict[str, dict[str, object]]:
 class TrackItemWidget(QWidget):
     edit_clicked  = pyqtSignal(str)
     audio_clicked = pyqtSignal(str)
+    project_deleted = pyqtSignal()
 
     def __init__(
             self,
@@ -200,14 +202,7 @@ class TrackItemWidget(QWidget):
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
         self.background_frame = QFrame(self)
-        self.background_frame.setStyleSheet(
-            f"""
-                QFrame {{
-                    background-color: {Styles.Colors.SecondaryBackground};
-                    border-radius: 24px;
-                }}
-            """
-        )
+        self.background_frame.setStyleSheet(Styles.Controls.TrackCard)
         self.background_frame.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
         main_layout = QVBoxLayout(self)
@@ -273,6 +268,8 @@ class TrackItemWidget(QWidget):
     def minimumSizeHint(self) -> QSize:
         return QSize(0, 120)
 
+    # Information Update
+
     def update_information(
             self,
             title:    str,
@@ -282,6 +279,8 @@ class TrackItemWidget(QWidget):
 
         self.title_label.setText(title)
         self.artist_label.setText(f"{artist}  {subtitle}")
+
+    # Action Handlers
 
     def on_edit_clicked(self) -> None:
         self.edit_clicked.emit(self.project_identifier)
@@ -295,13 +294,19 @@ class TrackItemWidget(QWidget):
         if not dialog.exec():
             return
 
-        shutil.rmtree(
-            Utils.get_user_path(str(self.project_identifier), "Cassette/Songs"),
-            ignore_errors = True
+        project_path = Utils.get_user_path(
+            str(self.project_identifier),
+            "Cassette/Songs"
         )
+        shutil.rmtree(project_path, ignore_errors = True)
 
-        if self.main_menu:
-            QTimer.singleShot(0, self.main_menu.refresh_tracks)
+        if not self.main_menu:
+            return
+
+        if not os.path.exists(project_path):
+            self.project_deleted.emit()
+
+        QTimer.singleShot(0, self.main_menu.refresh_tracks)
 
     def on_export_clicked(self) -> None:
         composition = ProjectSaver.MinimalComposition(self.project_identifier)
@@ -316,23 +321,20 @@ class MainMenu(QWidget):
     def __init__(self, parent: QWidget) -> None:
         super().__init__(parent)
 
-        self.projects_info:   dict[str, dict[str, object]] = {}
-        self.track_widgets:   dict[str, TrackItemWidget]   = {}
-        self.search_box:      Widgets.SearchTextbox | None = None
-        self.drag_loop_sound: Player.UISound | None        = None
+        self.projects_info:          dict[str, dict[str, object]] = {}
+        self.track_widgets:          dict[str, TrackItemWidget]   = {}
+        self.search_box:             Widgets.SearchTextbox | None = None
+        self.drag_loop_sound:        Player.UISound | None        = None
+        self.current_column_count:   int                          = 2
+        self.project_deletion_times: list[float]                  = []
+
+        self.minimum_column_width_px: int                         = 340
+        self.grid_spacing_px:         int                         = 12
 
         self.window_animator = WindowAnimator.WindowAnimator.get()
 
         self.container = QFrame(self)
-        self.container.setObjectName("container")
-        self.container.setStyleSheet(
-            f"""
-                #container {{
-                    background-color: {Styles.Colors.Background};
-                    border-radius: 32px;
-                }}
-            """
-        )
+        self.container.setStyleSheet(Styles.Controls.TitleCard)
 
         self.setAcceptDrops(True)
         self.setup_ui()
@@ -341,20 +343,15 @@ class MainMenu(QWidget):
         root_layout.setContentsMargins(0, 0, 0, 0)
         root_layout.addWidget(self.container)
 
+    # UI Setup
+
     def setup_ui(self) -> None:
         container_layout = QVBoxLayout(self.container)
         container_layout.setContentsMargins(12, 12, 12, 12)
         container_layout.setSpacing(12)
 
-        card_style = f"""
-            QFrame {{
-                background-color: {Styles.Colors.SecondaryBackground};
-                border-radius: 20px;
-            }}
-        """
-
         title_container = QFrame()
-        title_container.setStyleSheet(card_style)
+        title_container.setStyleSheet(Styles.Controls.ContainerCard)
 
         title_layout = QVBoxLayout(title_container)
         title_layout.setContentsMargins(20, 16, 20, 16)
@@ -367,7 +364,7 @@ class MainMenu(QWidget):
         container_layout.addWidget(title_container)
 
         button_container = QFrame()
-        button_container.setStyleSheet(card_style)
+        button_container.setStyleSheet(Styles.Controls.ContainerCard)
 
         button_layout = QVBoxLayout(button_container)
         button_layout.setContentsMargins(4, 4, 4, 4)
@@ -392,10 +389,10 @@ class MainMenu(QWidget):
 
         self.tracks_grid_widget = QWidget()
         self.tracks_grid_layout = QGridLayout(self.tracks_grid_widget)
-        self.tracks_grid_layout.setSpacing(12)
+        self.tracks_grid_layout.setSpacing(self.grid_spacing_px)
         self.tracks_grid_layout.setContentsMargins(0, 0, 0, 0)
-        self.tracks_grid_layout.setColumnStretch(0, 1)
-        self.tracks_grid_layout.setColumnStretch(1, 1)
+
+        self.apply_column_stretches(self.current_column_count)
 
         self.tracks_grid_widget.setSizePolicy(
             QSizePolicy.Policy.Expanding,
@@ -439,9 +436,30 @@ class MainMenu(QWidget):
             option_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             panel_layout.addWidget(option_button)
 
-        panel.setStyleSheet("background-color: transparent;")
+        panel.setStyleSheet(Styles.Other.Transparent)
 
         return panel
+
+    # Grid Dimension Management
+
+    def calculate_optimal_column_count(self) -> int:
+        viewport_width = self.scroll_area.viewport().width()
+
+        if viewport_width <= 0:
+            viewport_width = self.width() - 24
+
+        calculated_columns = viewport_width // self.minimum_column_width_px
+
+        return max(2, min(5, calculated_columns))
+
+    def apply_column_stretches(self, column_count: int) -> None:
+        for column_index in range(10):
+            self.tracks_grid_layout.setColumnStretch(column_index, 0)
+
+        for column_index in range(column_count):
+            self.tracks_grid_layout.setColumnStretch(column_index, 1)
+
+    # Search & Grid Layout
 
     def get_visible_projects(self, search_text: str) -> list[tuple[str, dict[str, object]]]:
         projects = list(self.projects_info.items())
@@ -507,36 +525,67 @@ class MainMenu(QWidget):
 
             track_item.edit_clicked.connect(self.on_edit_project)
             track_item.audio_clicked.connect(self.on_audio_settings)
+            track_item.project_deleted.connect(self.on_project_deleted)
 
             self.track_widgets[project_identifier] = track_item
 
         search_query = self.search_box.text() if self.search_box else ""
         self.apply_search_filter(search_query)
 
+    def on_project_deleted(self) -> None:
+        current_time = time.monotonic()
+        self.project_deletion_times = [
+            deletion_time
+            for deletion_time in self.project_deletion_times
+            if current_time - deletion_time <= 30.0
+        ]
+        self.project_deletion_times.append(current_time)
+
+        if len(self.project_deletion_times) < 5 or not self.search_box:
+            return
+
+        self.search_box.setPlaceholderText("Creative crisis, I guess.")
+        self.search_box.random_quote_enabled = False
+
     def apply_search_filter(self, search_text: str) -> None:
         for index in reversed(range(self.tracks_grid_layout.count())):
             layout_item = self.tracks_grid_layout.takeAt(index)
             grid_widget = layout_item.widget()
 
-            if grid_widget:
-                grid_widget.hide()
+            if not grid_widget:
+                continue
+
+            grid_widget.hide()
 
         visible_projects = self.get_visible_projects(search_text)
 
+        self.current_column_count = self.calculate_optimal_column_count()
+        self.apply_column_stretches(self.current_column_count)
+
         for index, (project_identifier, _) in enumerate(visible_projects):
-            row    = index // 2
-            column = index % 2
+            row_index    = index // self.current_column_count
+            column_index = index % self.current_column_count
 
             matched_widget = self.track_widgets.get(project_identifier)
 
-            if matched_widget:
-                self.tracks_grid_layout.addWidget(matched_widget, row, column)
-                matched_widget.show()
+            if not matched_widget:
+                continue
+
+            self.tracks_grid_layout.addWidget(matched_widget, row_index, column_index)
+            matched_widget.show()
 
         self.scroll_area.raw_scroll_position = 0.0
         self.scroll_area.velocity_speed      = 0.0
         self.scroll_area.apply_content_position()
         self.scroll_area.update_canvas_geometry()
+
+    def reset_search(self) -> None:
+        if not self.search_box:
+            return
+
+        self.search_box.clear()
+
+    # Focus Management
 
     def refocus_search_box(self) -> None:
         if not self.isVisible():
@@ -560,6 +609,8 @@ class MainMenu(QWidget):
 
         if not self.search_box.hasFocus():
             self.search_box.setFocus()
+
+    # Events & Filtering
 
     def eventFilter(
             self,
@@ -595,8 +646,10 @@ class MainMenu(QWidget):
     def hideEvent(self, event: QHideEvent) -> None:
         super().hideEvent(event)
 
-        if self.search_box:
-            self.search_box.clearFocus()
+        if not self.search_box:
+            return
+
+        self.search_box.clearFocus()
 
     def changeEvent(self, event: QEvent) -> None:
         super().changeEvent(event)
@@ -610,21 +663,29 @@ class MainMenu(QWidget):
     def mousePressEvent(self, event: QMouseEvent) -> None:
         super().mousePressEvent(event)
 
-        if self.isVisible():
-            self.refocus_search_box()
-
-    def process_new_composition(self, file_path: str) -> None:
-        audio_dialog = Windows.AudioSetupDialog(file_path)
-
-        if not audio_dialog.exec():
+        if not self.isVisible():
             return
 
-        composition = ProjectSaver.Composition(
-            file_path,
-            audio_dialog.saved_settings
-        )
+        self.refocus_search_box()
 
-        self.composition_created.emit(composition)
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        super().resizeEvent(event)
+
+        new_column_count = self.calculate_optimal_column_count()
+
+        if new_column_count == self.current_column_count:
+            return
+
+        search_query = self.search_box.text() if self.search_box else ""
+        self.apply_search_filter(search_query)
+
+    def showEvent(self, event: QShowEvent) -> None:
+        super().showEvent(event)
+        self.reset_search()
+        self.refresh_tracks()
+        self.refocus_search_box()
+
+    # Drag & Drop Events
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
         if not self.drag_loop_sound:
@@ -714,10 +775,20 @@ class MainMenu(QWidget):
 
         super().dropEvent(event)
 
-    def showEvent(self, event: QShowEvent) -> None:
-        super().showEvent(event)
-        self.refresh_tracks()
-        self.refocus_search_box()
+    # Actions & Dialogs
+
+    def process_new_composition(self, file_path: str) -> None:
+        audio_dialog = Windows.AudioSetupDialog(file_path)
+
+        if not audio_dialog.exec():
+            return
+
+        composition = ProjectSaver.Composition(
+            file_path,
+            audio_dialog.saved_settings
+        )
+
+        self.composition_created.emit(composition)
 
     def on_settings(self) -> None:
         settings_dialog = Windows.SettingsWindow()
@@ -755,7 +826,7 @@ class MainMenu(QWidget):
             return
 
         if has_alt:
-            Windows.AboutWindow(more_info = True).exec()
+            Windows.AboutWindow(more_information = True).exec()
 
             return
 

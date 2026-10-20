@@ -235,7 +235,7 @@ class CheckboxWithLabel(Widgets.BaseControlContainer):
     def setup_description(self, description: str) -> None:
         self.description_label = QLabel(description, self.container_background)
         self.description_label.setFont(Utils.NType(10))
-        self.description_label.setStyleSheet(f"color: {Styles.Colors.SubtleFontColor}; padding: 0px; border: none;")
+        self.description_label.setStyleSheet(Styles.Other.DescriptionLabel)
         self.inner_layout.addWidget(self.description_label, 1, Qt.AlignmentFlag.AlignVCenter)
 
     def isChecked(self) -> bool:

@@ -59,8 +59,7 @@ class SegmentedStrip(Lifecycle.LoomAnimationMixin, QWidget):
             pill_color:       object     = None,
             hover_color:      object     = None,
             button_font_size: int        = 10,
-            button_style:     str        = "",
-            stylesheet:       str        = ""
+            switch_sound:     str        = "Controls/Selector/Select"
         ) -> None:
 
         super().__init__()
@@ -72,15 +71,16 @@ class SegmentedStrip(Lifecycle.LoomAnimationMixin, QWidget):
         self.hover_color       = self.resolve_hover_color(hover_color)
         self.hovered_button    = None
         self.has_indicator     = False
+        self.switch_sound      = switch_sound
         self.wheel_accumulator = 0.0
 
         self.data_by_identifier: dict[int, object] = {}
         self.buttons:            list[QPushButton] = []
 
-        self.setup_layout(items, button_font_size, button_style)
+        self.setup_layout(items, button_font_size)
         self.setup_animation_handles()
 
-        self.setStyleSheet(stylesheet if stylesheet else Styles.Controls.Selector)
+        self.setStyleSheet(Styles.Controls.Selector)
 
         if default_text is not None:
             self.select_text(default_text, animated = False)
@@ -130,8 +130,7 @@ class SegmentedStrip(Lifecycle.LoomAnimationMixin, QWidget):
     def setup_layout(
             self,
             items:            list[str] | dict,
-            button_font_size: int,
-            button_style:     str
+            button_font_size: int
         ) -> None:
 
         self.layout = QHBoxLayout(self)
@@ -147,15 +146,14 @@ class SegmentedStrip(Lifecycle.LoomAnimationMixin, QWidget):
         source = items.items() if isinstance(items, dict) else ((identifier, identifier) for identifier in items)
 
         for index, (text, data) in enumerate(source):
-            self.add_button(index, text, data, button_font_size, button_style)
+            self.add_button(index, text, data, button_font_size)
 
     def add_button(
             self,
             index:            int,
             text:             str,
             data:             object,
-            button_font_size: int,
-            button_style:     str
+            button_font_size: int
         ) -> None:
 
         button = QPushButton(text, self, objectName = "segmentedButton")
@@ -166,18 +164,7 @@ class SegmentedStrip(Lifecycle.LoomAnimationMixin, QWidget):
         button.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         button.setMinimumHeight(30)
 
-        button.setStyleSheet(f"""
-            QPushButton#segmentedButton {{
-                {button_style}
-            }}
-
-            QPushButton#segmentedButton,
-            QPushButton#segmentedButton:checked,
-            QPushButton#segmentedButton:hover,
-            QPushButton#segmentedButton:hover:checked {{
-                background-color: transparent;
-            }}
-        """)
+        button.setStyleSheet(Styles.Controls.SelectorButton)
 
         button.installEventFilter(self)
 
@@ -271,7 +258,7 @@ class SegmentedStrip(Lifecycle.LoomAnimationMixin, QWidget):
         pan          = self.pan_ratio(button_index, button_count)
 
         Player.ui_player.play_sound(
-            "Controls/Selector/Hover",
+            name        = "Controls/Selector/Hover",
             speed       = tone,
             pan         = pan,
             setting_key = "selector_sounds",
@@ -373,7 +360,7 @@ class SegmentedStrip(Lifecycle.LoomAnimationMixin, QWidget):
         pan        = self.pan_ratio(index, count)
 
         Player.ui_player.play_sound(
-            "Controls/Selector/Select",
+            name        = self.switch_sound,
             speed       = tone,
             pan         = pan,
             setting_key = "selector_sounds",
@@ -577,7 +564,8 @@ class Selector(QWidget):
     def __init__(
             self,
             items:         list[str],
-            default_index: int = 0
+            default_index: int = 0,
+            switch_sound:  str = "Controls/Selector/Select"
         ) -> None:
 
         super().__init__()
@@ -594,7 +582,7 @@ class Selector(QWidget):
             items            = items,
             pill_color       = Styles.Colors.NothingAccent,
             button_font_size = 12,
-            button_style     = "background: transparent;"
+            switch_sound     = switch_sound
         )
 
         self.strip.selectionChanged.connect(self.on_selection_changed)
@@ -655,7 +643,8 @@ class SelectorWithLabel(Widgets.BaseControlContainer):
             description:   str,
             items:         list[str] | dict,
             default_text:  str | None = None,
-            default_value: object     = None
+            default_value: object     = None,
+            switch_sound:  str        = "Controls/Selector/Select"
         ) -> None:
 
         super().__init__()
@@ -664,7 +653,7 @@ class SelectorWithLabel(Widgets.BaseControlContainer):
         self.inner_layout.setContentsMargins(12, 8, 12, 12)
 
         self.setup_label(description)
-        self.setup_strip(items, default_text, default_value)
+        self.setup_strip(items, default_text, default_value, switch_sound)
 
     def setup_label(self, description: str) -> None:
         self.label = QLabel(description, self.container_background)
@@ -677,14 +666,16 @@ class SelectorWithLabel(Widgets.BaseControlContainer):
     def setup_strip(
             self,
             items:         list[str] | dict,
-            default_text:  str | None,
-            default_value: object | None
+            default_text:  str       | None,
+            default_value: object    | None,
+            switch_sound:  str
         ) -> None:
 
         self.strip = SegmentedStrip(
             items         = items,
             default_text  = default_text,
-            default_value = default_value
+            default_value = default_value,
+            switch_sound  = switch_sound
         )
 
         self.strip.selectionChanged.connect(self.selectionChanged.emit)

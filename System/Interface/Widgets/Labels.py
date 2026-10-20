@@ -13,6 +13,7 @@ from PyQt6.QtGui import (
 from PyQt6.QtCore import (
     Qt,
     QEvent,
+    pyqtProperty,
     pyqtSignal
 )
 
@@ -193,11 +194,12 @@ class TransformAnimationMixin:
 
         return transform
 
-    def paint_transformed(self, draw_content: object) -> None:
+    def paint_transformed(self, draw_content: object, opacity: float = 1.0) -> None:
         painter = QPainter(self)
 
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+        painter.setOpacity(opacity)
 
         rectangle = self.contentsRect()
         alignment = self.alignment()
@@ -242,6 +244,7 @@ class DescriptionLabel(TextGlitchMixin, TransformAnimationMixin, QLabel):
 
         super().__init__(self.formatted(text))
 
+        self._paint_opacity = 1.0
         self.init_glitch(text)
         self.init_transform_animation()
 
@@ -255,6 +258,15 @@ class DescriptionLabel(TextGlitchMixin, TransformAnimationMixin, QLabel):
             return
 
         self.setMaximumWidth(maximum_width)
+
+    @pyqtProperty(float)
+    def paint_opacity(self) -> float:
+        return self._paint_opacity
+
+    @paint_opacity.setter
+    def paint_opacity(self, opacity: float) -> None:
+        self._paint_opacity = max(0.0, min(1.0, opacity))
+        self.update()
 
     def formatted(self, text: str) -> str:
         text = re.sub(
@@ -273,7 +285,7 @@ class DescriptionLabel(TextGlitchMixin, TransformAnimationMixin, QLabel):
             self.update_glitch_source_text(text)
 
     def paintEvent(self, event: QEvent) -> None:
-        self.paint_transformed(self.draw_content)
+        self.paint_transformed(self.draw_content, self.paint_opacity)
 
     def draw_content(self, painter: QPainter, rectangle: object, alignment: object) -> None:
         document = QTextDocument()
