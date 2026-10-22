@@ -349,7 +349,7 @@ class ScrollController(QObject):
 
         current_playhead_px  = self.conductor.get_playhead_position_px()
         viewport_width       = float(self.conductor.viewport().width())
-        offset_ratio         = Constants.current_settings["playhead_position"]
+        offset_ratio         = float(Constants.current_settings["playhead_position"])
         target_visual_offset = viewport_width * offset_ratio
         target_scroll_px     = current_playhead_px - target_visual_offset
 
@@ -379,7 +379,7 @@ class ScrollController(QObject):
 
         horizontal_bar       = self.conductor.horizontalScrollBar()
         viewport_width       = float(self.conductor.viewport().width())
-        offset_ratio         = Constants.current_settings["playhead_position"]
+        offset_ratio         = float(Constants.current_settings["playhead_position"])
         target_visual_offset = viewport_width * offset_ratio
 
         current_playhead_px = self.conductor.get_playhead_position_px()
@@ -423,7 +423,7 @@ class ScrollController(QObject):
 
         horizontal_bar       = self.conductor.horizontalScrollBar()
         viewport_width       = float(self.conductor.viewport().width())
-        offset_ratio         = Constants.current_settings["playhead_position"]
+        offset_ratio         = float(Constants.current_settings["playhead_position"])
         target_visual_offset = viewport_width * offset_ratio
         target_scroll        = round(playhead_position_px - target_visual_offset)
 
@@ -453,7 +453,7 @@ class ScrollController(QObject):
         current_scroll       = float(horizontal_bar.value())
         playhead_x           = self.conductor.get_playhead_position_px()
         viewport_width       = float(self.conductor.viewport().width())
-        offset_ratio         = Constants.current_settings["playhead_position"]
+        offset_ratio         = float(Constants.current_settings["playhead_position"])
         target_visual_offset = viewport_width * offset_ratio
 
         target_scroll_px = playhead_x - target_visual_offset
@@ -491,7 +491,7 @@ class ScrollController(QObject):
         horizontal_bar       = self.conductor.horizontalScrollBar()
         playhead_x           = self.conductor.get_target_playhead_position_px()
         viewport_width       = float(self.conductor.viewport().width())
-        offset_ratio         = Constants.current_settings["playhead_position"]
+        offset_ratio         = float(Constants.current_settings["playhead_position"])
         target_visual_offset = viewport_width * offset_ratio
         target_scroll        = int(playhead_x - target_visual_offset)
 
@@ -504,7 +504,7 @@ class ScrollController(QObject):
         target_playhead_px = normalized_position * total_width
 
         viewport_width       = float(self.conductor.viewport().width())
-        offset_ratio         = Constants.current_settings["playhead_position"]
+        offset_ratio         = float(Constants.current_settings["playhead_position"])
         target_visual_offset = viewport_width * offset_ratio
         target_scroll_px     = target_playhead_px - target_visual_offset
 
@@ -534,7 +534,7 @@ class ScrollController(QObject):
     def sync_scroll_to_playhead(self) -> None:
         horizontal_bar       = self.conductor.horizontalScrollBar()
         viewport_width       = float(self.conductor.viewport().width())
-        offset_ratio         = Constants.current_settings["playhead_position"]
+        offset_ratio         = float(Constants.current_settings["playhead_position"])
         target_visual_offset = viewport_width * offset_ratio
         target_scroll        = int(self.conductor.get_playhead_position_px() - target_visual_offset)
 

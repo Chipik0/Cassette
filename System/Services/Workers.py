@@ -100,22 +100,26 @@ class LoadAudioWorker(BaseAudioWorker):
 
     def run(self) -> None:
         try:
-            data, sample_rate  = Audio.load_audio(self.audio_path)
-            audio_float_data   = data.astype("float32")
+            raw_data, sample_rate = Audio.load_audio(self.audio_path)
 
-            if audio_float_data.ndim > 1:
-                audio_float_data = numpy.mean(audio_float_data, axis = 1)
+            stereo_data = numpy.column_stack((raw_data, raw_data)) if raw_data.ndim == 1 else raw_data
+            stereo_data = numpy.ascontiguousarray(stereo_data, dtype = numpy.float32)
 
-            samples_per_pixel  = len(audio_float_data) / 1000
+            peak_amplitude = max(float(numpy.max(numpy.abs(stereo_data))), 1e-6)
+
+            mono_channel = numpy.mean(stereo_data, axis = 1)
+
+            samples_per_pixel  = len(mono_channel) / 1000.0
             step_size          = max(1, int(numpy.ceil(samples_per_pixel)))
-            padded_length      = ((len(audio_float_data) + step_size - 1) // step_size) * step_size
-            padding_difference = padded_length - len(audio_float_data)
-            padded_audio       = numpy.pad(audio_float_data, (0, padding_difference), mode = "constant")
-            reshaped_audio     = padded_audio.reshape(-1, step_size)
-            waveform_data      = numpy.mean(numpy.abs(reshaped_audio), axis = 1)
-            waveform_data      = Utils.gaussian_filter1d_np(waveform_data, sigma = 2)
+            padded_length      = ((len(mono_channel) + step_size - 1) // step_size) * step_size
+            padding_difference = padded_length - len(mono_channel)
 
-            self.finished.emit((data, sample_rate, waveform_data))
+            padded_audio  = numpy.pad(mono_channel, (0, padding_difference), mode = "constant")
+            reshaped_audio = padded_audio.reshape(-1, step_size)
+            waveform_data  = numpy.mean(numpy.abs(reshaped_audio), axis = 1)
+            waveform_data  = Utils.gaussian_filter1d_np(waveform_data, sigma = 2.0)
+
+            self.finished.emit((stereo_data, sample_rate, waveform_data, peak_amplitude))
 
         except Audio.CorruptedFileError:
             self.error.emit("The audio file is corrupted or in an unsupported format.")
@@ -131,6 +135,48 @@ class BPMWorker(BaseAudioWorker):
         try:
             beats_per_minute, peaks = Audio.analyze_bpm_and_beats(self.audio_path)
             self.finished.emit(beats_per_minute, peaks)
+
+        except Exception:
+            self.error.emit(traceback.format_exc())
+
+@Dev.track_ram
+class ReencodeAudioWorker(QObject):
+    finished = pyqtSignal()
+    error    = pyqtSignal(str)
+
+    def __init__(
+            self,
+            composition:   object,
+            start_ms:      int,
+            end_ms:        int,
+            fade_in:       int,
+            fade_out:      int,
+            fade_in_type:  str,
+            fade_out_type: str
+        ) -> None:
+
+        super().__init__()
+
+        self.composition   = composition
+        self.start_ms      = start_ms
+        self.end_ms        = end_ms
+        self.fade_in       = fade_in
+        self.fade_out      = fade_out
+        self.fade_in_type  = fade_in_type
+        self.fade_out_type = fade_out_type
+
+    def run(self) -> None:
+        try:
+            self.composition.trim_audio(
+                start_ms      = self.start_ms,
+                end_ms        = self.end_ms,
+                fade_in       = self.fade_in,
+                fade_out      = self.fade_out,
+                fade_in_type  = self.fade_in_type,
+                fade_out_type = self.fade_out_type
+            )
+
+            self.finished.emit()
 
         except Exception:
             self.error.emit(traceback.format_exc())
@@ -176,6 +222,7 @@ class NetworkReportWorker(QThread):
 
                 if response_code != 200:
                     self.request_failed.emit(f"Server response code: {response_code}")
+
                     return
 
                 self.request_succeeded.emit()

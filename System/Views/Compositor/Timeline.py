@@ -64,6 +64,7 @@ class ScrollableContent(QGraphicsView):
     dialog_cancelled          = pyqtSignal(str)
     speed_control_used        = pyqtSignal()
     speed_cycle_requested     = pyqtSignal()
+    effect_cycle_requested    = pyqtSignal()
     playground_requested      = pyqtSignal()
 
     def __init__(self, parent: QWidget) -> None:
@@ -297,6 +298,12 @@ class ScrollableContent(QGraphicsView):
         self.keyboard_controller.brightness_dialog_requested.connect(self.brightness_control_popup)
         self.keyboard_controller.duration_dialog_requested.connect(self.duration_control_popup)
         self.keyboard_controller.speed_cycle_requested.connect(self.speed_cycle_requested.emit)
+        self.keyboard_controller.effect_cycle_requested.connect(self.effect_cycle_requested.emit)
+        self.keyboard_controller.segments_dialog_requested.connect(self.context_menu_controller.segment_control_popup)
+        self.keyboard_controller.align_glyph_ends_requested.connect(self.glyph_controller.align_selected_glyph_ends_to_playhead)
+        self.keyboard_controller.align_glyph_starts_requested.connect(self.glyph_controller.align_selected_glyph_starts_to_playhead)
+        self.keyboard_controller.shift_segments_requested.connect(self.glyph_controller.shift_selected_glyph_segments)
+        self.keyboard_controller.navigate_glyph_requested.connect(self.glyph_controller.navigate_glyph)
         self.keyboard_controller.playground_requested.connect(self.playground_requested.emit)
         self.keyboard_controller.move_track_up_requested.connect(lambda: self.glyph_controller.move_selected_glyphs_vertical(-1))
         self.keyboard_controller.move_track_down_requested.connect(lambda: self.glyph_controller.move_selected_glyphs_vertical(1))

@@ -169,6 +169,7 @@ class CompositorWidget(QWidget):
 
         self.content_widget.playhead_moved_normalized.connect(self.on_playhead_position_changed)
         self.content_widget.speed_cycle_requested.connect(self.playspeed_button.next_state)
+        self.content_widget.effect_cycle_requested.connect(self.default_effect.next_state)
         self.content_widget.playground_requested.connect(self.open_playground_window)
 
         self.mini_preview_widget.preview_clicked.connect(self.on_mini_preview_clicked)
@@ -206,6 +207,9 @@ class CompositorWidget(QWidget):
         self.apply_mini_preview_position()
 
     def on_mini_preview_clicked(self, normalized_position: float) -> None:
+        if self.playback_manager.is_playing:
+            self.playback_manager.toggle_playback()
+
         self.content_widget.scroll_to_normalized_position(normalized_position)
 
     def on_playspeed_state_changed(

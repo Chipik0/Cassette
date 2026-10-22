@@ -33,7 +33,7 @@ from System.Interface import Timing
 def evaluate_keyframes(
         keyframes:       list[tuple[float, float]],
         progress:        float,
-        easing_function
+        easing_function: object
     ) -> float:
 
     if progress <= keyframes[0][0]:
@@ -119,6 +119,11 @@ class BaseSegmentedBar(QWidget):
         radius    = self.CORNER_RADIUS
         path      = QPainterPath()
 
+        if index == 0 and index == last_index:
+            path.addRoundedRect(rectangle, radius, radius)
+
+            return path
+
         if index == 0:
             path.moveTo(rectangle.topRight())
             path.lineTo(rectangle.topLeft() + QPointF(radius, 0))
@@ -177,13 +182,13 @@ class ScheduledSegmentedBar(BaseSegmentedBar):
 
         super().__init__(number_of_segments, base_thickness_px)
 
-        self.loop             = bool(loop)
-        self.schedule         = []
-        self.duration_ms      = 0
-        self.start_offset_ms  = 0
-        self.levels           = [0.0] * self.amount_of_segments
-        self.color_off        = QColor("#404040")
-        self.color_on         = QColor("#ffffff")
+        self.loop            = bool(loop)
+        self.schedule        = []
+        self.duration_ms     = 0
+        self.start_offset_ms = 0
+        self.levels          = [0.0] * self.amount_of_segments
+        self.color_off       = QColor("#404040")
+        self.color_on        = QColor("#ffffff")
 
         self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent)
         self.setStyleSheet(Styles.Other.Transparent)
@@ -209,7 +214,7 @@ class ScheduledSegmentedBar(BaseSegmentedBar):
     def active_indices(self, item: dict) -> range | list[int]:
         segments = item.get("segments")
 
-        if not segments:
+        if segments is None:
             return range(self.amount_of_segments)
 
         return [index for index in segments if 0 <= index < self.amount_of_segments]

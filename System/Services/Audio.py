@@ -26,7 +26,7 @@ class CorruptedFileError(Exception):
     pass
 
 def probe_audio(path: str) -> dict:
-    cmd = [
+    command = [
         Constants.FFPROBE_PATH,
         "-v", "error",
         "-print_format", "json",
@@ -37,8 +37,8 @@ def probe_audio(path: str) -> dict:
 
     try:
         logger.debug(f"Probing audio file: {path}")
-        result = Utils.run_hidden(cmd)
-    
+        result = Utils.run_hidden(command)
+
     except FileNotFoundError:
         logger.error("FFprobe was not found. Please ensure it is included with the application.")
         raise FileNotFoundError("FFprobe was not found.")
@@ -51,8 +51,9 @@ def probe_audio(path: str) -> dict:
 
     try:
         logger.debug("Parsing FFprobe output")
+
         return json.loads(result.stdout)
-    
+
     except json.JSONDecodeError:
         logger.error("Failed to parse FFprobe output. The audio file may be corrupted or in an unsupported format.")
         raise CorruptedFileError(
@@ -60,63 +61,65 @@ def probe_audio(path: str) -> dict:
         )
 
 def ensure_wav(path: str) -> str:
-    path_obj = Path(path)
+    path_object = Path(path)
 
-    if not path_obj.exists():
+    if not path_object.exists():
         raise FileNotFoundError("The specified audio file was not found.")
 
     try:
-        probe = probe_audio(path)
-    
+        probe_data = probe_audio(path)
+
     except FileNotFoundError:
         raise
-    
+
     except Exception:
         raise CorruptedFileError(
             "The audio file is corrupted or in an unsupported format."
         )
 
     audio_streams = [
-        s for s in probe.get("streams", [])
-        if s.get("codec_type") == "audio"
+        stream for stream in probe_data.get("streams", [])
+        if stream.get("codec_type") == "audio"
     ]
 
     if not audio_streams:
         raise NoAudioStreams()
 
-    fmt = probe.get("format", {}).get("format_name", "").lower()
+    format_name = probe_data.get("format", {}).get("format_name", "").lower()
 
-    if "wav" in fmt and path_obj.suffix.lower() == ".wav":
+    if "wav" in format_name and path_object.suffix.lower() == ".wav":
         logger.warning("Audio is WAV. Not converting.")
-        return str(path_obj)
+
+        return str(path_object)
 
     logger.warning("Audio is not WAV. Starting conversion...")
 
     sample_rate = audio_streams[0].get("sample_rate", "44100")
 
-    temp_file = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
-    temp_path = temp_file.name
-    temp_file.close()
+    temporary_file = tempfile.NamedTemporaryFile(suffix = ".wav", delete = False)
+    temporary_path = temporary_file.name
+    temporary_file.close()
 
-    cmd = [
+    command = [
         Constants.FFMPEG_PATH,
         "-y",
         "-v", "error",
+        "-threads", "2",
         "-i", path,
         "-vn",
         "-acodec", "pcm_s16le",
         "-ar", str(sample_rate),
-        temp_path
+        temporary_path
     ]
 
     try:
-        logger.debug(f"Converting audio to WAV: {path} -> {temp_path}")
-        result = Utils.run_hidden(cmd)
+        logger.debug(f"Converting audio to WAV: {path} -> {temporary_path}")
+        result = Utils.run_hidden(command)
 
         if result.returncode != 0:
-            stderr = (result.stderr or "").lower()
+            standard_error = (result.stderr or "").lower()
 
-            if "permission" in stderr or "access is denied" in stderr:
+            if "permission" in standard_error or "access is denied" in standard_error:
                 raise PermissionError(
                     "Permission error while accessing the file. "
                     "Please check if the file is open in another application."
@@ -126,68 +129,70 @@ def ensure_wav(path: str) -> str:
                 "The audio file is corrupted or in an unsupported format."
             )
 
-        return temp_path
+        return temporary_path
 
     except FileNotFoundError:
         raise FileNotFoundError("FFmpeg was not found.")
 
 def analyze_bpm_and_beats(
-    audio_path:  str,
-    hop_size:    int = 512,
-    window_size: int = 1024
-) -> tuple[float, list[float]]:
-    
+        audio_path:  str,
+        hop_size:    int = 512,
+        window_size: int = 1024
+    ) -> tuple[float, list[float]]:
+
     try:
-        source = aubio.source(audio_path, 0, hop_size)
-    
+        audio_source = aubio.source(audio_path, 0, hop_size)
+
     except Exception:
         return 0.0, []
 
     logger.debug(f"Analyzing BPM and beats for: {audio_path}")
-    
-    samplerate = source.samplerate or 44100
-    detector   = aubio.tempo("default", window_size, hop_size, samplerate)
-    detector.set_silence(-40)
 
-    beats:        list[float] = []
-    total_frames: int         = 0
-    count:        int         = 0
+    sample_rate   = audio_source.samplerate or 44100
+    tempo_detector = aubio.tempo("default", window_size, hop_size, sample_rate)
+    tempo_detector.set_silence(-40)
+
+    detected_beats: list[float] = []
+    iteration_count: int        = 0
 
     while True:
-        samples, read = source()
-        total_frames += read
+        samples, frames_read = audio_source()
 
-        if detector(samples):
-            beats.append(detector.get_last_s())
+        if tempo_detector(samples):
+            detected_beats.append(tempo_detector.get_last_s())
 
-        if read < hop_size:
+        if frames_read < hop_size:
             break
 
-        count += 1
-        if count % 150 == 0:
-            time.sleep(0.0001)
+        iteration_count += 1
 
-    bpm = 0.0
+        if iteration_count % 60 == 0:
+            time.sleep(0.001)
 
-    if len(beats) >= 2:
-        beats_array = numpy.array(beats, dtype=numpy.float32)
+    beats_per_minute = 0.0
+
+    if len(detected_beats) >= 2:
+        beats_array = numpy.array(detected_beats, dtype = numpy.float32)
         intervals   = numpy.diff(beats_array)
-        intervals   = intervals[(intervals > 0.08) & (intervals < 10.0)]
+        valid_intervals = intervals[(intervals > 0.08) & (intervals < 10.0)]
 
-        if intervals.size > 0:
-            bpm = round(float(numpy.median(60.0 / intervals)), 2)
+        if valid_intervals.size > 0:
+            beats_per_minute = round(float(numpy.median(60.0 / valid_intervals)), 2)
 
-    formatted_beats = [round(float(b), 3) for b in beats]
+    formatted_beats = [round(float(beat), 3) for beat in detected_beats]
 
-    logger.debug(f"Estimated BPM: {bpm}")
+    logger.debug(f"Estimated BPM: {beats_per_minute}")
 
-    return bpm, formatted_beats
+    return beats_per_minute, formatted_beats
 
 def load_audio(path: str) -> tuple[numpy.ndarray, int]:
     try:
-        data, sample_rate = soundfile.read(path, dtype="float32")
-        logger.info(f"Loaded audio file: {path} (Sample Rate: {sample_rate}, Channels: {data.shape[1] if data.ndim > 1 else 1})")
-        return data, sample_rate
-    
+        audio_data, sample_rate = soundfile.read(path, dtype = "float32")
+        channel_count           = audio_data.shape[1] if audio_data.ndim > 1 else 1
+
+        logger.info(f"Loaded audio file: {path} (Sample Rate: {sample_rate}, Channels: {channel_count})")
+
+        return audio_data, sample_rate
+
     except soundfile.LibsndfileError:
         raise CorruptedFileError("The audio file is corrupted or in an unsupported format.")

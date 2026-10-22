@@ -237,25 +237,17 @@ class Controls:
     FloatingTextBox = f"""
         background-color: {Colors.Floating.Background};
         color: #fff;
-        padding: 6px 10px;
-        border-radius: 11px;
+        padding: 0px 8px;
+        border-radius: 13px;
         border: 1.2px solid {Colors.GlassBorder}
     """
 
     FloatingSearchTextBox = f"""
         background-color: transparent;
         color: #fff;
-        padding: 6px 10px;
+        padding: 0px 10px;
         border-radius: 16px;
         border: none
-    """
-
-    FloatingTextBoxRound = f"""
-        background-color: {Colors.Floating.Background};
-        color: #fff;
-        padding: 6px 10px;
-        border-radius: 13px;
-        border: 1.2px solid {Colors.GlassBorder}
     """
 
     EffectSetupper = f"""

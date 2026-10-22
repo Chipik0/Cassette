@@ -73,18 +73,18 @@ def prepare_default_settings(setting_components: dict[str, list]) -> None:
 
 STATUS_BAR_DEFAULT = f"Cassette {open(Utils.get_resource_path('version')).read()}"
 
-DEFAULT_DURATION   = 100
-DEFAULT_BRIGHTNESS = 100
+DEFAULT_DURATION             = 100
+DEFAULT_BRIGHTNESS           = 100
 
-SPRING_STIFFNESS           = 0.04
-FADE_OVERLAY_SIZE          = 60
-SPRING_DAMPING_FACTOR      = 0.4
-PINCH_ZOOM_SENSITIVITY     = 400.0
-ANIMATION_TICK_INTERVAL    = 8
-USER_SCROLL_IDLE_TIMEOUT   = 150
-WHEEL_SCROLL_SENSITIVITY   = 1.0
-INERTIA_DECELERATION_RATE  = 0.93
-VISUAL_RESISTANCE_STRENGTH = 600.0
+SPRING_STIFFNESS             = 0.04
+FADE_OVERLAY_SIZE            = 60
+SPRING_DAMPING_FACTOR        = 0.4
+PINCH_ZOOM_SENSITIVITY       = 400.0
+ANIMATION_TICK_INTERVAL      = 8
+USER_SCROLL_IDLE_TIMEOUT     = 150
+WHEEL_SCROLL_SENSITIVITY     = 1.0
+INERTIA_DECELERATION_RATE    = 0.93
+VISUAL_RESISTANCE_STRENGTH   = 600.0
 
 EXIT_FADE_BASE_MS            = 3000
 EXIT_EFFECTS_DELAY_MS        = 1700
@@ -92,26 +92,26 @@ EXIT_CLOSE_SOUND_DURATION_MS = 1500
 NO_AUDIO_EXIT_DELAY_MS       = 1800
 ENTRY_VERTICAL_OFFSET_PX     = 150
 
-UNDERWATER_FREQUENCY_HZ  = 550.0
-UNDERWATER_Q             = 0.9
-UNDERWATER_BLIP_MS       = 260
+UNDERWATER_FREQUENCY_HZ      = 550.0
+UNDERWATER_Q                 = 0.9
+UNDERWATER_BLIP_MS           = 260
 
-MIN_AUDIO_MS             = 30000.0
-LOOP_GUARD_MS            = 220.0
-LOOP_WATCHDOG_MS         = 150
+MIN_AUDIO_MS                 = 30000.0
+LOOP_GUARD_MS                = 220.0
+LOOP_WATCHDOG_MS             = 150
 
-BASELINE_SPEED           = 1.0
-INTRO_RAMP_MS            = 2600
-RELEASE_RAMP_MS          = 900
+BASELINE_SPEED               = 1.0
+INTRO_RAMP_MS                = 2600
+RELEASE_RAMP_MS              = 900
 
-PAGE_PULSE_SPEED         = 0.8
-PAGE_PULSE_DOWN_MS       = 120
-PAGE_PULSE_UP_MS         = 160
+PAGE_PULSE_SPEED             = 0.8
+PAGE_PULSE_DOWN_MS           = 120
+PAGE_PULSE_UP_MS             = 160
 
-PLAY_PAUSE_ACCEL_RAMP_MS = 320
-PLAY_PAUSE_HOLD_MS       = 1400
-PLAY_PAUSE_STOP_RAMP_MS  = 400
-PLAY_PAUSE_TEXT_HOLD_MS  = 1600
+PLAY_PAUSE_ACCEL_RAMP_MS     = 320
+PLAY_PAUSE_HOLD_MS           = 1400
+PLAY_PAUSE_STOP_RAMP_MS      = 400
+PLAY_PAUSE_TEXT_HOLD_MS      = 1600
 
 PLAY_PAUSE_GOOD_TEXT = (
     "Good.\n"
@@ -141,12 +141,12 @@ FPS_30  = 33
 
 GITHUB_LINK = "https://www.github.com/chips047/Cassette/releases/latest"
 
-CROP_TOLERANCE_MS = 100
+CROP_TOLERANCE_MS            = 100
 
-EASE_PER_TICK  = 0.28
-SNAP_THRESHOLD = 0.003
+EASE_PER_TICK                = 0.28
+SNAP_THRESHOLD               = 0.003
 
-POLL_INTERVAL_MS = 20
+POLL_INTERVAL_MS             = 20
 
 EJECT_FADE_DURATION_MS       = 3000
 INTERRUPTED_FADE_DURATION_MS = 1000
@@ -366,10 +366,7 @@ void main() {
 # SettingsSchema
 
 class SettingsDictionaryMeta(type):
-    def __getitem__(
-            cls,
-            item: str
-        ) -> list:
+    def __getitem__(cls, item: str) -> list:
         return cls()[item]
 
     def items(cls) -> object:
@@ -386,6 +383,7 @@ class SettingsDictionaryMeta(type):
             key:     str,
             default: object = None
         ) -> object:
+
         return cls().get(key, default)
 
     def __iter__(cls) -> object:
@@ -491,35 +489,35 @@ class SettingsDict(dict, metaclass = SettingsDictionaryMeta):
         return {
             "Performance": [
                 {
-                    "type": "selector",
-                    "title": "OpenGL MSAA: Requires restart.",
-                    "key": "msaa",
+                    "type":    "selector",
+                    "title":   "OpenGL MSAA: Requires restart.",
+                    "key":     "msaa",
                     "map": {
                         "No MSAA": 0,
-                        "2x": 2,
-                        "4x": 4,
-                        "8x": 8
+                        "2x":      2,
+                        "4x":      4,
+                        "8x":      8
                     },
                     "default": "4x"
                 },
                 {
-                    "type": "checkbox",
-                    "title": "CPU Antialiasing",
-                    "key": "antialiasing",
+                    "type":        "checkbox",
+                    "title":       "CPU Antialiasing",
+                    "key":         "antialiasing",
                     "description": "Antialiasing on CPU rendered components.",
-                    "default": True
+                    "default":     True
                 },
                 {
-                    "type": "checkbox",
-                    "title": "Compositor GPU Rendering",
-                    "key": "gpu",
+                    "type":        "checkbox",
+                    "title":       "Compositor GPU Rendering",
+                    "key":         "gpu",
                     "description": "Significantly improves smoothness. Requires restart.",
-                    "default": True
+                    "default":      True
                 },
                 {
-                    "type": "selector",
-                    "title": "Waveform Tile Width",
-                    "key": "tile_width",
+                    "type":    "selector",
+                    "title":   "Waveform Tile Width",
+                    "key":     "tile_width",
                     "map": {
                         "256": 256,
                         "512": 512,
@@ -528,11 +526,11 @@ class SettingsDict(dict, metaclass = SettingsDictionaryMeta):
                     "default": "512"
                 },
                 {
-                    "type": "checkbox",
-                    "title": "Rounded Glyph Corners",
-                    "description": "Disable to draw glyphs with square corners, which is slightly cheaper to render.",
-                    "key": "glyph_rounded_corners",
-                    "default": True
+                    "type":        "checkbox",
+                    "title":       "Rounded Glyph Corners",
+                    "description": "Draws glyphs with rounded corners. Disabling may slightly improve rendering performance.",
+                    "key":         "glyph_rounded_corners",
+                    "default":     True
                 }
             ],
 
@@ -563,7 +561,7 @@ class SettingsDict(dict, metaclass = SettingsDictionaryMeta):
                         "Low":       "0.1",
                         "Normal":    "0.3",
                         "High":      "0.5",
-                        "Very high": "0.8"
+                        "Very High": "0.8"
                     },
                     "default": "Normal"
                 },
@@ -571,14 +569,14 @@ class SettingsDict(dict, metaclass = SettingsDictionaryMeta):
                     "type":        "checkbox",
                     "title":       "Scroll Smoothing",
                     "key":         "scroll_smoothing",
-                    "description": "Makes scroll movement more fluid.",
+                    "description": "Makes scrolling more fluid.",
                     "default":     True
                 },
                 {
                     "type":        "checkbox",
                     "title":       "Scroll Inertia",
                     "key":         "scroll_inertia",
-                    "description": "Keeps scroll moving naturally after swipe.",
+                    "description": "Keeps scrolling naturally after a swipe.",
                     "default":     True
                 },
                 {
@@ -634,66 +632,66 @@ class SettingsDict(dict, metaclass = SettingsDictionaryMeta):
 
             "Interface": [
                 {
-                    "type": "selector",
-                    "title": "Animation Style",
-                    "key": "animation_style",
-                    "map": styles_map,
+                    "type":    "selector",
+                    "title":   "Animation Style",
+                    "key":     "animation_style",
+                    "map":     styles_map,
                     "default": default_style
                 },
                 {
-                    "type": "selector",
+                    "type":  "selector",
                     "title": "Animation Multiplier",
-                    "key": "animation_multiplier",
+                    "key":   "animation_multiplier",
                     "map": {
                         "0.75x": "0.75",
-                        "1.0x": "1.0",
+                        "1.0x":  "1.0",
                         "1.15x": "1.15",
                         "1.25x": "1.25",
-                        "1.5x": "1.5",
-                        "3.0x": "3.0",
-                        "5.0x": "5.0",
+                        "1.5x":  "1.5",
+                        "3.0x":  "3.0",
+                        "5.0x":  "5.0",
                         "10.0x": "10.0",
                         "20.0x": "20.0"
                     },
                     "default": "1.0x"
                 },
                 {
-                    "type": "selector",
-                    "title": "Target FPS",
-                    "key": "target_fps",
-                    "map": frames_per_second_map,
+                    "type":    "selector",
+                    "title":   "Target FPS",
+                    "key":     "target_fps",
+                    "map":     frames_per_second_map,
                     "default": default_frames_per_second
                 },
                 {
-                    "type": "checkbox",
-                    "title": "Floating Window Animations",
-                    "key": "floating_window_animations",
+                    "type":        "checkbox",
+                    "title":       "Floating Window Animations",
+                    "key":         "floating_window_animations",
                     "description": "Enables popup background animations.",
-                    "default": True
+                    "default":      True
                 },
                 {
-                    "type": "selector",
-                    "title": "Window Hover Smoothing",
-                    "key": "window_hover_smoothing",
+                    "type":    "selector",
+                    "title":   "Window Hover Smoothing",
+                    "key":     "window_hover_smoothing",
                     "map": {
-                        "No Tilt": "0.0",
-                        "Slow": "0.07",
-                        "Normal": "0.2",
+                        "No Tilt":   "0.0",
+                        "Slow":      "0.07",
+                        "Normal":    "0.2",
                         "Very Fast": "0.8"
                     },
                     "default": "Normal"
                 },
                 {
-                    "type": "checkbox",
-                    "title": "BPM Animations",
+                    "type":        "checkbox",
+                    "title":       "BPM Animations",
                     "description": "Enables beat - synced animations.",
-                    "key": "bpm_animations",
-                    "default": True
+                    "key":         "bpm_animations",
+                    "default":     True
                 },
                 {
-                    "type": "selector",
-                    "title": "Window BPM Animation Style",
-                    "key": "window_bpm_animation_style",
+                    "type":    "selector",
+                    "title":   "Window BPM Animation Style",
+                    "key":     "window_bpm_animation_style",
                     "map": {
                         "Pulse": "pulse",
                         "Punch": "punch"
@@ -701,59 +699,59 @@ class SettingsDict(dict, metaclass = SettingsDictionaryMeta):
                     "default": "Pulse"
                 },
                 {
-                    "type": "checkbox",
-                    "title": "Glyph 3D Tilt",
+                    "type":        "checkbox",
+                    "title":       "Glyph 3D Tilt",
                     "description": "Enables 3D tilt when resizing or moving a glyph.",
-                    "key": "glyph_tilt_animation",
-                    "default": True
+                    "key":         "glyph_tilt_animation",
+                    "default":     True
                 },
                 {
-                    "type": "checkbox",
-                    "title": "Glyph Spawn Animation",
+                    "type":        "checkbox",
+                    "title":       "Glyph Spawn Animation",
                     "description": "Enables animations when spawning or despawning a glyph.",
-                    "key": "glyph_spawn_animation",
-                    "default": True
+                    "key":         "glyph_spawn_animation",
+                    "default":     True
                 },
                 {
-                    "type": "checkbox",
-                    "title": "Playhead Animations",
+                    "type":        "checkbox",
+                    "title":       "Playhead Animations",
                     "description": "Enables animations on the playhead.",
-                    "key": "playhead_animations",
-                    "default": True
+                    "key":         "playhead_animations",
+                    "default":     True
                 },
                 {
-                    "type": "checkbox",
-                    "title": "Marquee Hide Animation",
-                    "description": "Enables the marquee hide/damping animation.",
-                    "key": "marquee_hide_animation",
-                    "default": True
+                    "type":        "checkbox",
+                    "title":       "Marquee Hide Animation",
+                    "description": "Enables the marquee hiding / damping animation.",
+                    "key":         "marquee_hide_animation",
+                    "default":     True
                 },
                 {
-                    "type": "checkbox",
-                    "title": "Textbox Animations",
-                    "key": "textbox_animations",
+                    "type":        "checkbox",
+                    "title":       "Textbox Animations",
+                    "key":         "textbox_animations",
                     "description": "Enables textbox animations.",
-                    "default": True
+                    "default":     True
                 }
             ],
 
             "Audio": [
                 {
-                    "type": "delay_setup",
+                    "type":        "delay_setup",
                     "description": "Audio Latency.\nPress Space to the beat.",
-                    "key": "audio_delay_ms",
-                    "default": 0
+                    "key":         "audio_delay_ms",
+                    "default":     0
                 },
                 {
-                    "type": "selector",
-                    "title": "Audio Blocksize",
-                    "key": "audio_blocksize",
+                    "type":    "selector",
+                    "title":   "Audio Blocksize",
+                    "key":     "audio_blocksize",
                     "map": {
-                        "32": "32",
-                        "64": "64",
-                        "128": "128",
-                        "256": "256",
-                        "512": "512",
+                        "32":   "32",
+                        "64":   "64",
+                        "128":  "128",
+                        "256":  "256",
+                        "512":  "512",
                         "1024": "1024",
                         "2048": "2048",
                         "4096": "4096"
@@ -761,135 +759,142 @@ class SettingsDict(dict, metaclass = SettingsDictionaryMeta):
                     "default": "128"
                 },
                 {
-                    "type": "checkbox",
-                    "title": "Disable Sounds",
-                    "key": "disable_sounds",
+                    "type":        "checkbox",
+                    "title":       "Disable Sounds",
+                    "key":         "disable_sounds",
                     "description": "Disables all UI sounds.",
-                    "default": False
+                    "default":     False
                 },
                 {
-                    "type": "slider",
-                    "title": "Sound Effect Volume",
-                    "key": "sound_effect_volume",
-                    "min": 0,
-                    "max": 100,
+                    "type":    "slider",
+                    "title":   "Sound Effect Volume",
+                    "key":     "sound_effect_volume",
+                    "min":     0,
+                    "max":     100,
                     "default": 100
                 },
                 {
-                    "type": "checkbox",
-                    "title": "Sound Tone Effects",
+                    "type":        "checkbox",
+                    "title":       "Sound Tone Effects",
                     "description": "Enables dynamic tonal variation for UI sounds.",
-                    "key": "sound_tone_effects",
-                    "default": True
+                    "key":         "sound_tone_effects",
+                    "default":     True
                 },
                 {
-                    "type": "checkbox",
-                    "title": "Startup Sound",
+                    "type":        "checkbox",
+                    "title":       "Startup Sound",
                     "description": "Enables a sound effect on application startup.",
-                    "key": "startup_sound",
-                    "default": True
+                    "key":         "startup_sound",
+                    "default":     True
                 },
                 {
-                    "type": "checkbox",
-                    "title": "Shutdown Sound",
+                    "type":        "checkbox",
+                    "title":       "Shutdown Sound",
                     "description": "Enables a sound effect on application shutdown.",
-                    "key": "shutdown_sound",
-                    "default": True
+                    "key":         "shutdown_sound",
+                    "default":     True
                 },
                 {
-                    "type": "checkbox",
-                    "title": "Glyph Spawn Sound",
+                    "type":        "checkbox",
+                    "title":       "Glyph Spawn Sound",
                     "description": "Enables a sound effect when a glyph is spawned.",
-                    "key": "glyph_spawn_sound",
-                    "default": True
+                    "key":         "glyph_spawn_sound",
+                    "default":     True
                 },
                 {
-                    "type": "checkbox",
-                    "title": "Glyph Deletion Sound",
+                    "type":        "checkbox",
+                    "title":       "Other Glyph Sounds",
+                    "description": "Enables nudging and moving sounds.",
+                    "key":         "other_glyph_sounds",
+                    "default":     True
+                },
+                {
+                    "type":        "checkbox",
+                    "title":       "Glyph Deletion Sound",
                     "description": "Enables a sound effect when a glyph is deleted.",
-                    "key": "glyph_deletion_sound",
-                    "default": True
+                    "key":         "glyph_deletion_sound",
+                    "default":     True
                 },
                 {
-                    "type": "checkbox",
-                    "title": "Glyph Duplication Sound",
+                    "type":        "checkbox",
+                    "title":       "Glyph Duplication Sound",
                     "description": "Enables a sound effect when a glyph is duplicated.",
-                    "key": "glyph_duplication_sound",
-                    "default": True
+                    "key":         "glyph_duplication_sound",
+                    "default":     True
                 },
                 {
-                    "type": "checkbox",
-                    "title": "Glyph Stack Sounds",
+                    "type":        "checkbox",
+                    "title":       "Glyph Stack Sounds",
                     "description": "Enables sound effects when stacking or unstacking glyphs.",
-                    "key": "glyph_stack_sounds",
-                    "default": True
+                    "key":         "glyph_stack_sounds",
+                    "default":     True
                 },
                 {
-                    "type": "checkbox",
-                    "title": "Brightness Adjustment Sound",
+                    "type":        "checkbox",
+                    "title":       "Brightness Adjustment Sound",
                     "description": "Enables a sound effect when adjusting brightness.",
-                    "key": "brightness_adjustment_sounds",
-                    "default": True
+                    "key":         "brightness_adjustment_sounds",
+                    "default":     True
                 },
                 {
-                    "type": "checkbox",
-                    "title": "Playhead Sound Effects",
+                    "type":        "checkbox",
+                    "title":       "Playhead Sounds",
                     "description": "Enables sound effects on playhead actions.",
-                    "key": "playhead_sounds",
-                    "default": True
+                    "key":         "playhead_sounds",
+                    "default":     True
                 },
                 {
-                    "type": "checkbox",
-                    "title": "Timeline Jump Sound Effect",
+                    "type":        "checkbox",
+                    "title":       "Timeline Jump Sound",
                     "description": "Enables a sound effect when jumping to the start or end of a timeline.",
-                    "key": "timeline_jump_sounds",
-                    "default": True
+                    "key":         "timeline_jump_sounds",
+                    "default":     True
                 },
                 {
-                    "type": "checkbox",
-                    "title": "Rewind Sound Effect",
+                    "type":        "checkbox",
+                    "title":       "Rewind Sounds",
                     "description": "Enables a sound effect when auto scrolling.",
-                    "key": "rewind_sounds",
-                    "default": True
+                    "key":         "rewind_sounds",
+                    "default":     True
                 },
                 {
-                    "type": "checkbox",
-                    "title": "Checkbox Sounds",
+                    "type":        "checkbox",
+                    "title":       "Checkbox Sounds",
                     "description": "Enables sound effects when toggling checkboxes.",
-                    "key": "checkbox_sounds",
-                    "default": True
+                    "key":         "checkbox_sounds",
+                    "default":     True
                 },
                 {
-                    "type": "checkbox",
-                    "title": "Selector Sounds",
+                    "type":        "checkbox",
+                    "title":       "Selector Sounds",
                     "description": "Enables sound effects when changing selector values.",
-                    "key": "selector_sounds",
-                    "default": True
+                    "key":         "selector_sounds",
+                    "default":     True
                 },
                 {
-                    "type": "checkbox",
-                    "title": "Textbox Sound Effects",
+                    "type":        "checkbox",
+                    "title":       "Textbox Sounds",
                     "description": "Enables sound effects on textbox actions.",
-                    "key": "textbox_sounds",
-                    "default": True
+                    "key":         "textbox_sounds",
+                    "default":     True
                 },
                 {
-                    "type": "checkbox",
-                    "title": "Context Menu Sound Effects",
+                    "type":        "checkbox",
+                    "title":       "Context Menu Sounds",
                     "description": "Enables sound effects on context menu actions.",
-                    "key": "context_menu_sounds",
-                    "default": True
+                    "key":         "context_menu_sounds",
+                    "default":     True
                 },
                 {
-                    "type": "checkbox",
-                    "title": "Floating Window Sound Effects",
+                    "type":        "checkbox",
+                    "title":       "Floating Window Sounds",
                     "description": "Enables sound effects on floating window actions.",
-                    "key": "floating_window_sounds",
-                    "default": True
+                    "key":         "floating_window_sounds",
+                    "default":     True
                 },
                 {
                     "type": "checkbox",
-                    "title": "Drag & Drop Sound Effects",
+                    "title": "Drag & Drop Sounds",
                     "description": "Enables sound effects when dragging and dropping files.",
                     "key": "drag_drop_sounds",
                     "default": True
@@ -899,15 +904,15 @@ class SettingsDict(dict, metaclass = SettingsDictionaryMeta):
             "User Experience": [
                 {
                     "type":        "tutorial_reset",
-                    "description": "Interactive Tutorial.\nShow again on next project load.",
+                    "description": f"Interactive Tutorial.\n{'Show again on the next project load.' if current_settings['_tutorial_shown'] else 'You haven\'t seen the tutorial yet.'}",
                     "key":         "_tutorial_shown",
                     "button_text": "Reset",
                     "default":     False
                 },
                 {
-                    "type": "selector",
-                    "title": "Mouse Click Behavior",
-                    "key": "mouse_click_behavior",
+                    "type":    "selector",
+                    "title":   "Mouse Click Behavior",
+                    "key":     "mouse_click_behavior",
                     "map": {
                         "Normal": "normal",
                         "Fast (On Press)": "fast"
@@ -915,45 +920,45 @@ class SettingsDict(dict, metaclass = SettingsDictionaryMeta):
                     "default": "Normal"
                 },
                 {
-                    "type": "selector",
-                    "title": "Playhead Position",
-                    "key": "playhead_position",
+                    "type":    "selector",
+                    "title":   "Playhead Position",
+                    "key":     "playhead_position",
                     "map": {
-                        "Left": 0.25,
-                        "Center": 0.5,
-                        "Right": 0.75
+                        "Left":   "0.25",
+                        "Center": "0.5",
+                        "Right":  "0.75"
                     },
                     "default": "Left"
                 },
                 {
-                    "type": "slider",
-                    "title": "Playhead Arrow Increment",
-                    "min": 1,
-                    "max": 10,
-                    "key": "arrow_increment",
+                    "type":    "slider",
+                    "title":   "Playhead Arrow Increment",
+                    "min":     1,
+                    "max":     10,
+                    "key":     "arrow_increment",
                     "default": 1
                 },
                 {
-                    "type": "selector",
-                    "title": "Default Scaling",
-                    "key": "default_scaling",
+                    "type":    "selector",
+                    "title":   "Default Scaling",
+                    "key":     "default_scaling",
                     "map": {
-                        "Very small": 100,
-                        "Small": 200,
-                        "Medium": 300,
-                        "Big": 400,
-                        "Very big": 500
+                        "Very Small": 100,
+                        "Small":      200,
+                        "Medium":     300,
+                        "Big":        400,
+                        "Very Big":   500
                     },
                     "default": "Very big"
                 },
                 {
-                    "type": "selector",
-                    "title": "Waveform Smoothing",
-                    "key": "waveform_smoothing",
+                    "type":    "selector",
+                    "title":   "Waveform Smoothing",
+                    "key":     "waveform_smoothing",
                     "map": {
-                        "Accuracy": 0.5,
-                        "Balance": 1.7,
-                        "Smooth": 3
+                        "Accuracy":   "0.5",
+                        "Balance":    "1.7",
+                        "Smoothness": "3"
                     },
                     "default": "Balance"
                 },
@@ -988,7 +993,7 @@ class SettingsDict(dict, metaclass = SettingsDictionaryMeta):
             "Dev": [
                 {
                     "type":        "checkbox",
-                    "title":       "Enable FloatingWindow Debugging",
+                    "title":       "FloatingWindow Debugging",
                     "description": "Enables debugging for the FloatingWindow class. Slows down the app.",
                     "key":         "floating_window_debugging",
                     "default":     False
@@ -999,147 +1004,147 @@ class SettingsDict(dict, metaclass = SettingsDictionaryMeta):
 # Dot Matrix Font
 
 DOT_FONT = {
-    'A': [[0,1,0], [1,0,1], [1,1,1], [1,0,1], [1,0,1]],
-    'B': [[1,1,0], [1,0,1], [1,1,0], [1,0,1], [1,1,0]],
-    'C': [[0,1,1], [1,0,0], [1,0,0], [1,0,0], [0,1,1]],
-    'D': [[1,1,0], [1,0,1], [1,0,1], [1,0,1], [1,1,0]],
-    'E': [[1,1,1], [1,0,0], [1,1,0], [1,0,0], [1,1,1]],
-    'F': [[1,1,1], [1,0,0], [1,1,0], [1,0,0], [1,0,0]],
-    'G': [[0,1,1], [1,0,0], [1,0,1], [1,0,1], [0,1,1]],
-    'H': [[1,0,1], [1,0,1], [1,1,1], [1,0,1], [1,0,1]],
-    'I': [[1,1,1], [0,1,0], [0,1,0], [0,1,0], [1,1,1]],
-    'J': [[0,0,1], [0,0,1], [0,0,1], [1,0,1], [0,1,0]],
-    'K': [[1,0,1], [1,0,1], [1,1,0], [1,0,1], [1,0,1]],
-    'L': [[1,0,0], [1,0,0], [1,0,0], [1,0,0], [1,1,1]],
-    'M': [[1,0,1], [1,1,1], [1,0,1], [1,0,1], [1,0,1]],
-    'N': [[1,1,0], [1,0,1], [1,0,1], [1,0,1], [1,0,1]],
-    'O': [[0,1,0], [1,0,1], [1,0,1], [1,0,1], [0,1,0]],
-    'P': [[1,1,0], [1,0,1], [1,1,0], [1,0,0], [1,0,0]],
-    'Q': [[0,1,0], [1,0,1], [1,0,1], [1,1,1], [0,1,1]],
-    'R': [[1,1,0], [1,0,1], [1,1,0], [1,0,1], [1,0,1]],
-    'S': [[0,1,1], [1,0,0], [0,1,0], [0,0,1], [1,1,0]],
-    'T': [[1,1,1], [0,1,0], [0,1,0], [0,1,0], [0,1,0]],
-    'U': [[1,0,1], [1,0,1], [1,0,1], [1,0,1], [1,1,1]],
-    'V': [[1,0,1], [1,0,1], [1,0,1], [0,1,0], [0,1,0]],
-    'W': [[1,0,1], [1,0,1], [1,0,1], [1,1,1], [1,0,1]],
-    'X': [[1,0,1], [1,0,1], [0,1,0], [1,0,1], [1,0,1]],
-    'Y': [[1,0,1], [1,0,1], [0,1,0], [0,1,0], [0,1,0]],
-    'Z': [[1,1,1], [0,0,1], [0,1,0], [1,0,0], [1,1,1]],
+    'A': [[0,1,0],     [1,0,1],     [1,1,1],     [1,0,1],     [1,0,1]    ],
+    'B': [[1,1,0],     [1,0,1],     [1,1,0],     [1,0,1],     [1,1,0]    ],
+    'C': [[0,1,1],     [1,0,0],     [1,0,0],     [1,0,0],     [0,1,1]    ],
+    'D': [[1,1,0],     [1,0,1],     [1,0,1],     [1,0,1],     [1,1,0]    ],
+    'E': [[1,1,1],     [1,0,0],     [1,1,0],     [1,0,0],     [1,1,1]    ],
+    'F': [[1,1,1],     [1,0,0],     [1,1,0],     [1,0,0],     [1,0,0]    ],
+    'G': [[0,1,1],     [1,0,0],     [1,0,1],     [1,0,1],     [0,1,1]    ],
+    'H': [[1,0,1],     [1,0,1],     [1,1,1],     [1,0,1],     [1,0,1]    ],
+    'I': [[1,1,1],     [0,1,0],     [0,1,0],     [0,1,0],     [1,1,1]    ],
+    'J': [[0,0,1],     [0,0,1],     [0,0,1],     [1,0,1],     [0,1,0]    ],
+    'K': [[1,0,1],     [1,0,1],     [1,1,0],     [1,0,1],     [1,0,1]    ],
+    'L': [[1,0,0],     [1,0,0],     [1,0,0],     [1,0,0],     [1,1,1]    ],
+    'M': [[1,0,1],     [1,1,1],     [1,0,1],     [1,0,1],     [1,0,1]    ],
+    'N': [[1,1,0],     [1,0,1],     [1,0,1],     [1,0,1],     [1,0,1]    ],
+    'O': [[0,1,0],     [1,0,1],     [1,0,1],     [1,0,1],     [0,1,0]    ],
+    'P': [[1,1,0],     [1,0,1],     [1,1,0],     [1,0,0],     [1,0,0]    ],
+    'Q': [[0,1,0],     [1,0,1],     [1,0,1],     [1,1,1],     [0,1,1]    ],
+    'R': [[1,1,0],     [1,0,1],     [1,1,0],     [1,0,1],     [1,0,1]    ],
+    'S': [[0,1,1],     [1,0,0],     [0,1,0],     [0,0,1],     [1,1,0]    ],
+    'T': [[1,1,1],     [0,1,0],     [0,1,0],     [0,1,0],     [0,1,0]    ],
+    'U': [[1,0,1],     [1,0,1],     [1,0,1],     [1,0,1],     [1,1,1]    ],
+    'V': [[1,0,1],     [1,0,1],     [1,0,1],     [0,1,0],     [0,1,0]    ],
+    'W': [[1,0,1],     [1,0,1],     [1,0,1],     [1,1,1],     [1,0,1]    ],
+    'X': [[1,0,1],     [1,0,1],     [0,1,0],     [1,0,1],     [1,0,1]    ],
+    'Y': [[1,0,1],     [1,0,1],     [0,1,0],     [0,1,0],     [0,1,0]    ],
+    'Z': [[1,1,1],     [0,0,1],     [0,1,0],     [1,0,0],     [1,1,1]    ],
 
-    'a': [[0,0,0], [0,1,1], [1,0,1], [1,1,1], [0,1,1]],
-    'b': [[0,0,0], [1,0,0], [1,1,0], [1,0,1], [1,1,0]],
-    'c': [[0,0,0], [0,1,1], [1,0,0], [1,0,0], [0,1,1]],
-    'd': [[0,0,0], [0,0,1], [0,1,1], [1,0,1], [0,1,1]],
-    'e': [[0,0,0], [0,1,0], [1,1,1], [1,0,0], [0,1,1]],
-    'f': [[0,0,0], [0,1,1], [0,1,0], [0,1,1], [0,1,0]],
-    'g': [[0,1,1], [1,0,1], [0,1,1], [0,0,1], [1,1,0]],
-    'h': [[0,0,0], [1,0,0], [1,1,0], [1,0,1], [1,0,1]],
-    'l': [[0], [1], [1], [1], [1]],
-    'i': [[1], [0], [1], [1], [1]],
-    'k': [[0,0,0], [1,0,1], [1,1,0], [1,0,1], [1,0,1]],
+    'a': [[0,0,0],     [0,1,1],     [1,0,1],     [1,1,1],     [0,1,1]    ],
+    'b': [[0,0,0],     [1,0,0],     [1,1,0],     [1,0,1],     [1,1,0]    ],
+    'c': [[0,0,0],     [0,1,1],     [1,0,0],     [1,0,0],     [0,1,1]    ],
+    'd': [[0,0,0],     [0,0,1],     [0,1,1],     [1,0,1],     [0,1,1]    ],
+    'e': [[0,0,0],     [0,1,0],     [1,1,1],     [1,0,0],     [0,1,1]    ],
+    'f': [[0,0,0],     [0,1,1],     [0,1,0],     [0,1,1],     [0,1,0]    ],
+    'g': [[0,1,1],     [1,0,1],     [0,1,1],     [0,0,1],     [1,1,0]    ],
+    'h': [[0,0,0],     [1,0,0],     [1,1,0],     [1,0,1],     [1,0,1]    ],
+    'l': [[0],         [1],         [1],         [1],         [1]        ],
+    'i': [[1],         [0],         [1],         [1],         [1]        ],
+    'k': [[0,0,0],     [1,0,1],     [1,1,0],     [1,0,1],     [1,0,1]    ],
     'm': [[0,0,0,0,0], [1,1,1,1,1], [1,0,1,0,1], [1,0,1,0,1], [1,0,1,0,1]],
-    'n': [[0,0,0], [1,1,0], [1,0,1], [1,0,1], [1,0,1]],
-    'o': [[0,0,0], [0,1,0], [1,0,1], [1,0,1], [0,1,0]],
-    'p': [[0,0,0], [1,1,0], [1,0,1], [1,1,0], [1,0,0]],
-    'r': [[0,0,0], [1,1,0], [1,0,1], [1,0,0], [1,0,0]],
-    's': [[0,0,0], [0,1,1], [0,1,0], [0,0,1], [1,1,1]],
-    'q': [[0,0,0], [0,1,1], [1,0,1], [0,1,1], [0,0,1]],
-    't': [[0,0,0], [0,1,0], [1,1,1], [0,1,0], [0,1,1]],
-    'u': [[0,0,0], [1,0,1], [1,0,1], [1,0,1], [0,1,1]],
-    'v': [[0,0,0], [1,0,1], [1,0,1], [1,0,1], [0,1,0]],
+    'n': [[0,0,0],     [1,1,0],     [1,0,1],     [1,0,1],     [1,0,1]    ],
+    'o': [[0,0,0],     [0,1,0],     [1,0,1],     [1,0,1],     [0,1,0]    ],
+    'p': [[0,0,0],     [1,1,0],     [1,0,1],     [1,1,0],     [1,0,0]    ],
+    'r': [[0,0,0],     [1,1,0],     [1,0,1],     [1,0,0],     [1,0,0]    ],
+    's': [[0,0,0],     [0,1,1],     [0,1,0],     [0,0,1],     [1,1,1]    ],
+    'q': [[0,0,0],     [0,1,1],     [1,0,1],     [0,1,1],     [0,0,1]    ],
+    't': [[0,0,0],     [0,1,0],     [1,1,1],     [0,1,0],     [0,1,1]    ],
+    'u': [[0,0,0],     [1,0,1],     [1,0,1],     [1,0,1],     [0,1,1]    ],
+    'v': [[0,0,0],     [1,0,1],     [1,0,1],     [1,0,1],     [0,1,0]    ],
     'w': [[0,0,0,0,0], [1,0,1,0,1], [1,0,1,0,1], [1,1,1,1,1], [1,0,1,0,1]],
-    'x': [[0,0,0], [1,0,1], [0,1,0], [1,0,1], [1,0,1]],
-    'y': [[0,0,0], [1,0,1], [1,1,1], [0,0,1], [1,1,0]],
-    'z': [[0,0,0], [1,1,1], [0,1,0], [1,0,0], [1,1,1]],
-    'j': [[0,1], [0,0], [0,1], [0,1], [1,0]],
+    'x': [[0,0,0],     [1,0,1],     [0,1,0],     [1,0,1],     [1,0,1]    ],
+    'y': [[0,0,0],     [1,0,1],     [1,1,1],     [0,0,1],     [1,1,0]    ],
+    'z': [[0,0,0],     [1,1,1],     [0,1,0],     [1,0,0],     [1,1,1]    ],
+    'j': [[0,1],       [0,0],       [0,1],       [0,1],       [1,0]      ],
 
-    'А': [[0,1,0], [1,0,1], [1,1,1], [1,0,1], [1,0,1]],
-    'Б': [[1,1,1], [1,0,0], [1,1,0], [1,0,1], [1,1,0]],
-    'В': [[1,1,0], [1,0,1], [1,1,0], [1,0,1], [1,1,0]],
-    'Г': [[1,1,1], [1,0,0], [1,0,0], [1,0,0], [1,0,0]],
-    'Д': [[0,1,1], [0,1,0], [0,1,0], [1,1,1], [1,0,1]],
-    'Е': [[1,1,1], [1,0,0], [1,1,0], [1,0,0], [1,1,1]],
-    'Ё': [[0,1,0], [1,1,1], [1,0,0], [1,1,0], [1,1,1]],
-    'Ж': [[1,0,1], [1,0,1], [0,1,0], [1,0,1], [1,0,1]],
-    'З': [[1,1,0], [0,0,1], [0,1,0], [0,0,1], [1,1,0]],
-    'И': [[1,0,1], [1,0,1], [1,1,1], [1,0,1], [1,0,1]],
-    'Й': [[1,1,1], [1,0,1], [1,1,1], [1,0,1], [1,0,1]],
-    'К': [[1,0,1], [1,0,1], [1,1,0], [1,0,1], [1,0,1]],
-    'Л': [[0,1,1], [1,0,1], [1,0,1], [1,0,1], [1,0,1]],
-    'М': [[1,0,1], [1,1,1], [1,0,1], [1,0,1], [1,0,1]],
-    'Н': [[1,0,1], [1,0,1], [1,1,1], [1,0,1], [1,0,1]],
-    'О': [[0,1,0], [1,0,1], [1,0,1], [1,0,1], [0,1,0]],
-    'П': [[1,1,1], [1,0,1], [1,0,1], [1,0,1], [1,0,1]],
-    'Р': [[1,1,0], [1,0,1], [1,1,0], [1,0,0], [1,0,0]],
-    'С': [[0,1,1], [1,0,0], [1,0,0], [1,0,0], [0,1,1]],
-    'Т': [[1,1,1], [0,1,0], [0,1,0], [0,1,0], [0,1,0]],
-    'У': [[1,0,1], [1,0,1], [0,1,1], [0,0,1], [0,1,1]],
-    'Ф': [[0,1,0], [1,1,1], [1,1,1], [0,1,0], [0,1,0]],
-    'Х': [[1,0,1], [1,0,1], [0,1,0], [1,0,1], [1,0,1]],
-    'Ц': [[1,0,1], [1,0,1], [1,0,1], [1,1,1], [0,0,1]],
-    'Ч': [[1,0,1], [1,0,1], [0,1,1], [0,0,1], [0,0,1]],
-    'Ш': [[1,0,1], [1,0,1], [1,0,1], [1,0,1], [1,1,1]],
+    'А': [[0,1,0],     [1,0,1],     [1,1,1],     [1,0,1],     [1,0,1]    ],
+    'Б': [[1,1,1],     [1,0,0],     [1,1,0],     [1,0,1],     [1,1,0]    ],
+    'В': [[1,1,0],     [1,0,1],     [1,1,0],     [1,0,1],     [1,1,0]    ],
+    'Г': [[1,1,1],     [1,0,0],     [1,0,0],     [1,0,0],     [1,0,0]    ],
+    'Д': [[0,1,1],     [0,1,0],     [0,1,0],     [1,1,1],     [1,0,1]    ],
+    'Е': [[1,1,1],     [1,0,0],     [1,1,0],     [1,0,0],     [1,1,1]    ],
+    'Ё': [[0,1,0],     [1,1,1],     [1,0,0],     [1,1,0],     [1,1,1]    ],
+    'Ж': [[1,0,1],     [1,0,1],     [0,1,0],     [1,0,1],     [1,0,1]    ],
+    'З': [[1,1,0],     [0,0,1],     [0,1,0],     [0,0,1],     [1,1,0]    ],
+    'И': [[1,0,1],     [1,0,1],     [1,1,1],     [1,0,1],     [1,0,1]    ],
+    'Й': [[1,1,1],     [1,0,1],     [1,1,1],     [1,0,1],     [1,0,1]    ],
+    'К': [[1,0,1],     [1,0,1],     [1,1,0],     [1,0,1],     [1,0,1]    ],
+    'Л': [[0,1,1],     [1,0,1],     [1,0,1],     [1,0,1],     [1,0,1]    ],
+    'М': [[1,0,1],     [1,1,1],     [1,0,1],     [1,0,1],     [1,0,1]    ],
+    'Н': [[1,0,1],     [1,0,1],     [1,1,1],     [1,0,1],     [1,0,1]    ],
+    'О': [[0,1,0],     [1,0,1],     [1,0,1],     [1,0,1],     [0,1,0]    ],
+    'П': [[1,1,1],     [1,0,1],     [1,0,1],     [1,0,1],     [1,0,1]    ],
+    'Р': [[1,1,0],     [1,0,1],     [1,1,0],     [1,0,0],     [1,0,0]    ],
+    'С': [[0,1,1],     [1,0,0],     [1,0,0],     [1,0,0],     [0,1,1]    ],
+    'Т': [[1,1,1],     [0,1,0],     [0,1,0],     [0,1,0],     [0,1,0]    ],
+    'У': [[1,0,1],     [1,0,1],     [0,1,1],     [0,0,1],     [0,1,1]    ],
+    'Ф': [[0,1,0],     [1,1,1],     [1,1,1],     [0,1,0],     [0,1,0]    ],
+    'Х': [[1,0,1],     [1,0,1],     [0,1,0],     [1,0,1],     [1,0,1]    ],
+    'Ц': [[1,0,1],     [1,0,1],     [1,0,1],     [1,1,1],     [0,0,1]    ],
+    'Ч': [[1,0,1],     [1,0,1],     [0,1,1],     [0,0,1],     [0,0,1]    ],
+    'Ш': [[1,0,1],     [1,0,1],     [1,0,1],     [1,0,1],     [1,1,1]    ],
     'Щ': [[1,0,1,0,0], [1,0,1,0,0], [1,0,1,0,0], [1,1,1,0,0], [0,0,0,1,1]],
-    'Ъ': [[1,1,0], [0,1,0], [1,1,0], [1,0,1], [1,1,0]],
-    'Ы': [[1,0,1], [1,0,1], [1,1,1], [1,0,1], [1,1,1]],
-    'Ь': [[1,0,0], [1,0,0], [1,1,0], [1,0,1], [1,1,0]],
-    'Э': [[1,1,0], [0,0,1], [0,1,1], [0,0,1], [1,1,0]],
-    'Ю': [[1,1,1], [1,0,1], [1,1,1], [1,0,1], [1,1,1]],
-    'Я': [[0,1,1], [1,0,1], [0,1,1], [1,0,1], [1,0,1]],
+    'Ъ': [[1,1,0],     [0,1,0],     [1,1,0],     [1,0,1],     [1,1,0]    ],
+    'Ы': [[1,0,1],     [1,0,1],     [1,1,1],     [1,0,1],     [1,1,1]    ],
+    'Ь': [[1,0,0],     [1,0,0],     [1,1,0],     [1,0,1],     [1,1,0]    ],
+    'Э': [[1,1,0],     [0,0,1],     [0,1,1],     [0,0,1],     [1,1,0]    ],
+    'Ю': [[1,1,1],     [1,0,1],     [1,1,1],     [1,0,1],     [1,1,1]    ],
+    'Я': [[0,1,1],     [1,0,1],     [0,1,1],     [1,0,1],     [1,0,1]    ],
 
-    'а': [[0,0,0], [0,1,1], [1,0,1], [1,1,1], [0,1,1]],
-    'б': [[1,1,0], [1,0,0], [1,1,0], [1,0,1], [1,1,0]],
-    'в': [[0,0,0], [1,1,0], [1,1,1], [1,0,1], [1,1,1]],
-    'г': [[0,0,0], [1,1,1], [1,0,0], [1,0,0], [1,0,0]],
-    'д': [[0,1,0], [0,1,0], [1,1,1], [1,0,1], [1,0,1]],
-    'е': [[0,0,0], [0,1,0], [1,1,1], [1,0,0], [0,1,1]],
-    'ё': [[0,1,0], [0,0,0], [1,1,1], [1,0,0], [1,1,1]],
-    'ж': [[0,0,0], [1,0,1], [0,1,0], [1,0,1], [1,0,1]],
-    'з': [[0,0,0], [1,1,1], [0,1,1], [0,0,1], [1,1,1]],
-    'и': [[0,0,0], [1,0,1], [1,0,1], [1,0,1], [1,1,1]],
-    'й': [[1,0,1], [0,0,0], [1,0,1], [1,0,1], [1,1,1]],
-    'к': [[0,0,0], [1,0,1], [1,1,0], [1,0,1], [1,0,1]],
-    'л': [[0,0,0], [0,1,1], [1,0,1], [1,0,1], [1,0,1]],
+    'а': [[0,0,0],     [0,1,1],     [1,0,1],     [1,1,1],     [0,1,1]    ],
+    'б': [[1,1,0],     [1,0,0],     [1,1,0],     [1,0,1],     [1,1,0]    ],
+    'в': [[0,0,0],     [1,1,0],     [1,1,1],     [1,0,1],     [1,1,1]    ],
+    'г': [[0,0,0],     [1,1,1],     [1,0,0],     [1,0,0],     [1,0,0]    ],
+    'д': [[0,1,0],     [0,1,0],     [1,1,1],     [1,0,1],     [1,0,1]    ],
+    'е': [[0,0,0],     [0,1,0],     [1,1,1],     [1,0,0],     [0,1,1]    ],
+    'ё': [[0,1,0],     [0,0,0],     [1,1,1],     [1,0,0],     [1,1,1]    ],
+    'ж': [[0,0,0],     [1,0,1],     [0,1,0],     [1,0,1],     [1,0,1]    ],
+    'з': [[0,0,0],     [1,1,1],     [0,1,1],     [0,0,1],     [1,1,1]    ],
+    'и': [[0,0,0],     [1,0,1],     [1,0,1],     [1,0,1],     [1,1,1]    ],
+    'й': [[1,0,1],     [0,0,0],     [1,0,1],     [1,0,1],     [1,1,1]    ],
+    'к': [[0,0,0],     [1,0,1],     [1,1,0],     [1,0,1],     [1,0,1]    ],
+    'л': [[0,0,0],     [0,1,1],     [1,0,1],     [1,0,1],     [1,0,1]    ],
     'м': [[0,0,0,0,0], [1,1,1,1,1], [1,0,1,0,1], [1,0,1,0,1], [1,0,1,0,1]],
-    'н': [[0,0,0], [1,0,1], [1,1,1], [1,0,1], [1,0,1]],
-    'о': [[0,0,0], [0,1,0], [1,0,1], [1,0,1], [0,1,0]],
-    'п': [[0,0,0], [1,1,1], [1,0,1], [1,0,1], [1,0,1]],
-    'р': [[0,0,0], [1,1,0], [1,0,1], [1,1,0], [1,0,0]],
-    'с': [[0,0,0], [0,1,1], [1,0,0], [1,0,0], [0,1,1]],
+    'н': [[0,0,0],     [1,0,1],     [1,1,1],     [1,0,1],     [1,0,1]    ],
+    'о': [[0,0,0],     [0,1,0],     [1,0,1],     [1,0,1],     [0,1,0]    ],
+    'п': [[0,0,0],     [1,1,1],     [1,0,1],     [1,0,1],     [1,0,1]    ],
+    'р': [[0,0,0],     [1,1,0],     [1,0,1],     [1,1,0],     [1,0,0]    ],
+    'с': [[0,0,0],     [0,1,1],     [1,0,0],     [1,0,0],     [0,1,1]    ],
     'т': [[0,0,0,0,0], [1,1,1,1,1], [0,0,1,0,0], [0,0,1,0,0], [0,0,1,0,0]],
-    'у': [[0,0,0], [1,0,1], [1,1,1], [0,0,1], [1,1,0]],
-    'ф': [[0,1,0], [1,1,1], [1,1,1], [0,1,0], [0,1,0]],
-    'х': [[0,0,0], [1,0,1], [0,1,0], [1,0,1], [1,0,1]],
-    'ц': [[0,0,0], [1,0,1], [1,0,1], [1,1,1], [0,0,1]],
-    'ч': [[0,0,0], [1,0,1], [0,1,1], [0,0,1], [0,0,1]],
-    'ш': [[0,0,0], [1,0,1], [1,0,1], [1,0,1], [1,1,1]],
+    'у': [[0,0,0],     [1,0,1],     [1,1,1],     [0,0,1],     [1,1,0]    ],
+    'ф': [[0,1,0],     [1,1,1],     [1,1,1],     [0,1,0],     [0,1,0]    ],
+    'х': [[0,0,0],     [1,0,1],     [0,1,0],     [1,0,1],     [1,0,1]    ],
+    'ц': [[0,0,0],     [1,0,1],     [1,0,1],     [1,1,1],     [0,0,1]    ],
+    'ч': [[0,0,0],     [1,0,1],     [0,1,1],     [0,0,1],     [0,0,1]    ],
+    'ш': [[0,0,0],     [1,0,1],     [1,0,1],     [1,0,1],     [1,1,1]    ],
     'щ': [[0,0,0,0,0], [1,0,1,0,0], [1,0,1,0,0], [1,1,1,0,0], [0,0,0,1,1]],
-    'ъ': [[0,1,0], [0,1,0], [1,1,0], [1,0,1], [1,1,0]],
-    'ы': [[0,0,0], [1,0,1], [1,1,1], [1,0,1], [1,1,1]],
-    'ь': [[0,0,0], [1,0,0], [1,1,0], [1,0,1], [1,1,0]],
-    'э': [[0,0,0], [1,1,0], [0,1,1], [0,0,1], [1,1,0]],
+    'ъ': [[0,1,0],     [0,1,0],     [1,1,0],     [1,0,1],     [1,1,0]    ],
+    'ы': [[0,0,0],     [1,0,1],     [1,1,1],     [1,0,1],     [1,1,1]    ],
+    'ь': [[0,0,0],     [1,0,0],     [1,1,0],     [1,0,1],     [1,1,0]    ],
+    'э': [[0,0,0],     [1,1,0],     [0,1,1],     [0,0,1],     [1,1,0]    ],
     'ю': [[0,0,0,0,0], [1,0,1,1,0], [1,0,1,0,1], [1,0,1,0,1], [1,0,1,1,0]],
-    'я': [[0,0,0], [0,1,1], [1,0,1], [0,1,1], [1,0,1]],
+    'я': [[0,0,0],     [0,1,1],     [1,0,1],     [0,1,1],     [1,0,1]    ],
 
-    '1': [[0,1,0], [1,1,0], [0,1,0], [0,1,0], [1,1,1]],
-    '2': [[1,1,1], [0,0,1], [1,1,1], [1,0,0], [1,1,1]],
-    '3': [[1,1,1], [0,0,1], [0,1,1], [0,0,1], [1,1,1]],
-    '4': [[1,0,1], [1,0,1], [1,1,1], [0,0,1], [0,0,1]],
-    '5': [[1,1,1], [1,0,0], [1,1,1], [0,0,1], [1,1,1]],
-    '6': [[1,1,1], [1,0,0], [1,1,1], [1,0,1], [1,1,1]],
-    '7': [[1,1,1], [0,0,1], [0,1,0], [0,1,0], [0,1,0]],
-    '8': [[1,1,1], [1,0,1], [1,1,1], [1,0,1], [1,1,1]],
-    '9': [[1,1,1], [1,0,1], [1,1,1], [0,0,1], [1,1,1]],
-    '0': [[1,1,1], [1,0,1], [1,0,1], [1,0,1], [1,1,1]],
+    '1': [[0,1,0],     [1,1,0],     [0,1,0],     [0,1,0],     [1,1,1]    ],
+    '2': [[1,1,1],     [0,0,1],     [1,1,1],     [1,0,0],     [1,1,1]    ],
+    '3': [[1,1,1],     [0,0,1],     [0,1,1],     [0,0,1],     [1,1,1]    ],
+    '4': [[1,0,1],     [1,0,1],     [1,1,1],     [0,0,1],     [0,0,1]    ],
+    '5': [[1,1,1],     [1,0,0],     [1,1,1],     [0,0,1],     [1,1,1]    ],
+    '6': [[1,1,1],     [1,0,0],     [1,1,1],     [1,0,1],     [1,1,1]    ],
+    '7': [[1,1,1],     [0,0,1],     [0,1,0],     [0,1,0],     [0,1,0]    ],
+    '8': [[1,1,1],     [1,0,1],     [1,1,1],     [1,0,1],     [1,1,1]    ],
+    '9': [[1,1,1],     [1,0,1],     [1,1,1],     [0,0,1],     [1,1,1]    ],
+    '0': [[1,1,1],     [1,0,1],     [1,0,1],     [1,0,1],     [1,1,1]    ],
 
-    ',': [[0,0,0], [0,0,0], [0,0,0], [1,0,0], [0,1,0]],
-    '?': [[1,1,1], [0,0,1], [0,1,1], [0,0,0], [0,1,0]],
-    '-': [[0,0,0], [0,0,0], [1,1,1], [0,0,0], [0,0,0]],
-    '+': [[0,0,0], [0,1,0], [1,1,1], [0,1,0], [0,0,0]],
-    '.': [[0], [0], [0], [0], [1]],
-    '!': [[1], [1], [1], [0], [1]],
-    ':': [[0], [1], [0], [1], [0]],
-    ' ': [[0], [0], [0], [0], [0]]
+    ',': [[0,0,0],     [0,0,0],     [0,0,0],     [1,0,0],     [0,1,0]    ],
+    '?': [[1,1,1],     [0,0,1],     [0,1,1],     [0,0,0],     [0,1,0]    ],
+    '-': [[0,0,0],     [0,0,0],     [1,1,1],     [0,0,0],     [0,0,0]    ],
+    '+': [[0,0,0],     [0,1,0],     [1,1,1],     [0,1,0],     [0,0,0]    ],
+    '.': [[0],         [0],         [0],         [0],         [1]        ],
+    '!': [[1],         [1],         [1],         [0],         [1]        ],
+    ':': [[0],         [1],         [0],         [1],         [0]        ],
+    ' ': [[0],         [0],         [0],         [0],         [0]        ]
 }
 
 # Visual Easings
@@ -1158,12 +1163,12 @@ OK_TEXTS = [
     "Ok",
     "Yeah",
     "YEAH",
-    "Hell yeah",
     "Yep",
     "Sure",
     "Cool",
     "Right",
-    "You bet"
+    "You bet",
+    "Hell yeah"
 ]
 
 NO_TEXTS = [
@@ -1177,32 +1182,32 @@ NO_TEXTS = [
 
 CLOSE_BUTTON_RATING_TEXTS = {
     1: [
+        "Why do you keep me.",
         "You don't like Cassette :(",
-        "I remember that one star...",
-        "Why do you keep me."
+        "I remember that one star..."
     ],
 
     2: [
         "Meh.",
-        "One day you rated me... 2 stars...",
-        "I'm sad."
+        "I'm sad.",
+        "One day you rated me... 2 stars..."
     ],
     
     3: [
+        "3",
         "Close",
-        "3 stars",
-        "3"
+        "3 stars"
     ],
 
     4: [
+        "Good app.",
         "Cassette is cool.",
-        "You gave me 4 stars!!! :)",
-        "Good app."
+        "You gave me 4 stars!!! :)"
     ],
 
     5: [
         "Peak app.",
-        "I luv it!!!",
-        "#cassette"
+        "#cassette",
+        "I luv it!!!"
     ]
 }

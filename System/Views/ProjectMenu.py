@@ -69,7 +69,6 @@ from System.Services import (
 def normalize_text(text: str) -> str:
     return " ".join(text.casefold().split())
 
-
 def get_search_score(
         search_query:       str,
         project_identifier: str,
@@ -847,19 +846,7 @@ class MainMenu(QWidget):
             if not audio_window.exec():
                 return
 
-            composition.bpm = audio_window.get_bpm_value()
-
-            if audio_window.snapped_times:
-                composition.beats = audio_window.snapped_times
-
-            trim_settings = audio_window.get_trim_settings()
-
-            composition.trim_audio(
-                int(trim_settings["start_ms"]),
-                int(trim_settings["end_ms"]),
-                int(trim_settings["fade_in"]),
-                int(trim_settings["fade_out"])
-            )
+            self.refresh_tracks()
 
         except Exception as exception:
             Windows.ErrorWindow("Audio edit failed", str(exception)).exec()

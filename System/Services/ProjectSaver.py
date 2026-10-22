@@ -3,8 +3,11 @@ from __future__ import annotations
 import os
 import json
 import copy
+import numpy
 import shutil
 import random
+import tempfile
+import soundfile
 
 from loguru import logger
 
@@ -352,6 +355,8 @@ class BaseComposition:
         self.end_ms            = self.audio_settings.get("end_ms")
         self.fade_in_duration  = self.audio_settings.get("fade_in", 0)
         self.fade_out_duration = self.audio_settings.get("fade_out", 0)
+        self.fade_in_type      = self.audio_settings.get("fade_in_type", "fade")
+        self.fade_out_type     = self.audio_settings.get("fade_out_type", "fade")
         self.beats             = self.audio_settings.get("beats", [])
 
         self.glyphs = settings.get("glyphs", {})
@@ -400,8 +405,9 @@ class BaseComposition:
         full_duration_ms = get_audio_duration_ms(self.full_song_path)
         starts_at_zero   = self.start_ms <= Constants.CROP_TOLERANCE_MS
         ends_at_full     = abs(self.end_ms - full_duration_ms) <= Constants.CROP_TOLERANCE_MS
+        has_no_effects   = (int(self.fade_in_duration or 0) == 0 and int(self.fade_out_duration or 0) == 0)
 
-        return not (starts_at_zero and ends_at_full)
+        return not (starts_at_zero and ends_at_full and has_no_effects)
 
     def get_playback_audio_path(self) -> str:
         has_full    = os.path.exists(self.full_song_path)
@@ -426,56 +432,233 @@ class BaseComposition:
 
         return self.full_song_path
 
+    def apply_dsp_effects(
+            self,
+            data:          numpy.ndarray,
+            sample_rate:   int,
+            fade_in:       int,
+            fade_out:      int,
+            fade_in_type:  str,
+            fade_out_type: str
+        ) -> numpy.ndarray:
+
+        processed_data = numpy.array(data, copy = True)
+        total_samples  = len(processed_data)
+        minimum_speed  = 0.05
+
+        has_speed_intro = (fade_in_type == "speed" and fade_in > 0)
+        has_speed_outro = (fade_out_type == "speed" and fade_out > 0)
+
+        if has_speed_intro or has_speed_outro:
+            output_intro_samples = int(sample_rate * (fade_in / 1000.0)) if has_speed_intro else 0
+            source_intro_samples = int(output_intro_samples * (1.0 + minimum_speed) / 2.0) if has_speed_intro else 0
+
+            output_outro_samples = int(sample_rate * (fade_out / 1000.0)) if has_speed_outro else 0
+            source_outro_samples = int(output_outro_samples * (1.0 + minimum_speed) / 2.0) if has_speed_outro else 0
+
+            if source_intro_samples + source_outro_samples >= total_samples:
+                scale_ratio          = float(total_samples) / max(1.0, float(source_intro_samples + source_outro_samples))
+                output_intro_samples = int(output_intro_samples * scale_ratio)
+                source_intro_samples = int(source_intro_samples * scale_ratio)
+                output_outro_samples = int(output_outro_samples * scale_ratio)
+                source_outro_samples = int(source_outro_samples * scale_ratio)
+
+            source_steady_samples = total_samples - source_intro_samples - source_outro_samples
+            output_total_samples  = output_intro_samples + source_steady_samples + output_outro_samples
+
+            source_indices = numpy.empty(output_total_samples, dtype = numpy.float64)
+
+            if output_intro_samples > 0:
+                time_range                  = numpy.arange(output_intro_samples, dtype = numpy.float64)
+                time_fraction               = time_range / float(output_intro_samples)
+                source_indices[:output_intro_samples] = output_intro_samples * (minimum_speed * time_fraction + ((1.0 - minimum_speed) / 2.0) * (time_fraction ** 2))
+
+            steady_start_output = output_intro_samples
+            steady_end_output   = output_intro_samples + source_steady_samples
+
+            if source_steady_samples > 0:
+                steady_range = numpy.arange(source_steady_samples, dtype = numpy.float64)
+                source_indices[steady_start_output:steady_end_output] = source_intro_samples + steady_range
+
+            if output_outro_samples > 0:
+                time_range                 = numpy.arange(output_outro_samples, dtype = numpy.float64)
+                time_fraction              = time_range / float(output_outro_samples)
+                source_indices[steady_end_output:] = (source_intro_samples + source_steady_samples) + output_outro_samples * (time_fraction - ((1.0 - minimum_speed) / 2.0) * (time_fraction ** 2))
+
+            source_positions = numpy.arange(total_samples, dtype = numpy.float64)
+            resampled_audio  = numpy.empty((output_total_samples, processed_data.shape[1]), dtype = numpy.float32)
+
+            for channel in range(processed_data.shape[1]):
+                resampled_audio[:, channel] = numpy.interp(source_indices, source_positions, processed_data[:, channel])
+
+            processed_data = resampled_audio
+            total_samples  = len(processed_data)
+
+        if fade_in_type == "fade" and fade_in > 0:
+            fade_in_samples = min(total_samples, int(sample_rate * (fade_in / 1000.0)))
+            ramp            = numpy.linspace(0.0, 1.0, fade_in_samples, dtype = numpy.float32)[:, None]
+            processed_data[:fade_in_samples] *= ramp
+
+        elif fade_in_type == "filter" and fade_in > 0:
+            fade_in_samples = min(total_samples, int(sample_rate * (fade_in / 1000.0)))
+            progress        = numpy.linspace(0.0, 1.0, fade_in_samples, dtype = numpy.float32)
+            cutoff          = 300.0 + 11700.0 * (progress ** 2)
+            alpha           = numpy.clip(2.0 * numpy.pi * cutoff / sample_rate, 0.001, 0.999).astype(numpy.float32)
+
+            for channel in range(processed_data.shape[1]):
+                filtered_sample = 0.0
+
+                for sample_index in range(fade_in_samples):
+                    filtered_sample += alpha[sample_index] * (processed_data[sample_index, channel] - filtered_sample)
+                    processed_data[sample_index, channel] = filtered_sample
+
+        if fade_out_type == "fade" and fade_out > 0:
+            fade_out_samples = min(total_samples, int(sample_rate * (fade_out / 1000.0)))
+            ramp             = numpy.linspace(1.0, 0.0, fade_out_samples, dtype = numpy.float32)[:, None]
+            processed_data[-fade_out_samples:] *= ramp
+
+        elif fade_out_type == "filter" and fade_out > 0:
+            fade_out_samples = min(total_samples, int(sample_rate * (fade_out / 1000.0)))
+            progress         = numpy.linspace(1.0, 0.0, fade_out_samples, dtype = numpy.float32)
+            cutoff           = 300.0 + 11700.0 * (progress ** 2)
+            alpha            = numpy.clip(2.0 * numpy.pi * cutoff / sample_rate, 0.001, 0.999).astype(numpy.float32)
+            start_index      = total_samples - fade_out_samples
+
+            for channel in range(processed_data.shape[1]):
+                filtered_sample = float(processed_data[start_index, channel])
+
+                for sample_index in range(fade_out_samples):
+                    resolved_index   = start_index + sample_index
+                    filtered_sample += alpha[sample_index] * (processed_data[resolved_index, channel] - filtered_sample)
+                    processed_data[resolved_index, channel] = filtered_sample
+
+        return processed_data
+
     def export_segment(
             self,
-            input_path:  str,
-            output_path: str,
-            start_ms:    int,
-            end_ms:      int,
-            fade_in:     int = 0,
-            fade_out:    int = 0
+            input_path:    str,
+            output_path:   str,
+            start_ms:      int,
+            end_ms:        int,
+            fade_in:       int = 0,
+            fade_out:      int = 0,
+            fade_in_type:  str = "fade",
+            fade_out_type: str = "fade"
         ) -> None:
 
-        start_time   = start_ms / 1000.0
-        end_time     = end_ms / 1000.0
+        fade_in_duration  = int(fade_in or 0)
+        fade_out_duration = int(fade_out or 0)
+
+        is_pure_volume_fade = (fade_in_type == "fade" and fade_out_type == "fade")
+
+        if is_pure_volume_fade:
+            start_time   = start_ms / 1000.0
+            end_time     = end_ms / 1000.0
+            duration_sec = max(0.0, (end_ms - start_ms) / 1000.0)
+
+            filters = [
+                f"atrim=start={start_time}:end={end_time}",
+                "asetpts=PTS-STARTPTS",
+                "dynaudnorm"
+            ]
+
+            if fade_in_duration:
+                fade_in_sec = fade_in_duration / 1000.0
+                filters.append(f"afade=t=in:st=0:d={fade_in_sec}")
+
+            if fade_out_duration:
+                fade_out_sec = fade_out_duration / 1000.0
+                fade_start   = max(0.0, duration_sec - fade_out_sec)
+                filters.append(f"afade=t=out:st={fade_start}:d={fade_out_sec}")
+
+            audio_filter = ",".join(filters)
+
+            command = [
+                Constants.FFMPEG_PATH,
+                "-y",
+                "-v", "error",
+                "-i", input_path,
+                "-vn",
+                "-af", audio_filter,
+                "-c:a", "libopus",
+                "-ar", "48000",
+                output_path
+            ]
+
+            result = Utils.run_hidden(command)
+
+            if result.returncode != 0:
+                error_message = (result.stderr or "").strip()
+                logger.critical(error_message)
+
+                raise RuntimeError(error_message or "ffmpeg failed")
+
+            return
+
+        temporary_wav      = tempfile.NamedTemporaryFile(suffix = ".wav", delete = False)
+        temporary_wav_path = temporary_wav.name
+        temporary_wav.close()
+
         duration_sec = max(0.0, (end_ms - start_ms) / 1000.0)
 
-        filters = [
-            f"atrim=start={start_time}:end={end_time}",
-            "asetpts=PTS-STARTPTS",
-            "dynaudnorm"
-        ]
-
-        if fade_in:
-            fade_in_sec = fade_in / 1000.0
-            filters.append(f"afade=t=in:st=0:d={fade_in_sec}")
-
-        if fade_out:
-            fade_out_sec = fade_out / 1000.0
-            fade_start   = max(0.0, duration_sec - fade_out_sec)
-            filters.append(f"afade=t=out:st={fade_start}:d={fade_out_sec}")
-
-        audio_filter = ",".join(filters)
-
-        command = [
+        extract_command = [
             Constants.FFMPEG_PATH,
             "-y",
             "-v", "error",
+            "-ss", str(start_ms / 1000.0),
+            "-t", str(duration_sec),
             "-i", input_path,
             "-vn",
-            "-af", audio_filter,
+            "-af", "dynaudnorm",
+            "-c:a", "pcm_s16le",
+            "-ar", "48000",
+            temporary_wav_path
+        ]
+
+        result = Utils.run_hidden(extract_command)
+
+        if result.returncode != 0:
+            if os.path.exists(temporary_wav_path):
+                os.remove(temporary_wav_path)
+
+            error_message = (result.stderr or "").strip()
+            raise RuntimeError(error_message or "ffmpeg failed extracting temporary WAV")
+
+        audio_samples, sample_rate = soundfile.read(temporary_wav_path, dtype = "float32")
+
+        if audio_samples.ndim == 1:
+            audio_samples = numpy.column_stack((audio_samples, audio_samples))
+
+        processed_samples = self.apply_dsp_effects(
+            audio_samples,
+            sample_rate,
+            fade_in_duration,
+            fade_out_duration,
+            fade_in_type,
+            fade_out_type
+        )
+
+        soundfile.write(temporary_wav_path, processed_samples, sample_rate)
+
+        encode_command = [
+            Constants.FFMPEG_PATH,
+            "-y",
+            "-v", "error",
+            "-i", temporary_wav_path,
+            "-vn",
             "-c:a", "libopus",
             "-ar", "48000",
             output_path
         ]
 
-        result = Utils.run_hidden(command)
+        result = Utils.run_hidden(encode_command)
+
+        if os.path.exists(temporary_wav_path):
+            os.remove(temporary_wav_path)
 
         if result.returncode != 0:
             error_message = (result.stderr or "").strip()
-            logger.critical(error_message)
-
-            raise RuntimeError(error_message or "ffmpeg failed")
+            raise RuntimeError(error_message or "ffmpeg failed encoding processed Opus")
 
     def sorted_glyphs(self) -> tuple[list[dict], list[dict]]:
         singles = []
@@ -500,7 +683,9 @@ class BaseComposition:
             self.start_ms,
             self.end_ms,
             self.fade_in_duration,
-            self.fade_out_duration
+            self.fade_out_duration,
+            self.fade_in_type,
+            self.fade_out_type
         )
 
         if os.path.exists(self.cropped_song_path):
@@ -797,14 +982,16 @@ class Composition(BaseComposition):
             **self.cached_save_data,
             "audio": {
                 **self.cached_save_data.get("audio", {}),
-                "title":    title,
-                "artist":   artist,
-                "start_ms": self.start_ms,
-                "end_ms":   self.end_ms,
-                "bpm":      self.bpm,
-                "beats":    self.beats,
-                "fade_in":  self.fade_in_duration,
-                "fade_out": self.fade_out_duration
+                "title":         title,
+                "artist":        artist,
+                "start_ms":      self.start_ms,
+                "end_ms":        self.end_ms,
+                "bpm":           self.bpm,
+                "beats":         self.beats,
+                "fade_in":       self.fade_in_duration,
+                "fade_out":      self.fade_out_duration,
+                "fade_in_type":  self.fade_in_type,
+                "fade_out_type": self.fade_out_type
             },
             "progress": self.progress,
             "model":    self.model,
@@ -857,10 +1044,12 @@ class Composition(BaseComposition):
 
     def trim_audio(
             self,
-            start_ms: int,
-            end_ms:   int,
-            fade_in:  int = 0,
-            fade_out: int = 0
+            start_ms:      int,
+            end_ms:        int,
+            fade_in:       int = 0,
+            fade_out:      int = 0,
+            fade_in_type:  str = "fade",
+            fade_out_type: str = "fade"
         ) -> None:
 
         old_start_ms = self.start_ms or 0
@@ -869,6 +1058,8 @@ class Composition(BaseComposition):
         self.end_ms            = end_ms
         self.fade_in_duration  = fade_in
         self.fade_out_duration = fade_out
+        self.fade_in_type      = fade_in_type
+        self.fade_out_type     = fade_out_type
 
         kept_glyphs  = {}
         removed_keys = []

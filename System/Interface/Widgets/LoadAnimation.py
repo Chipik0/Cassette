@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import math
 import time
+import math
+import numpy
 
 from enum import Enum
 
@@ -12,6 +13,7 @@ from PyQt6.QtCore import (
 
 from PyQt6.QtGui import (
     QPen,
+    QBrush,
     QColor,
     QPainter,
     QHideEvent,
@@ -26,13 +28,13 @@ from PyQt6.QtWidgets import (
     QSizePolicy
 )
 
+from System.Common import Constants
+
+from System.Interface import Timing
 from System.Interface.Animation import (
     Lifecycle,
     LoomEngine
 )
-
-from System.Interface import Timing
-from System.Common import    Constants
 
 # Wave Types
 
@@ -111,11 +113,31 @@ class HeartbeatSynthesizer:
 
 class WavePathAssembler:
     @staticmethod
+    def calculate_blended_offset(
+            pixel_index:         int,
+            samples:             list[float] | numpy.ndarray,
+            flatten_ratio:       float,
+            transition_ratio:    float,
+            effective_amplitude: float,
+            wavelength_px:       float,
+            sine_phase:          float
+        ) -> float:
+
+        sample_count = len(samples)
+        pulse_sample = samples[pixel_index] if pixel_index < sample_count else 0.0
+        pulse_offset = pulse_sample * flatten_ratio
+
+        spatial_angle = (pixel_index / wavelength_px) * 2.0 * math.pi - sine_phase
+        sine_offset   = math.sin(spatial_angle) * effective_amplitude * flatten_ratio
+
+        return pulse_offset * (1.0 - transition_ratio) + sine_offset * transition_ratio
+
+    @staticmethod
     def append_blended_segment(
             path:                QPainterPath,
             start_index:         int,
             end_index:           int,
-            samples:             list[float],
+            samples:             list[float] | numpy.ndarray,
             center_y:            float,
             flatten_ratio:       float,
             transition_ratio:    float,
@@ -127,21 +149,87 @@ class WavePathAssembler:
         if start_index > end_index:
             return
 
-        def calculate_blended_y(pixel_index: int) -> float:
-            pulse_offset = samples[pixel_index] * flatten_ratio
-            pulse_y      = center_y - pulse_offset
+        initial_offset = WavePathAssembler.calculate_blended_offset(
+            start_index,
+            samples,
+            flatten_ratio,
+            transition_ratio,
+            effective_amplitude,
+            wavelength_px,
+            sine_phase
+        )
 
-            spatial_angle = (pixel_index / wavelength_px) * 2.0 * math.pi - sine_phase
-            sine_offset   = math.sin(spatial_angle) * effective_amplitude * flatten_ratio
-            sine_y        = center_y - sine_offset
-
-            return pulse_y * (1.0 - transition_ratio) + sine_y * transition_ratio
-
-        initial_y = calculate_blended_y(start_index)
-        path.moveTo(float(start_index), initial_y)
+        path.moveTo(float(start_index), center_y - initial_offset)
 
         for index in range(start_index + 1, end_index + 1):
-            path.lineTo(float(index), calculate_blended_y(index))
+            offset = WavePathAssembler.calculate_blended_offset(
+                index,
+                samples,
+                flatten_ratio,
+                transition_ratio,
+                effective_amplitude,
+                wavelength_px,
+                sine_phase
+            )
+
+            path.lineTo(float(index), center_y - offset)
+
+    @staticmethod
+    def append_contour_segment(
+            path:                QPainterPath,
+            start_index:         int,
+            end_index:           int,
+            samples:             list[float] | numpy.ndarray,
+            contour_amplitudes:  numpy.ndarray,
+            center_y:            float,
+            flatten_ratio:       float,
+            transition_ratio:    float,
+            effective_amplitude: float,
+            wavelength_px:       float,
+            sine_phase:          float,
+            contour_ratio:       float,
+            max_contour_height:  float
+        ) -> None:
+
+        if start_index > end_index:
+            return
+
+        contour_size = len(contour_amplitudes)
+
+        top_points:    list[tuple[float, float]] = []
+        bottom_points: list[tuple[float, float]] = []
+
+        for pixel_index in range(start_index, end_index + 1):
+            base_wave_offset = WavePathAssembler.calculate_blended_offset(
+                pixel_index,
+                samples,
+                flatten_ratio,
+                transition_ratio,
+                effective_amplitude,
+                wavelength_px,
+                sine_phase
+            )
+
+            wave_component = base_wave_offset * (1.0 - contour_ratio)
+
+            normalized_amp = float(contour_amplitudes[pixel_index]) if pixel_index < contour_size else 0.0
+            contour_offset = normalized_amp * max_contour_height * contour_ratio
+
+            y_top    = center_y - wave_component - contour_offset
+            y_bottom = center_y - wave_component + contour_offset
+
+            top_points.append((float(pixel_index), y_top))
+            bottom_points.append((float(pixel_index), y_bottom))
+
+        path.moveTo(top_points[0][0], top_points[0][1])
+
+        for x_coord, y_coord in top_points[1:]:
+            path.lineTo(x_coord, y_coord)
+
+        for x_coord, y_coord in reversed(bottom_points):
+            path.lineTo(x_coord, y_coord)
+
+        path.closeSubpath()
 
 # Pulse Status Widget
 
@@ -165,6 +253,10 @@ class PulseStatusWidget(Lifecycle.LoomAnimationMixin, QWidget):
         self.manual_beat_mode         = False
         self.manual_beat_active       = False
 
+        self.target_contour             = numpy.empty(0, dtype = numpy.float32)
+        self.cached_resampled_contour   = None
+        self.cached_contour_source_size = 0
+
         self.simulation_timer = Timing.Timer(
             interval = Constants.FPS_60,
             callback = self.advance_simulation,
@@ -174,6 +266,8 @@ class PulseStatusWidget(Lifecycle.LoomAnimationMixin, QWidget):
         self.setup_user_interface()
         self.setup_animations()
 
+    # User Interface
+
     def setup_user_interface(self) -> None:
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setSizePolicy(
@@ -182,6 +276,8 @@ class PulseStatusWidget(Lifecycle.LoomAnimationMixin, QWidget):
         )
 
         self.setMinimumHeight(64)
+
+    # Animations
 
     def setup_animations(self) -> None:
         self.color_handle = LoomEngine.ui_engine.bind(
@@ -230,8 +326,69 @@ class PulseStatusWidget(Lifecycle.LoomAnimationMixin, QWidget):
             on_change  = self.on_property_update
         )
 
+        self.contour_handle = LoomEngine.ui_engine.bind(
+            owner      = self,
+            name       = "contour_ratio",
+            base_value = 0.0,
+            mix_mode   = LoomEngine.MixMode.REPLACE,
+            on_change  = self.on_property_update
+        )
+
     def on_property_update(self, value: object):
         self.update()
+
+    # Contour Management
+
+    def get_resampled_contour(self, target_width: int) -> numpy.ndarray:
+        if self.target_contour.size == 0 or target_width <= 0:
+            return numpy.empty(0, dtype = numpy.float32)
+
+        if (
+            self.cached_resampled_contour is not None and
+            self.cached_resampled_contour.size == target_width and
+            self.cached_contour_source_size == self.target_contour.size
+        ):
+            return self.cached_resampled_contour
+
+        source_indices = numpy.linspace(0.0, float(self.target_contour.size - 1), target_width)
+        x_indices      = numpy.arange(self.target_contour.size, dtype = numpy.float32)
+
+        self.cached_resampled_contour   = numpy.interp(source_indices, x_indices, self.target_contour).astype(numpy.float32)
+        self.cached_contour_source_size = self.target_contour.size
+
+        return self.cached_resampled_contour
+
+    def transition_to_contour(
+            self,
+            amplitudes:      numpy.ndarray | list[float],
+            duration_ms:     int    = 700,
+            easing_function: object = LoomEngine.Easing.ease_out_cubic
+        ) -> None:
+
+        self.target_contour             = numpy.asarray(amplitudes, dtype = numpy.float32)
+        self.cached_resampled_contour   = None
+        self.cached_contour_source_size = 0
+
+        self.transition_to_sine(duration_ms = duration_ms, easing_function = easing_function)
+        self.set_amplitude(amplitude = 6.0, duration_ms = duration_ms, easing_function = easing_function)
+
+        self.contour_handle.set_base(0.0)
+        self.contour_handle.set_target(
+            value                      = 1.0,
+            duration_ms                = duration_ms,
+            easing_function            = easing_function,
+            multiply_duration_by_speed = False
+        )
+
+    def reset_contour(self) -> None:
+        self.target_contour             = numpy.empty(0, dtype = numpy.float32)
+        self.cached_resampled_contour   = None
+        self.cached_contour_source_size = 0
+
+        self.contour_handle.stop_targeting()
+        self.contour_handle.set_base(0.0)
+
+    # Lifecycle Events
 
     def showEvent(self, event: QShowEvent) -> None:
         super().showEvent(event)
@@ -262,17 +419,21 @@ class PulseStatusWidget(Lifecycle.LoomAnimationMixin, QWidget):
 
         if current_length == 0:
             self.buffer_values = [0.0] * target_width
+
             return
 
         if target_width > current_length:
             expansion = [0.0] * (target_width - current_length)
             self.buffer_values.extend(expansion)
+
             return
 
         self.buffer_values = self.buffer_values[:target_width]
 
         if self.sweep_position >= target_width:
             self.sweep_position = 0.0
+
+    # Simulation
 
     def advance_simulation(self) -> None:
         current_time              = time.perf_counter()
@@ -347,6 +508,8 @@ class PulseStatusWidget(Lifecycle.LoomAnimationMixin, QWidget):
         angular_velocity = current_speed * 4.0 * math.pi
         self.sine_phase  = (self.sine_phase + angular_velocity * delta_time) % (2.0 * math.pi)
 
+    # Painting
+
     def paintEvent(self, event: QPaintEvent) -> None:
         current_width  = self.width()
         current_height = self.height()
@@ -372,7 +535,8 @@ class PulseStatusWidget(Lifecycle.LoomAnimationMixin, QWidget):
             center_y,
             flatten_ratio,
             transition_ratio,
-            effective_amplitude
+            effective_amplitude,
+            current_color
         )
 
     def paint_blended_wave(
@@ -382,7 +546,8 @@ class PulseStatusWidget(Lifecycle.LoomAnimationMixin, QWidget):
             center_y:            float,
             flatten_ratio:       float,
             transition_ratio:    float,
-            effective_amplitude: float
+            effective_amplitude: float,
+            current_color:       QColor
         ) -> None:
 
         buffer_length = len(self.buffer_values)
@@ -390,9 +555,44 @@ class PulseStatusWidget(Lifecycle.LoomAnimationMixin, QWidget):
         if buffer_length == 0:
             return
 
-        effective_gap = int(self.erase_gap_px * (1.0 - transition_ratio))
+        contour_ratio = float(self.contour_handle.value)
 
-        wave_path = QPainterPath()
+        if contour_ratio > 0.001 and self.target_contour.size > 0:
+            wave_path = QPainterPath()
+
+            fill_color = QColor(current_color)
+            fill_alpha = int(45.0 * contour_ratio * (current_color.alpha() / 255.0))
+            fill_color.setAlpha(fill_alpha)
+
+            painter.setBrush(QBrush(fill_color))
+
+            max_contour_height = center_y * 0.90
+            resampled_contour  = self.get_resampled_contour(total_width)
+
+            WavePathAssembler.append_contour_segment(
+                path                = wave_path,
+                start_index         = 0,
+                end_index           = total_width - 1,
+                samples             = self.buffer_values,
+                contour_amplitudes  = resampled_contour,
+                center_y            = center_y,
+                flatten_ratio       = flatten_ratio,
+                transition_ratio    = transition_ratio,
+                effective_amplitude = effective_amplitude,
+                wavelength_px       = self.wavelength_px,
+                sine_phase          = self.sine_phase,
+                contour_ratio       = contour_ratio,
+                max_contour_height  = max_contour_height
+            )
+
+            painter.drawPath(wave_path)
+
+            return
+
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+
+        effective_gap = int(self.erase_gap_px * (1.0 - transition_ratio))
+        wave_path     = QPainterPath()
 
         if effective_gap <= 1:
             WavePathAssembler.append_blended_segment(
@@ -456,6 +656,8 @@ class PulseStatusWidget(Lifecycle.LoomAnimationMixin, QWidget):
 
         painter.drawPath(wave_path)
 
+    # API
+
     def set_mode(self, mode: WaveMode) -> None:
         self.wave_mode = mode
 
@@ -476,6 +678,7 @@ class PulseStatusWidget(Lifecycle.LoomAnimationMixin, QWidget):
 
         if duration_ms <= 0:
             self.transition_handle.set_base(target_value)
+
             return
 
         self.transition_handle.set_target(
@@ -513,6 +716,7 @@ class PulseStatusWidget(Lifecycle.LoomAnimationMixin, QWidget):
 
         if duration_ms <= 0:
             self.amplitude_handle.set_base(float(amplitude))
+
             return
 
         self.amplitude_handle.set_target(
@@ -547,6 +751,7 @@ class PulseStatusWidget(Lifecycle.LoomAnimationMixin, QWidget):
 
         if duration_ms <= 0:
             self.beats_per_minute_handle.set_base(float(beats_per_minute))
+
             return
 
         self.beats_per_minute_handle.set_target(
@@ -570,6 +775,7 @@ class PulseStatusWidget(Lifecycle.LoomAnimationMixin, QWidget):
         if duration_ms <= 0:
             self.beats_per_minute_handle.set_base(target_bpm)
             self.sine_speed_handle.set_base(target_sine_speed)
+
             return
 
         self.beats_per_minute_handle.set_target(
@@ -594,6 +800,7 @@ class PulseStatusWidget(Lifecycle.LoomAnimationMixin, QWidget):
 
         if duration_ms <= 0:
             self.flatten_handle.set_base(0.0)
+
             return
 
         self.flatten_handle.set_target(
@@ -611,6 +818,7 @@ class PulseStatusWidget(Lifecycle.LoomAnimationMixin, QWidget):
 
         if duration_ms <= 0:
             self.flatten_handle.set_base(1.0)
+
             return
 
         self.flatten_handle.set_target(
@@ -630,6 +838,7 @@ class PulseStatusWidget(Lifecycle.LoomAnimationMixin, QWidget):
 
         if duration_ms <= 0:
             self.color_handle.set_base(target_color)
+
             return
 
         self.color_handle.set_target(
@@ -649,6 +858,7 @@ class PulseStatusWidget(Lifecycle.LoomAnimationMixin, QWidget):
 
         if duration_ms <= 0:
             self.color_handle.set_base(target_color)
+
             return
 
         self.color_handle.set_target(
@@ -665,8 +875,8 @@ class PulseStatusWidget(Lifecycle.LoomAnimationMixin, QWidget):
         ) -> None:
 
         current_color = self.color_handle.value
-        
-        target_color  = QColor(
+
+        target_color = QColor(
             current_color.red(),
             current_color.green(),
             current_color.blue(),
@@ -675,6 +885,7 @@ class PulseStatusWidget(Lifecycle.LoomAnimationMixin, QWidget):
 
         if duration_ms <= 0:
             self.color_handle.set_base(target_color)
+
             return
 
         self.color_handle.set_target(
@@ -700,6 +911,7 @@ class PulseStatusWidget(Lifecycle.LoomAnimationMixin, QWidget):
 
         if duration_ms <= 0:
             self.color_handle.set_base(target_color)
+
             return
 
         self.color_handle.set_target(

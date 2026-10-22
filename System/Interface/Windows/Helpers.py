@@ -5,7 +5,11 @@ from PyQt6.QtWidgets import (
     QVBoxLayout
 )
 
-from System.Common    import Styles
+from System.Common    import (
+    Utils,
+    Styles
+)
+
 from System.Interface import Widgets
 
 # Helpers
@@ -37,5 +41,6 @@ def make_fade_textbox(placeholder: str) -> Widgets.Textbox:
     textbox = Widgets.Textbox("number", 0, 5000, placeholder = placeholder)
     textbox.setStyleSheet(Styles.Controls.FloatingTextBox)
     textbox.setFixedHeight(32)
+    textbox.setFont(Utils.NType(10))
 
     return textbox

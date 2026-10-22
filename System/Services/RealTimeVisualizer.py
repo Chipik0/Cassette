@@ -417,8 +417,7 @@ class GlyphSyncer(QObject):
 
                     current_speed = Player.player.speed
 
-                    if current_speed != 1.0:
-                        self.set_speed(current_speed)
+                    self.set_speed(current_speed)
 
                     if Player.player.is_playing:
                         current_position_ms = max(0, int(Player.player.get_position()))
@@ -710,22 +709,25 @@ class GlyphSyncer(QObject):
     def full_load(self, glyphs_dictionary: dict) -> None:
         if glyphs_dictionary is None:
             glyphs_dictionary = {}
-
+    
         enriched_list: list = []
-
+    
         for glyph_identifier_key, glyph_item in glyphs_dictionary.items():
             item_copy: dict = create_enriched_glyph_data(
                 glyph_identifier = str(glyph_identifier_key),
                 glyph_content    = glyph_item,
                 composition      = self.composition
             )
-
+    
             item_copy["id"] = glyph_identifier_key
-
+    
             enriched_list.append(item_copy)
-
+    
         self.send_payload({"action": "load", "glyphs": enriched_list})
         self.last_synced = copy.deepcopy({str(key): value for key, value in glyphs_dictionary.items()})
+    
+        current_speed = Player.player.speed
+        self.set_speed(current_speed)
 
     # Playback Control
 

@@ -165,7 +165,7 @@ class ImportWindow(BPMEditorBase):
 
         self.move_start_animation()
         self.start_shake()
-        
+
         event.acceptProposedAction()
 
     def dragLeaveEvent(self, event: object) -> None:
@@ -247,6 +247,7 @@ class ImportWindow(BPMEditorBase):
     def accept_callback(self) -> None:
         if not self.validate_trim():
             self.ok_button.start_glitch()
+
             return
 
         try:
@@ -258,14 +259,17 @@ class ImportWindow(BPMEditorBase):
 
         except Encoder.ZeroGlyphsError:
             ErrorWindow("No glyphs?", "The save file doesn't contain any valid glyphs. File may be corrupted.").exec()
+
             return
 
         except Encoder.LabelsNoModelError:
             ErrorWindow("Woops.", "Unable to determine the model from the save file. File may be corrupted.").exec()
+
             return
 
         except Encoder.UnknownFileFormatError:
             ErrorWindow("Woops.", "Unknown file format. Make sure you are importing a valid save file.").exec()
+
             return
 
         bpm_settings = self.get_bpm_settings()
@@ -273,12 +277,14 @@ class ImportWindow(BPMEditorBase):
         self.saved_settings = {
             "model": model,
             "audio": {
-                "bpm":      bpm_settings["bpm"],
-                "beats":    bpm_settings["beats"],
-                "start_ms": self.trim_widget.start_time_sec * 1000,
-                "end_ms":   self.trim_widget.end_time_sec   * 1000,
-                "fade_in":  self.fade_in_textbox.text(),
-                "fade_out": self.fade_out_textbox.text()
+                "bpm":           bpm_settings["bpm"],
+                "beats":         bpm_settings["beats"],
+                "start_ms":      self.trim_widget.start_time_sec * 1000,
+                "end_ms":        self.trim_widget.end_time_sec   * 1000,
+                "fade_in":       self.fade_in_textbox.text(),
+                "fade_out":      self.fade_out_textbox.text(),
+                "fade_in_type":  self.fade_in_selector.current_text().lower(),
+                "fade_out_type": self.fade_out_selector.current_text().lower()
             },
             "glyphs": glyphs
         }

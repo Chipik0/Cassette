@@ -30,6 +30,7 @@ from PyQt6.QtWidgets import (
 )
 
 from System.Common import (
+    Utils,
     Styles,
     Constants
 )
@@ -44,14 +45,14 @@ from System.Interface import (
     Widgets
 )
 
-from System.Interface.Animation                 import LoomEngine
-from System.Interface.Windows.ErrorWindow       import ErrorWindow
-from System.Interface.Windows.FloatingWindowGPU import FloatingWindowGPU
-
-from System.Interface.Windows.Helpers import (
+from System.Interface.Animation           import LoomEngine
+from System.Interface.Windows.ErrorWindow import ErrorWindow
+from System.Interface.Windows.Helpers     import (
     make_fade_textbox,
     make_time_textbox
 )
+
+from System.Interface.Windows.FloatingWindowGPU import FloatingWindowGPU
 
 # Pipeline
 
@@ -61,7 +62,7 @@ class AudioLoadingDialog(FloatingWindowGPU):
             worker:            QObject,
             finished_callback: object,
             error_callback:    object,
-            priority:          QThread.Priority = QThread.Priority.InheritPriority
+            priority:          QThread.Priority = QThread.Priority.LowPriority
         ) -> QThread:
 
         thread = QThread(self)
@@ -89,7 +90,8 @@ class AudioLoadingDialog(FloatingWindowGPU):
         self.prepare_thread = self.launch_worker_thread(
             self.prepare_worker,
             self.on_prepare_success,
-            self.on_load_failed
+            self.on_load_failed,
+            QThread.Priority.LowPriority
         )
 
         self.load_thread = None
@@ -148,6 +150,7 @@ class AudioLoadingDialog(FloatingWindowGPU):
 
         if not threads_to_wait:
             self.safe_delete_cache()
+
             return
 
         self.wait_and_cleanup(threads_to_wait)
@@ -192,6 +195,12 @@ class AudioEditorBase(AudioLoadingDialog):
         self.fade_in_textbox    = make_fade_textbox("Fade in (ms)")
         self.fade_out_textbox   = make_fade_textbox("Fade out (ms)")
 
+        self.fade_in_selector   = Widgets.Selector(["Fade", "Filter", "Speed"], default_index = 0)
+        self.fade_out_selector  = Widgets.Selector(["Speed", "Filter", "Fade"], default_index  = 2)
+
+        self.configure_compact_selector(self.fade_in_selector)
+        self.configure_compact_selector(self.fade_out_selector)
+
         self.start_time_textbox.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.end_time_textbox.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.fade_out_textbox.setAlignment(Qt.AlignmentFlag.AlignRight)
@@ -217,7 +226,24 @@ class AudioEditorBase(AudioLoadingDialog):
         self.trim_widget.regionChanged.connect(self.update_textboxes)
         self.end_time_textbox.safeTextChanged.connect(self.edit_end_time)
         self.start_time_textbox.safeTextChanged.connect(self.edit_start_time)
+        self.fade_in_selector.selectionChanged.connect(self.on_effect_selector_changed)
+        self.fade_out_selector.selectionChanged.connect(self.on_effect_selector_changed)
         self.play_button.clicked.connect(self.toggle_playback)
+
+    def configure_compact_selector(
+            self,
+            selector: Widgets.Selector,
+            width_px: int = 180
+        ) -> None:
+
+        selector_font = Utils.NType(10)
+
+        selector.setFont(selector_font)
+        selector.setFixedWidth(width_px)
+        selector.setFixedHeight(32)
+
+        selector.strip.setFixedWidth(width_px)
+        selector.strip.setFixedHeight(32)
 
     def setup_action_buttons(
             self,
@@ -235,11 +261,18 @@ class AudioEditorBase(AudioLoadingDialog):
     def build_playback_row(self) -> QHBoxLayout:
         row_layout = QHBoxLayout()
 
-        row_layout.addWidget(self.start_time_textbox)
-        row_layout.addWidget(self.fade_in_textbox)
-        row_layout.addWidget(self.play_button)
-        row_layout.addWidget(self.fade_out_textbox)
-        row_layout.addWidget(self.end_time_textbox)
+        row_layout.setContentsMargins(0, 0, 0, 0)
+        row_layout.setSpacing(12)
+
+        center = Qt.AlignmentFlag.AlignVCenter
+
+        row_layout.addWidget(self.start_time_textbox, 0, center)
+        row_layout.addWidget(self.fade_in_selector,   0, center)
+        row_layout.addWidget(self.fade_in_textbox,    0, center)
+        row_layout.addWidget(self.play_button,        0, center)
+        row_layout.addWidget(self.fade_out_textbox,   0, center)
+        row_layout.addWidget(self.fade_out_selector,  0, center)
+        row_layout.addWidget(self.end_time_textbox,   0, center)
 
         return row_layout
 
@@ -251,9 +284,15 @@ class AudioEditorBase(AudioLoadingDialog):
 
     def on_load_finished(self, result: tuple) -> None:
         try:
-            data, sample_rate, waveform_data = result
+            if len(result) == 4:
+                data, sample_rate, waveform_data, peak_amplitude = result
+
+            else:
+                data, sample_rate, waveform_data = result
+                peak_amplitude = None
 
             def on_audio_ready_callback() -> None:
+                Player.ui_player.play_sound("Alerts/AudioLoaded")
                 self.trim_widget.set_data(data, sample_rate, waveform_data)
 
                 self.end_time_textbox.max_number = self.trim_widget.duration_sec
@@ -264,7 +303,12 @@ class AudioEditorBase(AudioLoadingDialog):
                 self.play_button.setEnabled(True)
                 self.on_audio_ready()
 
-            self.player.load_audio_from_data(data, sample_rate, on_ready = on_audio_ready_callback)
+            self.player.load_audio_from_data(
+                data           = data,
+                sample_rate    = sample_rate,
+                on_ready       = on_audio_ready_callback,
+                peak_amplitude = peak_amplitude
+            )
 
         except Exception as error:
             self.trim_widget.show_error()
@@ -319,6 +363,89 @@ class AudioEditorBase(AudioLoadingDialog):
 
         self.start_time_textbox.max_number = end_seconds - 1
 
+    def on_effect_selector_changed(self, *arguments: object) -> None:
+        if not self.player.is_playing:
+            return
+
+        current_position_ms = self.player.get_position()
+        self.apply_preview_effects(current_position_ms, force = True)
+
+    def reset_preview_effects(self) -> None:
+        self.player.set_volume(1.0, duration_ms = 0)
+        self.player.set_speed(1.0, duration_ms = 0, update_base = False)
+        self.player.set_passes([], mix = 0.0, duration_ms = 0)
+
+    def apply_preview_effects(
+            self,
+            position_ms: float,
+            force:       bool = False
+        ) -> None:
+
+        start_ms = self.trim_widget.start_time_sec * 1000.0
+        end_ms   = self.trim_widget.end_time_sec   * 1000.0
+
+        elapsed_ms   = max(0.0, position_ms - start_ms)
+        remaining_ms = max(0.0, end_ms - position_ms)
+
+        fade_in_ms  = float(self.fade_in_textbox.text()  or 0)
+        fade_out_ms = float(self.fade_out_textbox.text() or 0)
+
+        fade_in_type  = self.fade_in_selector.current_text().lower()
+        fade_out_type = self.fade_out_selector.current_text().lower()
+
+        volume = 1.0
+
+        if fade_in_type == "fade" and fade_in_ms > 0 and elapsed_ms < fade_in_ms:
+            volume *= (elapsed_ms / fade_in_ms)
+
+        if fade_out_type == "fade" and fade_out_ms > 0 and remaining_ms < fade_out_ms:
+            volume *= (remaining_ms / fade_out_ms)
+
+        target_volume = max(0.0, min(1.0, volume))
+        self.player.set_volume(target_volume, duration_ms = 0)
+
+        filter_in  = 0.0
+        filter_out = 0.0
+
+        if fade_in_type == "filter" and fade_in_ms > 0 and elapsed_ms < fade_in_ms:
+            filter_in = 1.0 - (elapsed_ms / fade_in_ms)
+
+        if fade_out_type == "filter" and fade_out_ms > 0 and remaining_ms < fade_out_ms:
+            filter_out = 1.0 - (remaining_ms / fade_out_ms)
+
+        filter_factor = max(filter_in, filter_out)
+
+        if filter_factor > 0.01:
+            cutoff_frequency = 250.0 + (1.0 - filter_factor) * 4500.0
+            self.player.set_passes([cutoff_frequency], q = 1.2, mix = filter_factor, gain = 1.0, duration_ms = 0)
+
+        elif force or self.player.pass_mix_property.value > 0.0:
+            self.player.set_passes([], mix = 0.0, duration_ms = 0)
+
+        minimum_speed = 0.08
+        speed_in      = 1.0
+        speed_out     = 1.0
+
+        if fade_in_type == "speed" and fade_in_ms > 0:
+            audio_intro_threshold = ((1.0 + minimum_speed) / 2.0) * fade_in_ms
+
+            if elapsed_ms < audio_intro_threshold:
+                speed_ratio = elapsed_ms / fade_in_ms
+                speed_in    = math.sqrt(minimum_speed ** 2 + 2.0 * (1.0 - minimum_speed) * speed_ratio)
+
+        if fade_out_type == "speed" and fade_out_ms > 0:
+            audio_outro_threshold = ((1.0 + minimum_speed) / 2.0) * fade_out_ms
+
+            if remaining_ms < audio_outro_threshold:
+                speed_ratio = remaining_ms / fade_out_ms
+                speed_out   = math.sqrt(minimum_speed ** 2 + 2.0 * (1.0 - minimum_speed) * speed_ratio)
+
+        target_speed = min(speed_in, speed_out)
+        target_speed = max(minimum_speed, min(1.0, target_speed))
+
+        if force or abs(self.player.speed - target_speed) > 0.015:
+            self.player.set_speed(target_speed, duration_ms = 0, update_base = False)
+
     def toggle_playback(self) -> None:
         if self.player.is_playing:
             self.stop_playback()
@@ -334,13 +461,15 @@ class AudioEditorBase(AudioLoadingDialog):
             current_position = self.trim_widget.start_time_sec
             self.trim_widget.set_playback_position(current_position)
 
-        self.player.play(current_position * 1000)
+        self.apply_preview_effects(current_position * 1000.0, force = True)
+        self.player.play(current_position * 1000.0)
         self.play_button.setIcon(self.pause_icon)
         self.trim_widget.set_is_playing(True)
         self.playback_timer.start()
 
     def stop_playback(self) -> None:
         self.player.stop()
+        self.reset_preview_effects()
         self.play_button.setIcon(self.play_icon)
         self.trim_widget.set_is_playing(False)
         self.playback_timer.stop()
@@ -349,6 +478,7 @@ class AudioEditorBase(AudioLoadingDialog):
         if not self.player.is_playing:
             self.trim_widget.set_playback_position(0)
             self.stop_playback()
+
             return
 
         current_position_ms = self.player.get_position()
@@ -356,27 +486,33 @@ class AudioEditorBase(AudioLoadingDialog):
         if current_position_ms > self.trim_widget.end_time_sec * 1000:
             self.trim_widget.set_playback_position(self.trim_widget.start_time_sec)
             self.toggle_playback()
+
             return
 
-        self.trim_widget.set_playback_position(current_position_ms / 1000)
+        self.apply_preview_effects(current_position_ms)
+        self.trim_widget.set_playback_position(current_position_ms / 1000.0)
 
     def validate_trim(self) -> bool:
         if self.end_time_textbox.is_not_valid() or not self.end_time_textbox.text():
             self.end_time_textbox.start_glitch(False)
+
             return False
 
         if self.start_time_textbox.text() is None:
             self.start_time_textbox.start_glitch(False)
+
             return False
 
         return True
 
     def get_trim_settings(self) -> dict:
         return {
-            "start_ms": self.trim_widget.start_time_sec * 1000,
-            "end_ms":   self.trim_widget.end_time_sec   * 1000,
-            "fade_in":  self.fade_in_textbox.text(),
-            "fade_out": self.fade_out_textbox.text()
+            "start_ms":      self.trim_widget.start_time_sec * 1000.0,
+            "end_ms":        self.trim_widget.end_time_sec   * 1000.0,
+            "fade_in":       int(self.fade_in_textbox.text() or 0),
+            "fade_out":      int(self.fade_out_textbox.text() or 0),
+            "fade_in_type":  self.fade_in_selector.current_text().lower(),
+            "fade_out_type": self.fade_out_selector.current_text().lower()
         }
 
     def get_threads(self) -> list[QThread | None]:
@@ -407,6 +543,7 @@ class AudioEditorBase(AudioLoadingDialog):
                 self.toggle_playback()
 
             event.accept()
+
             return
 
         super().keyPressEvent(event)
@@ -421,6 +558,7 @@ class AudioEditorBase(AudioLoadingDialog):
 
     def cleanup_audio(self) -> None:
         self.playback_timer.stop()
+        self.reset_preview_effects()
         self.trim_widget.audio_data = None
 
         if self.player.is_playing:
@@ -455,7 +593,7 @@ class BPMEditorBase(AudioEditorBase):
         self.bpm_input = Widgets.Textbox("number", 1, 400, placeholder = "Counting BPM... 120")
         self.bpm_input.setMaximumWidth(176)
         self.bpm_input.setFixedHeight(Styles.Metrics.ElementHeight)
-        self.bpm_input.setStyleSheet(Styles.Controls.FloatingTextBoxRound)
+        self.bpm_input.setStyleSheet(Styles.Controls.FloatingTextBox)
 
         self.bpm_animation_timer = Timing.Timer(
             interval   = Constants.FPS_30,
@@ -587,6 +725,7 @@ class BPMEditorBase(AudioEditorBase):
         if self.bpm_text:
             self.bpm_text = self.bpm_text[1:]
             self.bpm_input.setPlaceholderText(f"{self.bpm_text}{self.bpm_number_string}")
+
             return
 
         self.bpm_remove_timer.stop()

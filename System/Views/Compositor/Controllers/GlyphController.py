@@ -284,6 +284,116 @@ class GlyphController(QObject):
         )
         self.update_glyphs(selected_ids)
 
+    def shift_selected_glyph_segments(self, delta: int) -> None:
+        if delta not in (-1, 1):
+            raise ValueError(f"Segment shift must be -1 or 1, got {delta}")
+
+        device = Constants.DEVICES[self.composition.model]
+        before_state: dict[int, dict] = {}
+        after_state:  dict[int, dict] = {}
+        deleted_glyphs: dict[int, dict] = {}
+
+        for glyph_id in self.get_selected_glyph_ids():
+            glyph_data = self.composition.get_glyph(glyph_id)
+
+            if not glyph_data or "segments" not in glyph_data:
+                continue
+
+            segment_count = device.get_track_segment_count(glyph_data["track"])
+
+            if not segment_count:
+                continue
+
+            shifted_segments = [
+                segment + delta
+                for segment in glyph_data["segments"]
+                if 0 <= segment + delta < segment_count
+            ]
+
+            if shifted_segments == glyph_data["segments"] and shifted_segments:
+                continue
+
+            before_state[glyph_id] = copy.deepcopy(glyph_data)
+            if shifted_segments:
+                new_glyph_data = copy.deepcopy(glyph_data)
+                new_glyph_data["segments"] = shifted_segments
+                after_state[glyph_id] = new_glyph_data
+
+            else:
+                deleted_glyphs[glyph_id] = copy.deepcopy(glyph_data)
+
+        if not before_state:
+            return
+
+        self.composition.start_batching()
+
+        try:
+            if after_state:
+                self.composition.update_bunch_of_glyphs(after_state)
+                self.update_glyphs(after_state, animate_movement = True)
+
+            if deleted_glyphs:
+                self.delete_glyphs(list(deleted_glyphs), push_undo = False)
+
+            self.push_action(
+                Actions.ActionSegmentShift(
+                    self,
+                    before_state,
+                    after_state,
+                    deleted_glyphs
+                )
+            )
+            self.elements_changed.emit()
+            self.glyph_property_changed.emit("segments")
+            self.refresh_all_occlusion()
+
+            if deleted_glyphs:
+                direction_text = "right" if delta > 0 else "left"
+                deleted_count  = len(deleted_glyphs)
+
+                message = (
+                    f"Deleted {deleted_count} glyph"
+                    f"{'s' if deleted_count != 1 else ''}: shifting {direction_text} "
+                    "removed all active segments."
+                )
+
+                Player.ui_player.play_sound(
+                    "Controls/Glyphs/Delete",
+                    setting_key = "glyph_deletion_sound"
+                )
+                self.conductor.tooltip.show_tooltip_at(message, plan_hide = True)
+
+            else:
+                Player.ui_player.play_sound(
+                    name        = "Alerts/Clicks/Toggle3",
+                    speed       = 1.1 if delta > 0 else 0.9,
+                    setting_key = "other_glyph_sounds"
+                )
+
+                if len(after_state) == 1:
+                    glyph_id = next(iter(after_state))
+                    item = self.glyph_items.get(glyph_id)
+                    segments_text = ", ".join(
+                        str(segment + 1)
+                        for segment in after_state[glyph_id]["segments"]
+                    )
+
+                    if item:
+                        self.conductor.tooltip.show_tooltip_at(
+                            f"Segments: {segments_text}",
+                            item,
+                            True
+                        )
+
+                else:
+                    self.conductor.tooltip.show_tooltip_at(
+                        f"Shifted segments for {len(after_state)} glyphs.",
+                        plan_hide = True
+                    )
+
+        finally:
+            self.composition.stop_batching()
+
     def adjust_keyframes_brightness(
             self,
             keyframes: list[tuple[float, int]],
@@ -420,7 +530,7 @@ class GlyphController(QObject):
 
     def push_action(
             self,
-            action: Actions.ActionAdd | Actions.ActionModify | Actions.ActionDelete | Actions.EditFadeKeyframesCommand
+            action: Actions.ActionAdd | Actions.ActionModify | Actions.ActionDelete | Actions.ActionSegmentShift | Actions.EditFadeKeyframesCommand
         ) -> None:
 
         if isinstance(action, Actions.ActionModify) and action.glyphs_before_modify == action.glyphs_after_modify:
@@ -531,7 +641,11 @@ class GlyphController(QObject):
             self.glyph_property_changed.emit("start")
             self.refresh_all_occlusion()
 
-            Player.ui_player.play_sound("Alerts/Clicks/Toggle3", speed = 1.1 if delta_ms > 0 else 0.9)
+            Player.ui_player.play_sound(
+                name        = "Alerts/Clicks/Toggle3",
+                speed       = 1.1 if delta_ms > 0 else 0.9,
+                setting_key = "other_glyph_sounds"
+            )
 
         finally:
             self.composition.stop_batching()
@@ -580,10 +694,198 @@ class GlyphController(QObject):
             self.glyph_property_changed.emit("duration")
             self.refresh_all_occlusion()
 
-            Player.ui_player.play_sound("Alerts/Clicks/Toggle3", speed = 1.2 if delta_ms > 0 else 0.8)
+            Player.ui_player.play_sound(
+                name        = "Alerts/Clicks/Toggle3",
+                speed       = 1.2 if delta_ms > 0 else 0.8,
+                setting_key = "other_glyph_sounds"
+            )
 
         finally:
             self.composition.stop_batching()
+
+    def align_selected_glyph_ends_to_playhead(self) -> None:
+        selected_glyph_ids = self.get_selected_glyph_ids()
+
+        if not selected_glyph_ids:
+            return
+
+        playhead_ms = int(round(self.conductor.get_playhead_position_ms()))
+
+        if playhead_ms < 10:
+            self.conductor.tooltip.show_tooltip_at(
+                "Move the playhead to at least 10 ms to align glyph ends.",
+                plan_hide = True
+            )
+
+            return
+
+        before_state: dict[int, dict] = {}
+        after_state:  dict[int, dict] = {}
+
+        for glyph_id in selected_glyph_ids:
+            glyph_data = self.composition.get_glyph(glyph_id)
+
+            if not glyph_data:
+                continue
+
+            new_start = min(glyph_data["start"], playhead_ms - 10)
+            new_duration = playhead_ms - new_start
+
+            if (
+                glyph_data["start"] == new_start and
+                glyph_data["duration"] == new_duration
+            ):
+                continue
+
+            before_state[glyph_id] = copy.deepcopy(glyph_data)
+
+            new_glyph_data = copy.deepcopy(glyph_data)
+            new_glyph_data["start"] = new_start
+            new_glyph_data["duration"] = new_duration
+            after_state[glyph_id] = new_glyph_data
+
+        if not after_state:
+            return
+
+        self.composition.start_batching()
+
+        try:
+            self.push_action(Actions.ActionModify(self, before_state, after_state))
+            self.composition.update_bunch_of_glyphs(after_state)
+            self.update_glyphs(after_state, animate_movement = True)
+
+            self.elements_changed.emit()
+            self.glyph_property_changed.emit("start")
+            self.glyph_property_changed.emit("duration")
+            self.refresh_all_occlusion()
+
+        finally:
+            self.composition.stop_batching()
+
+    def align_selected_glyph_starts_to_playhead(self) -> None:
+        selected_glyph_ids = self.get_selected_glyph_ids()
+
+        if not selected_glyph_ids:
+            return
+
+        playhead_ms = int(round(self.conductor.get_playhead_position_ms()))
+        audio_duration_ms = self.conductor.playback_manager.duration_ms
+
+        if playhead_ms > audio_duration_ms - 10:
+            self.conductor.tooltip.show_tooltip_at(
+                "Move the playhead at least 10 ms before the end of the audio.",
+                plan_hide = True
+            )
+
+            return
+
+        before_state: dict[int, dict] = {}
+        after_state:  dict[int, dict] = {}
+
+        for glyph_id in selected_glyph_ids:
+            glyph_data = self.composition.get_glyph(glyph_id)
+
+            if not glyph_data:
+                continue
+
+            old_end = glyph_data["start"] + glyph_data["duration"]
+            new_start = playhead_ms
+            new_duration = max(10, old_end - new_start)
+            new_duration = min(new_duration, audio_duration_ms - new_start)
+
+            if (
+                glyph_data["start"] == new_start and
+                glyph_data["duration"] == new_duration
+            ):
+                continue
+
+            before_state[glyph_id] = copy.deepcopy(glyph_data)
+            new_glyph_data = copy.deepcopy(glyph_data)
+            new_glyph_data["start"] = new_start
+            new_glyph_data["duration"] = new_duration
+            after_state[glyph_id] = new_glyph_data
+
+        if not after_state:
+            return
+
+        self.composition.start_batching()
+
+        try:
+            self.push_action(Actions.ActionModify(self, before_state, after_state))
+            self.composition.update_bunch_of_glyphs(after_state)
+            self.update_glyphs(after_state, animate_movement = True)
+
+            self.elements_changed.emit()
+            self.glyph_property_changed.emit("start")
+            self.glyph_property_changed.emit("duration")
+            self.refresh_all_occlusion()
+
+        finally:
+            self.composition.stop_batching()
+
+    def navigate_glyph(self, direction: int) -> None:
+        if direction not in (-1, 1):
+            raise ValueError(f"Glyph navigation direction must be -1 or 1, got {direction}")
+
+        ordered_glyphs = sorted(
+            (
+                (glyph_data["start"], glyph_id, glyph_item)
+                for glyph_id, glyph_item in self.glyph_items.items()
+                if (glyph_data := self.composition.get_glyph(glyph_id)) is not None
+            ),
+            key = lambda entry: (entry[0], entry[1])
+        )
+
+        if not ordered_glyphs:
+            return
+
+        selected_ids = set(self.get_selected_glyph_ids())
+
+        if selected_ids:
+            selected_positions = [
+                index
+                for index, (_, glyph_id, _) in enumerate(ordered_glyphs)
+                if glyph_id in selected_ids
+            ]
+        else:
+            selected_positions = []
+
+        if selected_positions:
+            target_index = (
+                max(selected_positions) + 1
+                if direction > 0
+                else min(selected_positions) - 1
+            )
+        else:
+            playhead_ms = self.conductor.get_playhead_position_ms()
+            candidates = [
+                index
+                for index, (start, _, _) in enumerate(ordered_glyphs)
+                if (start > playhead_ms if direction > 0 else start < playhead_ms)
+            ]
+
+            if not candidates:
+                return
+
+            target_index = candidates[0] if direction > 0 else candidates[-1]
+
+        if not 0 <= target_index < len(ordered_glyphs):
+            return
+
+        start_ms, _, target_item = ordered_glyphs[target_index]
+        self.conductor.scene.clearSelection()
+        target_item.setSelected(True)
+        if self.conductor.total_content_width <= 0:
+            return
+
+        target_position_px = start_ms / 1000.0 * self.conductor.px_per_sec
+        normalized_position = target_position_px / self.conductor.total_content_width
+        self.conductor.scroll_to_normalized_position(normalized_position)
+        Player.ui_player.play_sound(
+            "Controls/Playhead/Move",
+            speed       = 1.1 if direction > 0 else 0.9,
+            setting_key = "playhead_sounds"
+        )
 
     def set_caching_active(self, active: bool) -> None:
         self.caching_active = active
@@ -737,7 +1039,10 @@ class GlyphController(QObject):
             self.refresh_stack_indicators(force = True)
             self.refresh_all_occlusion()
 
-            Player.ui_player.play_sound("Alerts/Clicks/Toggle1", speed = 1.1 if direction < 0 else 0.9)
+            Player.ui_player.play_sound(
+                name        = "Alerts/Clicks/Toggle1",
+                speed       = 1.1 if direction < 0 else 0.9,
+                setting_key = "other_glyph_sounds")
 
         finally:
             self.composition.stop_batching()

@@ -75,7 +75,7 @@ def convert_to_glyphs(
     raise UnknownFileFormatError(f"Unknown file format for: {path}")
 
 def get_audio_duration(path_to_audio: str) -> float:
-    ffprobe_path = getattr(Constants, 'FFPROBE_PATH', 'ffprobe')
+    ffprobe_path = Constants.FFPROBE_PATH
     
     cmd = [
         ffprobe_path,
@@ -89,7 +89,7 @@ def get_audio_duration(path_to_audio: str) -> float:
     return float(result.stdout.strip())
 
 def get_ogg_metadata(path: str) -> dict:
-    ffprobe_path = getattr(Constants, 'FFPROBE_PATH', 'ffprobe')
+    ffprobe_path = Constants.FFPROBE_PATH
 
     cmd = [
         ffprobe_path,

@@ -485,7 +485,7 @@ class GlyphVisualizer(FloatingWindowGPU):
         if self.is_playing or not self.parent:
             return
 
-        composition = getattr(self.parent, "composition", None)
+        composition = self.parent.composition
 
         if not composition:
             return
@@ -528,7 +528,7 @@ class GlyphVisualizer(FloatingWindowGPU):
         ) -> slice | numpy.ndarray:
 
         if "segments" in item:
-            return base_index + numpy.array(item["segments"])
+            return base_index + numpy.array(item["segments"], dtype = numpy.intp)
 
         return slice(base_index, base_index + segment_count)
 

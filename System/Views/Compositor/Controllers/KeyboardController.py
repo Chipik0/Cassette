@@ -39,11 +39,17 @@ class KeyboardController(QObject):
     delete_requested            = pyqtSignal()
     escape_requested            = pyqtSignal()
     speed_cycle_requested       = pyqtSignal()
+    effect_cycle_requested      = pyqtSignal()
     playground_requested        = pyqtSignal()
     brightness_dialog_requested = pyqtSignal()
     duration_dialog_requested   = pyqtSignal()
+    segments_dialog_requested   = pyqtSignal()
+    shift_segments_requested    = pyqtSignal(int)
     scale_requested             = pyqtSignal(float)
     brightness_adjust_requested = pyqtSignal(int)
+    align_glyph_ends_requested  = pyqtSignal()
+    align_glyph_starts_requested = pyqtSignal()
+    navigate_glyph_requested    = pyqtSignal(int)
     spawn_track_glyph_requested = pyqtSignal(str)
     move_track_up_requested     = pyqtSignal()
     move_track_down_requested   = pyqtSignal()
@@ -116,6 +122,10 @@ class KeyboardController(QObject):
             (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_V,   self.paste_requested.emit,     True),
             (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_X,   self.cut_requested.emit,        False),
             (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_D,   self.handle_duplicate,         False),
+            (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_E,   self.handle_align_glyph_ends,  False),
+            (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_S,   self.handle_align_glyph_starts, False),
+            (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_Left,  lambda: self.navigate_glyph_requested.emit(-1), False),
+            (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_Right, lambda: self.navigate_glyph_requested.emit(1),  False),
             (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_F11, self.playground_requested.emit, False),
 
             (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_A,                                     self.select_all_requested.emit,   False),
@@ -135,11 +145,15 @@ class KeyboardController(QObject):
             (Qt.Key.Key_Right,                                     self.handle_arrow_right,        True),
             (Qt.KeyboardModifier.ShiftModifier | Qt.Key.Key_Left,  self.handle_shift_arrow_left,   True),
             (Qt.KeyboardModifier.ShiftModifier | Qt.Key.Key_Right, self.handle_shift_arrow_right,  True),
+            (Qt.KeyboardModifier.AltModifier | Qt.Key.Key_Left,    lambda: self.shift_segments_requested.emit(-1), True),
+            (Qt.KeyboardModifier.AltModifier | Qt.Key.Key_Right,   lambda: self.shift_segments_requested.emit(1),  True),
+            (Qt.KeyboardModifier.ShiftModifier | Qt.Key.Key_S,      self.open_segments_editor, False),
 
             (Qt.Key.Key_Delete,    self.handle_deletion, True),
             (Qt.Key.Key_Backspace, self.handle_deletion, True),
 
             (Qt.Key.Key_S,            self.speed_cycle_requested.emit,            False),
+            (Qt.Key.Key_E,            self.effect_cycle_requested.emit,           False),
             (Qt.Key.Key_B,            self.open_brightness_editor,                False),
             (Qt.Key.Key_D,            self.open_duration_editor,                  False),
             (Qt.Key.Key_BracketLeft,  lambda: self.adjust_brightness_by_step(-1), True),
@@ -207,6 +221,9 @@ class KeyboardController(QObject):
                 Player.ui_player.release_sound("warning_zoom_selection")
                 Player.ui_player.release_sound("warning_already_zoomed")
 
+            elif key_code == Qt.Key.Key_S:
+                Player.ui_player.release_sound("warning_segments")
+
         return super().eventFilter(watched, event)
 
     def trigger_space_easter_egg(self) -> None:
@@ -267,31 +284,20 @@ class KeyboardController(QObject):
 
         if len(self.space_press_times) >= 10:
             self.trigger_space_easter_egg()
-
             return
 
-        position_ms        = self.conductor.get_playhead_position_ms()
-        duration_ms        = self.playback_manager.duration_ms
-        engine_position_ms = self.playback_manager.get_position()
+        position_ms = self.conductor.get_playhead_position_ms()
+        duration_ms = self.playback_manager.duration_ms
 
-        is_at_end = duration_ms > 0 and (
-            position_ms        >= (duration_ms - 50.0) or
-            engine_position_ms >= (duration_ms - 50.0)
-        )
+        is_at_end = duration_ms > 0 and position_ms >= (duration_ms - 50.0)
 
         if is_at_end:
             self.conductor.set_playhead_position_ms(0.0)
             self.conductor.horizontalScrollBar().setValue(0)
             self.conductor.scroll_to_playhead()
             self.playback_manager.toggle_playback(0.0)
-
+            
             return
-
-        if not self.playback_manager.is_playing:
-            delay_ms = self.conductor.get_audio_delay_ms()
-
-            if abs(engine_position_ms - delay_ms - position_ms) < 1.0:
-                position_ms = engine_position_ms
 
         self.playback_manager.toggle_playback(position_ms)
 
@@ -404,6 +410,67 @@ class KeyboardController(QObject):
             return
 
         self.duration_dialog_requested.emit()
+
+    def open_segments_editor(self) -> None:
+        if not self.ensure_selection("warning_segments"):
+            return
+
+        selected_items = self.conductor.glyph_controller.get_selected_glyph_items()
+        device = Constants.DEVICES[self.conductor.composition.model]
+
+        glyphs = [
+            glyph
+            for item in selected_items
+            if (glyph := self.conductor.composition.get_glyph(item.glyph_id)) is not None
+        ]
+
+        if not glyphs:
+            return
+
+        if any(not device.get_track_segment_count(glyph["track"]) for glyph in glyphs):
+            warning_index = random.randint(1, 4)
+            Player.ui_player.play_sound(
+                name     = f"Alerts/Warnings/Warning{warning_index}",
+                lock_tag = "warning_segments"
+            )
+
+            message = (
+                "Selected glyph does not support segments."
+                if len(glyphs) == 1
+                else "Selection contains non - segmented glyphs."
+            )
+
+            self.conductor.tooltip.show_tooltip_at(message, plan_hide = True)
+
+            return
+
+        first_track = glyphs[0]["track"]
+
+        if any(glyph["track"] != first_track for glyph in glyphs):
+            warning_index = random.randint(1, 4)
+
+            Player.ui_player.play_sound(
+                f"Alerts/Warnings/Warning{warning_index}",
+                lock_tag = "warning_segments"
+            )
+
+            self.conductor.tooltip.show_tooltip_at("Selected glyphs must be on the same track.", plan_hide = True)
+
+            return
+
+        self.segments_dialog_requested.emit()
+
+    def handle_align_glyph_ends(self) -> None:
+        if not self.ensure_selection("warning_align_ends"):
+            return
+
+        self.align_glyph_ends_requested.emit()
+
+    def handle_align_glyph_starts(self) -> None:
+        if not self.ensure_selection("warning_align_starts"):
+            return
+
+        self.align_glyph_starts_requested.emit()
 
     def ensure_selection(self, lock_tag: str = "warning") -> bool:
         if not self.conductor.scene.selectedItems():

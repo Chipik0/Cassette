@@ -53,6 +53,8 @@ class ContextMenu(QMenu):
 
         self.aboutToHide.connect(self.close_sound)
 
+    # Styling
+
     def apply_styling(self, menu: QMenu) -> None:
         menu.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         menu.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground)
@@ -83,18 +85,21 @@ class ContextMenu(QMenu):
 
         if label == "-":
             menu.addSeparator()
+
             return
 
         if isinstance(handler, list):
             submenu = menu.addMenu(label)
             self.apply_styling(submenu)
             self.populate(submenu, handler)
+
             return
 
         if isinstance(handler, QWidget):
             action = QWidgetAction(menu)
             action.setDefaultWidget(handler)
             menu.addAction(action)
+
             return
 
         action = QAction(label, menu)
@@ -122,23 +127,31 @@ class EffectPreviewWidget(QWidget):
 
     def __init__(
             self,
-            effect_name: str,
-            config:      dict,
-            glyph:       dict,
-            parent:      QWidget | None = None
+            effect_name:   str,
+            config:        dict,
+            glyph:         dict,
+            bpm:           float | int    = 120,
+            model:         str | None     = None,
+            segment_count: int            = 1,
+            parent:        QWidget | None = None
         ) -> None:
 
         super().__init__(parent)
 
-        self.effect_name = effect_name
-        self.config      = config
-        self.glyph       = glyph
-        self.controls    = {}
-        self.effect_info = GlyphEffects.EffectsConfig.get(self.effect_name, {})
+        self.effect_name   = effect_name
+        self.config        = config
+        self.glyph         = glyph
+        self.bpm           = bpm
+        self.model         = model
+        self.segment_count = max(1, segment_count)
+        self.controls      = {}
+        self.effect_info   = GlyphEffects.EffectsConfig.get(self.effect_name, {})
 
         self.setup_user_interface()
         self.populate_controls()
         self.on_control_changed()
+
+    # User Interface
 
     def setup_user_interface(self) -> None:
         self.setAttribute(Qt.WidgetAttribute.WA_NoMousePropagation, True)
@@ -150,7 +163,7 @@ class EffectPreviewWidget(QWidget):
         self.main_layout.setContentsMargins(8, 8, 8, 8)
         self.main_layout.setSpacing(12)
 
-        self.live_preview_bar = Widgets.ScheduledSegmentedBar(30, loop = True)
+        self.live_preview_bar = Widgets.ScheduledSegmentedBar(self.segment_count, loop = True)
         self.apply_button     = Widgets.NothingButton("Apply")
 
         self.main_layout.addWidget(self.live_preview_bar)
@@ -163,7 +176,7 @@ class EffectPreviewWidget(QWidget):
             "selector": (Widgets.SelectorWithLabel, "selectionChanged")
         }
 
-        for item in self.effect_info["settings"]:
+        for item in self.effect_info.get("settings", []):
             item_type                 = item.get("type")
             widget_class, signal_name = types_map[item_type]
 
@@ -199,21 +212,35 @@ class EffectPreviewWidget(QWidget):
             elif isinstance(widget, Widgets.SelectorWithLabel):
                 settings[key] = widget.current_data()
 
+            else:
+                pass
+
         return settings
 
     def generate_effect_track(self) -> None:
         settings   = self.get_settings()
         brightness = self.glyph["brightness"] if "brightness" in self.glyph else 100
 
-        glyph = GlyphEffects.generate_glyph_dict(
-            duration   = max(self.glyph["duration"], 3000),
-            brightness = brightness
+        preview_glyph = {
+            "track":      self.glyph["track"],
+            "start":      0,
+            "duration":   max(self.glyph["duration"], 3000),
+            "brightness": brightness
+        }
+
+        if self.segment_count > 1 and "segments" in self.glyph:
+            preview_glyph["segments"] = list(self.glyph["segments"])
+
+        applied_glyph = GlyphEffects.apply_visual_effect(
+            preview_glyph,
+            self.effect_name,
+            settings
         )
 
         track_data = GlyphEffects.effect_to_glyph(
-            GlyphEffects.apply_visual_effect(glyph, self.effect_name, settings),
-            60,
-            "PREVIEW"
+            applied_glyph,
+            self.bpm,
+            self.model
         )
 
         self.live_preview_bar.set_schedule(track_data)

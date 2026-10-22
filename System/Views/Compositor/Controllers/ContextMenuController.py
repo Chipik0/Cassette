@@ -6,8 +6,8 @@ from PyQt6.QtGui import QContextMenuEvent
 
 from PyQt6.QtCore import (
     Qt,
-    QTimer,
     QPoint,
+    QTimer,
     QObject,
     pyqtSignal
 )
@@ -51,8 +51,8 @@ class ContextMenuController(QObject):
 
         try:
             scene_position = self.conductor.mapToScene(event.pos())
-            
-            items_at_pos = self.conductor.scene.items(scene_position)
+
+            items_at_pos     = self.conductor.scene.items(scene_position)
             item_under_mouse = next(
                 (item for item in items_at_pos if isinstance(item, Widgets.GlyphItem)),
                 None
@@ -89,6 +89,11 @@ class ContextMenuController(QObject):
             self.context_menu_opened.emit()
             self.conductor.update()
 
+            preview_glyph, segment_count, bpm, model = self.resolve_preview_parameters(
+                selected_ids,
+                clicked_glyph
+            )
+
             effects, can_show_segments = self.resolve_effect_options(
                 selected_ids,
                 selected_items
@@ -96,10 +101,13 @@ class ContextMenuController(QObject):
 
             effect_entries = [
                 self.make_effect_entry(
-                    effect_name,
-                    config,
-                    clicked_glyph,
-                    selected_ids
+                    effect_name   = effect_name,
+                    config        = config,
+                    preview_glyph = preview_glyph,
+                    selected_ids  = selected_ids,
+                    bpm           = bpm,
+                    model         = model,
+                    segment_count = segment_count
                 )
                 for effect_name, config in effects.items()
             ]
@@ -139,6 +147,66 @@ class ContextMenuController(QObject):
                 "Context Menu Error",
                 "An unexpected error occurred while opening the context menu."
             ).exec()
+
+    # Preview Resolution
+
+    def resolve_preview_parameters(
+            self,
+            selected_ids:  list[int],
+            clicked_glyph: dict
+        ) -> tuple[dict, int, float | int, str]:
+
+        composition = self.conductor.composition
+        device      = Constants.DEVICES[composition.model]
+
+        selected_glyphs = [
+            glyph
+            for glyph_id in selected_ids
+            if (glyph := composition.get_glyph(glyph_id)) is not None
+        ]
+
+        if not selected_glyphs:
+            selected_glyphs = [clicked_glyph]
+
+        def get_glyph_track_segment_count(glyph_dictionary: dict) -> int:
+            segment_count = device.get_track_segment_count(glyph_dictionary["track"])
+
+            return segment_count if segment_count else 0
+
+        has_unsegmented_glyph = any(
+            get_glyph_track_segment_count(glyph_dictionary) == 0
+            for glyph_dictionary in selected_glyphs
+        )
+
+        bpm   = composition.bpm if composition.bpm else 120
+        model = composition.model
+
+        if has_unsegmented_glyph:
+            unsegmented_glyph = next(
+                (
+                    glyph_dictionary
+                    for glyph_dictionary in selected_glyphs
+                    if get_glyph_track_segment_count(glyph_dictionary) == 0
+                ),
+                clicked_glyph
+            )
+
+            return unsegmented_glyph, 1, bpm, model
+
+        segment_counts = [
+            get_glyph_track_segment_count(glyph_dictionary)
+            for glyph_dictionary in selected_glyphs
+        ]
+
+        if len(set(segment_counts)) == 1:
+            return clicked_glyph, segment_counts[0], bpm, model
+
+        clicked_count = get_glyph_track_segment_count(clicked_glyph)
+
+        if clicked_count > 0:
+            return clicked_glyph, clicked_count, bpm, model
+
+        return selected_glyphs[0], segment_counts[0], bpm, model
 
     # Pan Calculation
 
@@ -214,14 +282,20 @@ class ContextMenuController(QObject):
             self,
             effect_name:   str,
             config:        dict,
-            clicked_glyph: dict,
-            selected_ids:  list[int]
+            preview_glyph: dict,
+            selected_ids:  list[int],
+            bpm:           float | int,
+            model:         str,
+            segment_count: int
         ) -> tuple[str, list]:
 
         preview = Menu.EffectPreviewWidget(
-            effect_name,
-            config,
-            clicked_glyph
+            effect_name   = effect_name,
+            config        = config,
+            glyph         = preview_glyph,
+            bpm           = bpm,
+            model         = model,
+            segment_count = segment_count
         )
 
         preview.apply_requested.connect(
@@ -259,6 +333,7 @@ class ContextMenuController(QObject):
 
         if not dialog.exec():
             self.dialog_cancelled.emit(key)
+
             return
 
         self.modify_property_requested.emit(key, dialog.get_text())
@@ -288,6 +363,9 @@ class ContextMenuController(QObject):
 
         device      = Constants.DEVICES[self.conductor.composition.model]
         track_count = device.get_track_segment_count(first_glyph["track"])
+
+        if not track_count:
+            return
 
         popup = Windows.SegmentEditor(
             "Segments",

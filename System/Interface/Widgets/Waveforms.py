@@ -357,7 +357,6 @@ class TrimmingWaveformWidget(QWidget):
         self.dragging_handle     = None
 
         self.setMinimumHeight(80)
-        self.setFixedWidth(690)
 
         wave_color = QColor(Styles.Colors.Waveform.MainColor)
 
@@ -368,7 +367,9 @@ class TrimmingWaveformWidget(QWidget):
         self.cached_accent_brush = QBrush(QColor(Styles.Colors.NothingAccent))
 
         self.pulse_status_widget = PulseStatusWidget(self)
-        self.pulse_status_widget.set_mode(WaveMode.PULSE)
+        self.pulse_status_widget.set_amplitude(1)
+        self.pulse_status_widget.set_loading_speed_ratio(2.0)
+        self.pulse_status_widget.set_mode(WaveMode.SINE)
         self.pulse_status_widget.setGeometry(0, 0, 690, 80)
         self.pulse_status_widget.show()
 
@@ -393,11 +394,33 @@ class TrimmingWaveformWidget(QWidget):
 
         self.waveform_opacity_handle.set_base(0.0)
 
+        self.pulse_status_widget.reset_contour()
         self.pulse_status_widget.transition_to_white(0)
         self.pulse_status_widget.unflatten(0)
         self.pulse_status_widget.fade_in(0)
         self.pulse_status_widget.setGeometry(self.rect())
         self.pulse_status_widget.show()
+
+        self.update()
+
+    def start_reencoding(self) -> None:
+        self.is_loading       = True
+        self.is_transitioning = True
+
+        self.waveform_opacity_handle.set_target(
+            value                      = 0.0,
+            duration_ms                = 200,
+            easing_function            = LoomEngine.Easing.ease_out_cubic,
+            multiply_duration_by_speed = False
+        )
+
+        self.pulse_status_widget.reset_contour()
+        self.pulse_status_widget.setGeometry(self.rect())
+        self.pulse_status_widget.show()
+        self.pulse_status_widget.unflatten(duration_ms = 250)
+        self.pulse_status_widget.transition_to_white(duration_ms = 200)
+        self.pulse_status_widget.fade_in(duration_ms = 200)
+        self.pulse_status_widget.transition_to_sine(1000, LoomEngine.Easing.ease_out_cubic)
 
         self.update()
 
@@ -434,30 +457,33 @@ class TrimmingWaveformWidget(QWidget):
 
         self.generate_pixmap()
 
-        self.pulse_status_widget.set_amplitude(5)
-        self.pulse_status_widget.transition_to_sine(1200, LoomEngine.Easing.ease_out_cubic)
+        self.pulse_status_widget.transition_to_contour(
+            amplitudes  = waveform_amplitudes,
+            duration_ms = 750
+        )
 
-        QTimer.singleShot(300, self.begin_waveform_fade)
+        QTimer.singleShot(500, self.begin_waveform_fade)
 
     def begin_waveform_fade(self) -> None:
         if not self.is_transitioning:
             return
 
-        self.pulse_status_widget.fade_out(duration_ms = 400)
+        self.pulse_status_widget.fade_out(duration_ms = 350)
 
         self.waveform_opacity_handle.set_target(
             value                      = 1.0,
-            duration_ms                = 250,
+            duration_ms                = 300,
             easing_function            = LoomEngine.Easing.ease_out_cubic,
             multiply_duration_by_speed = False
         )
 
-        QTimer.singleShot(400, self.complete_waveform_fade)
+        QTimer.singleShot(350, self.complete_waveform_fade)
 
     def complete_waveform_fade(self) -> None:
         self.is_loading       = False
         self.is_transitioning = False
 
+        self.pulse_status_widget.reset_contour()
         self.pulse_status_widget.hide()
         self.update()
 

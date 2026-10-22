@@ -32,15 +32,28 @@ class SegmentEditor(FloatingWindowGPU):
         lower_button_row = Widgets.ButtonRow(
             [
                 (Widgets.ButtonWithOutline, "Nah",   self.on_cancel),
-                (Widgets.NothingButton,     "Apply", self.on_ok)
+                (Widgets.NothingButton,     "Apply", self.on_ok, False)
             ]
         )
+        self.apply_button = lower_button_row.get_button("Apply")
+
+        if self.apply_button is None:
+            raise RuntimeError("Segment editor Apply button was not created")
 
         self.content_layout.addWidget(self.segmented_bar)
         self.content_layout.addLayout(upper_button_row)
         self.content_layout.addLayout(lower_button_row)
 
         self.segmented_bar.segment_changed.connect(self.wobble)
+
+    def on_ok(self) -> None:
+        if not any(self.segmented_bar.active):
+            self.apply_button.start_glitch()
+            self.play_disturb_animation()
+
+            return
+
+        super().on_ok()
 
     def segments(self) -> list:
         return self.segmented_bar.active

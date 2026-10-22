@@ -15,7 +15,7 @@ class ActionModify:
         },
         {
             "key":      "segments",
-            "label":    lambda glyph: ", ".join(map(lambda segment_index: str(segment_index + 1), glyph["segments"])) if glyph.get("segments") else "all",
+            "label":    lambda glyph: ", ".join(map(lambda segment_index: str(segment_index + 1), glyph["segments"])) if glyph.get("segments") else ("none" if glyph.get("segments") is not None else "all"),
             "template": "setting segments from {before} to {after}"
         },
         {
@@ -106,6 +106,67 @@ class ActionModify:
         try:
             self.composition.update_bunch_of_glyphs(copy.deepcopy(self.glyphs_after_modify))
             self.controller.update_glyphs(self.glyphs_after_modify, animate_movement = True)
+
+        finally:
+            self.composition.stop_batching()
+
+# Segment Shifts
+
+class ActionSegmentShift:
+    def __init__(
+            self,
+            controller:      object,
+            before_state:    dict[int, dict],
+            after_state:     dict[int, dict],
+            deleted_glyphs:  dict[int, dict]
+        ) -> None:
+
+        self.controller     = controller
+        self.composition    = controller.composition
+        self.before_state   = copy.deepcopy(before_state)
+        self.after_state    = copy.deepcopy(after_state)
+        self.deleted_glyphs = copy.deepcopy(deleted_glyphs)
+
+    def get_description(self) -> str:
+        glyph_count = len(self.before_state)
+
+        return f"segment shift for {glyph_count} glyph{'s' if glyph_count != 1 else ''}"
+
+    def undo(self) -> None:
+        self.composition.start_batching()
+
+        try:
+            self.composition.update_bunch_of_glyphs(copy.deepcopy(self.before_state))
+
+            if self.deleted_glyphs:
+                self.controller.create_glyph_items(
+                    list(self.deleted_glyphs),
+                    reset_selection = False
+                )
+
+            self.controller.update_glyphs(self.after_state, animate_movement = True)
+            self.controller.elements_changed.emit()
+            self.controller.refresh_all_occlusion()
+
+        finally:
+            self.composition.stop_batching()
+
+    def redo(self) -> None:
+        self.composition.start_batching()
+
+        try:
+            if self.after_state:
+                self.composition.update_bunch_of_glyphs(copy.deepcopy(self.after_state))
+                self.controller.update_glyphs(self.after_state, animate_movement = True)
+
+            if self.deleted_glyphs:
+                self.controller.delete_glyphs(
+                    list(self.deleted_glyphs),
+                    push_undo = False
+                )
+
+            self.controller.elements_changed.emit()
+            self.controller.refresh_all_occlusion()
 
         finally:
             self.composition.stop_batching()

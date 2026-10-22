@@ -81,6 +81,7 @@ class Textbox(Lifecycle.LoomAnimationMixin, QLineEdit):
             self.setPlaceholderText(placeholder)
 
         self.setFont(Utils.NType(11))
+        self.setMinimumHeight(Styles.Metrics.ElementHeight)
         self.setStyleSheet(Styles.Controls.FloatingTextBox)
         self.setAcceptDrops(False)
 
@@ -747,6 +748,7 @@ class SearchTextbox(Textbox):
         self.random_quote_enabled: bool = True
 
         self.setStyleSheet(Styles.Controls.FloatingSearchTextBox)
+        self.setMinimumHeight(35)
 
         self.glitchStarted.connect(self.on_search_box_glitch)
         self.safeTextChanged.connect(self.on_text_changed)

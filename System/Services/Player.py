@@ -85,6 +85,7 @@ class PlaybackManager(QObject):
         self.is_pulsing                     = False
         self.pulse_timer                    = None
         self.property_timers                = {}
+        self.loop                           = False
 
         self.is_scrubbing                   = False
         self.was_playing_before_scrub       = False
@@ -303,6 +304,7 @@ class PlaybackManager(QObject):
         self.echo_focus                     = "all"
         self.is_playing                     = False
         self.duration_ms                    = 0.0
+        self.loop                           = False
 
         self.track_peak_level               = 1.0
         self.current_audio_level            = 0.0
@@ -380,6 +382,7 @@ class PlaybackManager(QObject):
 
         if not self.is_scrubbing:
             self.start_scrubbing(target_position_ms)
+
             return
 
         current_time   = time.perf_counter()
@@ -453,6 +456,7 @@ class PlaybackManager(QObject):
     def process_scrub_friction_tick(self) -> None:
         if not self.is_scrubbing:
             self.scrub_friction_timer.stop()
+
             return
 
         elapsed_since_event_sec = time.perf_counter() - self.scrub_last_event_time
@@ -493,6 +497,7 @@ class PlaybackManager(QObject):
 
         if discrepancy > (self.sample_rate * 0.5):
             self.position = target_sample
+
             return
 
         self.position = self.position * 0.80 + target_sample * 0.20
@@ -561,15 +566,23 @@ class PlaybackManager(QObject):
 
     def load_audio_from_data(
             self,
-            data:        numpy.ndarray,
-            sample_rate: int,
-            on_ready:    object = None
+            data:           numpy.ndarray,
+            sample_rate:    int,
+            on_ready:       object = None,
+            peak_amplitude: float | None = None
         ) -> None:
 
         def apply_load() -> None:
-            stereo_data = numpy.column_stack((data, data)) if data.ndim == 1 else data
-            stereo_data = numpy.ascontiguousarray(stereo_data, dtype = numpy.float32)
-            channels    = stereo_data.shape[1]
+            if data.ndim == 1:
+                stereo_data = numpy.column_stack((data, data))
+
+            else:
+                stereo_data = data
+
+            if not stereo_data.flags.c_contiguous:
+                stereo_data = numpy.ascontiguousarray(stereo_data, dtype = numpy.float32)
+
+            channels = stereo_data.shape[1]
 
             with self.lock:
                 self.reset_playback_state()
@@ -584,8 +597,8 @@ class PlaybackManager(QObject):
                 self.echo_states      = numpy.zeros((channels, 4), dtype = numpy.float64)
                 self.pass_states      = numpy.zeros((len(self.pass_frequencies), channels, 4), dtype = numpy.float64)
 
-                peak_level            = float(numpy.max(numpy.abs(stereo_data)))
-                self.track_peak_level = max(peak_level, 1e-6)
+                resolved_peak         = peak_amplitude if peak_amplitude is not None else float(numpy.max(numpy.abs(stereo_data)))
+                self.track_peak_level = max(resolved_peak, 1e-6)
 
             self.stream_needs_reopen = (
                 self.stream is None                         or
@@ -617,6 +630,7 @@ class PlaybackManager(QObject):
                     use_engine_multiplier = False,
                     on_finish             = apply_load
                 )
+
                 return
 
             self.stop()
@@ -680,6 +694,7 @@ class PlaybackManager(QObject):
             return self.playback_start_audio_ms
 
         elapsed_ms = (time.time() - self.playback_start_wall_time) * 1000.0
+
         return self.playback_start_audio_ms + (elapsed_ms * self.speed)
 
     def update_playback_start(self, speed: float) -> None:
@@ -690,6 +705,7 @@ class PlaybackManager(QObject):
     def toggle_playback(self, ms: float | None = None) -> None:
         if self.is_playing:
             self.stop()
+
             return
 
         target_ms = self.get_position() if ms is None else ms
@@ -802,6 +818,7 @@ class PlaybackManager(QObject):
 
         if band_count <= 0:
             self.pass_states = numpy.zeros((0, channels, 4), dtype = numpy.float64)
+
             return
 
         if self.pass_states is not None and self.pass_states.shape == (band_count, channels, 4):
@@ -1038,10 +1055,12 @@ class PlaybackManager(QObject):
         if noise_mix <= 0.0:
             self.radio_noise_active           = False
             self.radio_noise_frames_remaining = 0
+
             return block
 
         if not self.radio_noise_permanent and self.radio_noise_frames_remaining <= 0:
             self.radio_noise_active = False
+
             return block
 
         if self.radio_noise_permanent:
@@ -1206,8 +1225,14 @@ class PlaybackManager(QObject):
             self.current_audio_level = self.current_audio_level * level_decay_factor
 
         if not self.is_scrubbing and self.position >= len(self.data):
-            self.position = float(len(self.data))
-            self.stop()
+            if self.loop:
+                self.position                 = 0.0
+                self.playback_start_audio_ms  = 0.0
+                self.playback_start_wall_time = time.time()
+
+            else:
+                self.position = float(len(self.data))
+                self.stop()
 
         return block
 
@@ -1215,6 +1240,7 @@ class PlaybackManager(QObject):
         if self.radio_noise_mix_property.value <= 0.0:
             self.radio_noise_active           = False
             self.radio_noise_frames_remaining = 0
+
             return
 
         if self.radio_noise_permanent:
@@ -1225,6 +1251,7 @@ class PlaybackManager(QObject):
             self.radio_noise_frames_remaining = 1
             self.radio_noise_total_frames     = 1
             self.radio_noise_elapsed_frames   = 0
+
             return
 
         if intensity <= 0.0 or self.radio_noise_active:
@@ -1278,6 +1305,7 @@ class PlaybackManager(QObject):
             return numpy.zeros((frames, 2), dtype = numpy.float32)
 
         channels = self.data.shape[1]
+
         return numpy.zeros((frames, channels), dtype = numpy.float32)
 
     def get_current_audio_level(self) -> float:
@@ -1303,6 +1331,7 @@ class PlaybackManager(QObject):
         if duration_ms <= 0:
             self.channel_delay_left_property.set_base(target_left_ms)
             self.channel_delay_right_property.set_base(target_right_ms)
+
             return
 
         self.channel_delay_left_property.set_target(target_left_ms, duration_ms, easing)
@@ -1549,6 +1578,7 @@ class PlaybackManager(QObject):
 
         if active:
             self.set_car_radio_active(duration_ms, easing)
+
             return
 
         self.set_car_radio_inactive(duration_ms, easing)
@@ -1591,6 +1621,7 @@ class PlaybackManager(QObject):
             if duration_ms <= 0:
                 on_finish()
                 self.set_property("pass_mix", 0.0)
+
                 return
 
             self.set_property(
@@ -1801,9 +1832,11 @@ class UISoundManager:
 
         if clamped_pan <= 0.0:
             spread = -clamped_pan
+
             return 1.0 - spread * 0.3, 1.0 - spread * 0.7
 
         spread = clamped_pan
+
         return 1.0 - spread * 0.7, 1.0 - spread * 0.3
 
     def play_sound(
@@ -1971,6 +2004,7 @@ class UISoundManager:
                         frames,
                         loop
                     )
+
                 else:
                     sound_block, new_position, is_active = PlayerFunctions.process_ui_sound_interp(
                         data,
@@ -1988,6 +2022,7 @@ class UISoundManager:
 
                 if is_active:
                     updates.append((sound_id, new_position))
+
                 else:
                     to_remove.append(sound_id)
 
@@ -2067,6 +2102,7 @@ class ByteBeatPlayer:
 
         except Exception:
             logger.error("Formula incorrect: {}", formula_string)
+
             return
 
         with self.lock:
@@ -2093,6 +2129,7 @@ class ByteBeatPlayer:
 
     def generate_silence_block(self, number_of_frames: int) -> bytes:
         silence_buffer = numpy.zeros(number_of_frames, dtype = numpy.int16)
+
         return silence_buffer.tobytes()
 
     def calculate_single_sample(self, time_value: int) -> int:
@@ -2139,6 +2176,7 @@ class ByteBeatPlayer:
         while True:
             if self.formula_bytecode is None:
                 number_of_frames = yield self.generate_silence_block(number_of_frames)
+
                 continue
 
             number_of_frames = yield self.process_audio_block(number_of_frames)
