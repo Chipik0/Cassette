@@ -326,7 +326,8 @@ class ScrollableContent(QGraphicsView):
         self.scroll_controller.cleanup()
         self.playback_controller.cleanup()
         self.scale_controller.cleanup()
-        self.waveform_controller.clear()
+        self.waveform_controller.advance_generation_and_clear()
+        self.waveform_controller.thread_pool.waitForDone(300)
 
         if self.glyph_controller:
             self.glyph_controller.clear_glyphs()

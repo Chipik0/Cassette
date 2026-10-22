@@ -367,8 +367,8 @@ class TrimmingWaveformWidget(QWidget):
         self.cached_accent_brush = QBrush(QColor(Styles.Colors.NothingAccent))
 
         self.pulse_status_widget = PulseStatusWidget(self)
-        self.pulse_status_widget.set_amplitude(1)
-        self.pulse_status_widget.set_loading_speed_ratio(2.0)
+        self.pulse_status_widget.set_amplitude(12, 0)
+        self.pulse_status_widget.set_loading_speed_ratio(0.8)
         self.pulse_status_widget.set_mode(WaveMode.SINE)
         self.pulse_status_widget.setGeometry(0, 0, 690, 80)
         self.pulse_status_widget.show()

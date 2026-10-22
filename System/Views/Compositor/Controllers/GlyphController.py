@@ -113,6 +113,9 @@ class GlyphController(QObject):
     # Selection Management
 
     def get_selected_glyph_items(self) -> list[Widgets.GlyphItem]:
+        if self.conductor.playback_manager.is_playing:
+            return []
+
         valid_items = set(self.glyph_items.values())
 
         return [
@@ -124,6 +127,9 @@ class GlyphController(QObject):
         return [item.glyph_id for item in self.get_selected_glyph_items()]
 
     def select_all_on_same_track(self) -> None:
+        if self.conductor.playback_manager.is_playing:
+            return
+
         selected = self.get_selected_glyph_items()
 
         if not selected:
@@ -135,6 +141,9 @@ class GlyphController(QObject):
             item.setSelected(item.track == target_track)
 
     def select_all_glyphs(self) -> None:
+        if self.conductor.playback_manager.is_playing:
+            return
+
         for item in self.glyph_items.values():
             item.setSelected(True)
 
@@ -314,6 +323,7 @@ class GlyphController(QObject):
                 continue
 
             before_state[glyph_id] = copy.deepcopy(glyph_data)
+
             if shifted_segments:
                 new_glyph_data = copy.deepcopy(glyph_data)
                 new_glyph_data["segments"] = shifted_segments
@@ -824,6 +834,9 @@ class GlyphController(QObject):
             self.composition.stop_batching()
 
     def navigate_glyph(self, direction: int) -> None:
+        if self.conductor.playback_manager.is_playing:
+            return
+
         if direction not in (-1, 1):
             raise ValueError(f"Glyph navigation direction must be -1 or 1, got {direction}")
 
@@ -847,6 +860,7 @@ class GlyphController(QObject):
                 for index, (_, glyph_id, _) in enumerate(ordered_glyphs)
                 if glyph_id in selected_ids
             ]
+
         else:
             selected_positions = []
 
@@ -856,6 +870,7 @@ class GlyphController(QObject):
                 if direction > 0
                 else min(selected_positions) - 1
             )
+
         else:
             playhead_ms = self.conductor.get_playhead_position_ms()
             candidates = [
@@ -875,6 +890,7 @@ class GlyphController(QObject):
         start_ms, _, target_item = ordered_glyphs[target_index]
         self.conductor.scene.clearSelection()
         target_item.setSelected(True)
+
         if self.conductor.total_content_width <= 0:
             return
 

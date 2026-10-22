@@ -36,7 +36,7 @@ class TileWorkerSignals(QObject):
 class TileWorker(QRunnable):
     def __init__(
             self,
-            controller,
+            controller:         object,
             tile_index:         int,
             generation:         int,
             device_pixel_ratio: float
@@ -53,7 +53,19 @@ class TileWorker(QRunnable):
         self.setAutoDelete(True)
 
     def run(self) -> None:
-        image = self.controller.compute_tile_image(self.tile_index, self.device_pixel_ratio)
+        if not self.controller.is_tile_needed(self.tile_index, self.generation):
+            self.controller.discard_pending_tile(self.tile_index)
+            return
+
+        image = self.controller.compute_tile_image(
+            self.tile_index,
+            self.generation,
+            self.device_pixel_ratio
+        )
+
+        if not self.controller.is_tile_needed(self.tile_index, self.generation):
+            self.controller.discard_pending_tile(self.tile_index)
+            return
 
         self.signals.tile_ready.emit(
             self.tile_index,

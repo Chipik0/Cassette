@@ -3,6 +3,9 @@ from __future__ import annotations
 import numpy
 
 from PyQt6.QtGui import (
+    QPen,
+    QBrush,
+    QColor,
     QImage,
     QPixmap,
     QPainter,
@@ -19,6 +22,8 @@ from PyQt6.QtCore import (
     pyqtSignal,
     QThreadPool
 )
+
+from loguru import logger
 
 from System.Accelerated import VisualFunctions
 
@@ -37,7 +42,7 @@ class WaveformController(QObject):
     def __init__(self, conductor: Timeline.ScrollableContent) -> None:
         super().__init__(conductor)
 
-        self.conductor = conductor
+        self.conductor           = conductor
 
         self.tile_width          = Constants.current_settings["tile_width"]
         self.waveform_tiles      = {}
@@ -48,12 +53,15 @@ class WaveformController(QObject):
         self.visible_start_tile  = 0
         self.visible_end_tile    = 0
 
-        self.thread_pool = QThreadPool(self)
+        self.thread_pool         = QThreadPool(self)
         self.thread_pool.setMaxThreadCount(max(1, min(4, QThread.idealThreadCount() // 2)))
 
     # Audio
 
     def prepare_audio(self) -> None:
+        self.advance_generation_and_clear()
+        self.thread_pool.waitForDone(150)
+
         audio_data = self.conductor.playback_manager.data
 
         if audio_data is None or len(audio_data) == 0:
@@ -83,7 +91,10 @@ class WaveformController(QObject):
         if generation != self.tile_generation_id:
             return False
 
-        margin_tiles = 3
+        if self.visible_end_tile <= 0:
+            return True
+
+        margin_tiles = 4
 
         return (self.visible_start_tile - margin_tiles) <= tile_index <= (self.visible_end_tile + margin_tiles)
 
@@ -98,7 +109,8 @@ class WaveformController(QObject):
 
         self.pending_tiles.add(tile_index)
 
-        device_pixel_ratio = QGuiApplication.primaryScreen().devicePixelRatio()
+        screen             = QGuiApplication.primaryScreen()
+        device_pixel_ratio = screen.devicePixelRatio() if screen else 1.0
         generation         = self.tile_generation_id
         worker             = Workers.TileWorker(self, tile_index, generation, device_pixel_ratio)
 
@@ -129,7 +141,10 @@ class WaveformController(QObject):
 
         self.tile_ready.emit(tile_index, pixmap)
 
-        is_currently_visible = self.visible_start_tile <= tile_index <= self.visible_end_tile
+        is_currently_visible = (
+            self.visible_end_tile <= 0 or
+            self.visible_start_tile <= tile_index <= self.visible_end_tile
+        )
 
         if is_currently_visible:
             self.conductor.viewport().update()
@@ -144,33 +159,71 @@ class WaveformController(QObject):
     def compute_tile_image(
             self,
             tile_index:         int,
+            generation:         int,
             device_pixel_ratio: float
         ) -> QImage | None:
 
-        audio_data     = self.conductor.playback_manager.data
-        total_px       = self.conductor.total_content_width
-        samples_per_px = len(audio_data) / float(total_px)
+        if generation != self.tile_generation_id:
+            return None
+
+        if self.conductor is None or self.conductor.playback_manager is None:
+            return None
+
+        audio_data = self.conductor.playback_manager.data
+
+        if audio_data is None or len(audio_data) == 0:
+            return None
+
+        total_content_width = float(self.conductor.total_content_width)
+
+        if total_content_width <= 0.0:
+            return None
+
+        total_samples  = len(audio_data)
+        samples_per_px = total_samples / total_content_width
+
+        if samples_per_px <= 0.0:
+            return None
 
         start_px     = tile_index * self.tile_width
         start_sample = int(start_px * samples_per_px)
-        end_sample   = min(len(audio_data), int((start_px + self.tile_width) * samples_per_px))
+
+        if start_sample < 0 or start_sample >= total_samples:
+            return None
+
+        end_px       = start_px + self.tile_width
+        end_sample   = min(total_samples, int(end_px * samples_per_px))
+
+        if end_sample <= start_sample:
+            return None
 
         audio_chunk = audio_data[start_sample:end_sample]
 
         if audio_chunk.shape[0] == 0:
             return None
 
-        height = float(Styles.Metrics.Waveform.Height)
-        sigma  = float(Constants.current_settings["waveform_smoothing"])
+        height       = float(Styles.Metrics.Waveform.Height)
+        sigma        = float(Constants.current_settings["waveform_smoothing"])
+        waveform_max = max(float(self.global_waveform_max), 0.000001)
 
-        calculated_data = VisualFunctions.process_waveform_tile(
-            audio_chunk.astype(numpy.float32),
-            self.tile_width,
-            samples_per_px,
-            height,
-            self.global_waveform_max,
-            sigma
-        )
+        try:
+            chunk_contiguous = numpy.ascontiguousarray(audio_chunk, dtype = numpy.float32)
+
+            calculated_data = VisualFunctions.process_waveform_tile(
+                chunk_contiguous,
+                self.tile_width,
+                samples_per_px,
+                height,
+                waveform_max,
+                sigma
+            )
+
+        except Exception as error:
+            logger.error(f"Waveform processing error: {error}")
+            return None
+
+        if calculated_data is None or len(calculated_data) == 0:
+            return None
 
         top_points    = calculated_data[:, 0]
         bottom_points = calculated_data[:, 1]
@@ -210,12 +263,16 @@ class WaveformController(QObject):
         path.addPolygon(QPolygonF(polygon_points))
         path.closeSubpath()
 
-        painter.setPen(self.conductor.cached_waveform_pen)
+        waveform_pen   = QPen(QColor(255, 255, 255, 90), 2.5)
+        waveform_brush = QBrush(QColor(255, 255, 255, 90))
+        waveform_pen2  = QPen(QColor(255, 255, 255, 160), 0.7)
+
+        painter.setPen(waveform_pen)
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawPath(path)
 
-        painter.setBrush(self.conductor.cached_waveform_brush)
-        painter.setPen(self.conductor.cached_waveform_pen2)
+        painter.setBrush(waveform_brush)
+        painter.setPen(waveform_pen2)
         painter.drawPath(path)
 
         painter.end()

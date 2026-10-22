@@ -28,33 +28,33 @@ from .. import Timeline
 # Keyboard Controller
 
 class KeyboardController(QObject):
-    undo_requested              = pyqtSignal()
-    redo_requested              = pyqtSignal()
-    copy_requested              = pyqtSignal()
-    paste_requested             = pyqtSignal()
-    cut_requested               = pyqtSignal()
-    duplicate_requested         = pyqtSignal()
-    select_all_requested        = pyqtSignal()
-    select_track_requested      = pyqtSignal()
-    delete_requested            = pyqtSignal()
-    escape_requested            = pyqtSignal()
-    speed_cycle_requested       = pyqtSignal()
-    effect_cycle_requested      = pyqtSignal()
-    playground_requested        = pyqtSignal()
-    brightness_dialog_requested = pyqtSignal()
-    duration_dialog_requested   = pyqtSignal()
-    segments_dialog_requested   = pyqtSignal()
-    shift_segments_requested    = pyqtSignal(int)
-    scale_requested             = pyqtSignal(float)
-    brightness_adjust_requested = pyqtSignal(int)
-    align_glyph_ends_requested  = pyqtSignal()
+    undo_requested               = pyqtSignal()
+    redo_requested               = pyqtSignal()
+    copy_requested               = pyqtSignal()
+    paste_requested              = pyqtSignal()
+    cut_requested                = pyqtSignal()
+    duplicate_requested          = pyqtSignal()
+    select_all_requested         = pyqtSignal()
+    select_track_requested       = pyqtSignal()
+    delete_requested             = pyqtSignal()
+    escape_requested             = pyqtSignal()
+    speed_cycle_requested        = pyqtSignal()
+    effect_cycle_requested       = pyqtSignal()
+    playground_requested         = pyqtSignal()
+    brightness_dialog_requested  = pyqtSignal()
+    duration_dialog_requested    = pyqtSignal()
+    segments_dialog_requested    = pyqtSignal()
+    shift_segments_requested     = pyqtSignal(int)
+    scale_requested              = pyqtSignal(float)
+    brightness_adjust_requested  = pyqtSignal(int)
+    align_glyph_ends_requested   = pyqtSignal()
     align_glyph_starts_requested = pyqtSignal()
-    navigate_glyph_requested    = pyqtSignal(int)
-    spawn_track_glyph_requested = pyqtSignal(str)
-    move_track_up_requested     = pyqtSignal()
-    move_track_down_requested   = pyqtSignal()
-    zoom_selection_requested    = pyqtSignal()
-    zoom_fit_requested          = pyqtSignal()
+    navigate_glyph_requested     = pyqtSignal(int)
+    spawn_track_glyph_requested  = pyqtSignal(str)
+    move_track_up_requested      = pyqtSignal()
+    move_track_down_requested    = pyqtSignal()
+    zoom_selection_requested     = pyqtSignal()
+    zoom_fit_requested           = pyqtSignal()
 
     TRACK_KEY_MAPPINGS: dict[Qt.Key, str] = {
         Qt.Key.Key_A:     Constants.MASTER_TRACK_IDENTIFIER,
@@ -118,18 +118,18 @@ class KeyboardController(QObject):
             (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_Y,                                     self.redo_requested.emit,               True),
             (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier | Qt.Key.Key_Z, self.redo_requested.emit,               True),
 
-            (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_C,   self.copy_requested.emit,      False),
-            (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_V,   self.paste_requested.emit,     True),
-            (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_X,   self.cut_requested.emit,        False),
-            (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_D,   self.handle_duplicate,         False),
-            (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_E,   self.handle_align_glyph_ends,  False),
-            (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_S,   self.handle_align_glyph_starts, False),
-            (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_Left,  lambda: self.navigate_glyph_requested.emit(-1), False),
-            (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_Right, lambda: self.navigate_glyph_requested.emit(1),  False),
-            (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_F11, self.playground_requested.emit, False),
+            (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_C,     self.copy_requested.emit,            False),
+            (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_V,     self.paste_requested.emit,           True),
+            (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_X,     self.cut_requested.emit,              False),
+            (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_D,     self.handle_duplicate,               False),
+            (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_E,     self.handle_align_glyph_ends,        False),
+            (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_S,     self.handle_align_glyph_starts,      False),
+            (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_Left,  lambda: self.handle_navigate_glyph(-1), False),
+            (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_Right, lambda: self.handle_navigate_glyph(1),  False),
+            (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_F11,   self.playground_requested.emit,      False),
 
-            (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_A,                                     self.select_all_requested.emit,   False),
-            (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier | Qt.Key.Key_A, self.select_track_requested.emit, False),
+            (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_A,                                     self.handle_select_all,   False),
+            (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier | Qt.Key.Key_A, self.handle_select_track, False),
 
             (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_Equal, lambda: self.scale_requested.emit(100.0),  True),
             (Qt.KeyboardModifier.ControlModifier | Qt.Key.Key_Minus, lambda: self.scale_requested.emit(-100.0), True),
@@ -246,7 +246,25 @@ class KeyboardController(QObject):
             self.space_hold_timer.stop()
 
     # Arrow Navigation and Nudge Handlers
-    
+
+    def handle_navigate_glyph(self, direction: int) -> None:
+        if self.playback_manager.is_playing:
+            return
+
+        self.navigate_glyph_requested.emit(direction)
+
+    def handle_select_all(self) -> None:
+        if self.playback_manager.is_playing:
+            return
+
+        self.select_all_requested.emit()
+
+    def handle_select_track(self) -> None:
+        if self.playback_manager.is_playing:
+            return
+
+        self.select_track_requested.emit()
+
     def handle_arrow_left(self) -> None:
         if self.conductor.scene.selectedItems():
             self.conductor.glyph_controller.nudge_selected_glyphs_horizontal(-10)
@@ -296,7 +314,7 @@ class KeyboardController(QObject):
             self.conductor.horizontalScrollBar().setValue(0)
             self.conductor.scroll_to_playhead()
             self.playback_manager.toggle_playback(0.0)
-            
+
             return
 
         self.playback_manager.toggle_playback(position_ms)
@@ -416,7 +434,7 @@ class KeyboardController(QObject):
             return
 
         selected_items = self.conductor.glyph_controller.get_selected_glyph_items()
-        device = Constants.DEVICES[self.conductor.composition.model]
+        device         = Constants.DEVICES[self.conductor.composition.model]
 
         glyphs = [
             glyph

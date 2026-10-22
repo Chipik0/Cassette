@@ -188,6 +188,7 @@ class AudioLoadingDialog(FloatingWindowGPU):
 
 class AudioEditorBase(AudioLoadingDialog):
     def setup_trim_section(self) -> None:
+        self.is_cleaning_up     = False
         self.trim_widget        = Widgets.TrimmingWaveformWidget()
 
         self.start_time_textbox = make_time_textbox()
@@ -196,7 +197,7 @@ class AudioEditorBase(AudioLoadingDialog):
         self.fade_out_textbox   = make_fade_textbox("Fade out (ms)")
 
         self.fade_in_selector   = Widgets.Selector(["Fade", "Filter", "Speed"], default_index = 0)
-        self.fade_out_selector  = Widgets.Selector(["Speed", "Filter", "Fade"], default_index  = 2)
+        self.fade_out_selector  = Widgets.Selector(["Speed", "Filter", "Fade"], default_index = 2)
 
         self.configure_compact_selector(self.fade_in_selector)
         self.configure_compact_selector(self.fade_out_selector)
@@ -256,7 +257,7 @@ class AudioEditorBase(AudioLoadingDialog):
 
         self.ok_button.setEnabled(False)
         self.ok_button.clicked.connect(self.accept_callback)
-        self.cancel_button.clicked.connect(self.close)
+        self.cancel_button.clicked.connect(self.on_cancel)
 
     def build_playback_row(self) -> QHBoxLayout:
         row_layout = QHBoxLayout()
@@ -557,12 +558,24 @@ class AudioEditorBase(AudioLoadingDialog):
             child_widget.installEventFilter(self)
 
     def cleanup_audio(self) -> None:
+        if self.is_cleaning_up:
+            return
+
+        self.is_cleaning_up = True
+
         self.playback_timer.stop()
-        self.reset_preview_effects()
-        self.trim_widget.audio_data = None
+        self.trim_widget.set_is_playing(False)
 
         if self.player.is_playing:
-            self.player.fade_out_and_stop(3000)
+            self.player.fade_out_and_stop(
+                duration_ms = 600,
+                easing      = LoomEngine.Easing.ease_out_quart,
+                on_finish   = self.reset_preview_effects
+            )
+
+        else:
+            self.player.stop()
+            self.reset_preview_effects()
 
         self.cleanup_threads(self.get_threads())
 
@@ -571,9 +584,12 @@ class AudioEditorBase(AudioLoadingDialog):
         self.prepare_thread = None
         self.load_thread    = None
 
-    def closeEvent(self, event: QCloseEvent) -> None:
+    def on_cancel(self) -> None:
         self.cleanup_audio()
         super().on_cancel()
+
+    def closeEvent(self, event: QCloseEvent) -> None:
+        self.cleanup_audio()
         super().closeEvent(event)
 
 # BPM Editor

@@ -111,7 +111,7 @@ class GlyphSyncer(QObject):
         self.composition = composition
 
     def start_scanning_loop(self) -> None:
-        if self.client_socket is not None:
+        if self.connection_mode == "cable" and self.client_socket is not None:
             return
 
         if self.scan_timer.isActive():
@@ -125,6 +125,37 @@ class GlyphSyncer(QObject):
             return
 
         self.scan_timer.stop()
+
+    def disconnect_socket(self) -> None:
+        self.heartbeat_timer.stop()
+        self.is_sender_active     = False
+        self.has_warned_high_ping = False
+
+        while not self.send_queue.empty():
+            try:
+                self.send_queue.get_nowait()
+
+            except queue.Empty:
+                break
+
+        if self.client_socket is not None:
+            try:
+                self.client_socket.shutdown(socket.SHUT_RDWR)
+
+            except Exception:
+                pass
+
+            try:
+                self.client_socket.close()
+
+            except Exception:
+                pass
+
+            self.client_socket = None
+
+        self.connection_mode   = None
+        self.active_ip_address = None
+        self.is_connecting     = False
 
     # Process
 
@@ -176,17 +207,18 @@ class GlyphSyncer(QObject):
     # Discovery
 
     def scan_devices(self) -> None:
-        if self.client_socket is not None:
+        if self.connection_mode == "cable" and self.client_socket is not None:
             return
 
         if self.is_connecting:
             return
 
-        self.send_wireless_discovery_probe()
-        self.check_wireless_discovery_responses()
+        if self.client_socket is None:
+            self.send_wireless_discovery_probe()
+            self.check_wireless_discovery_responses()
 
-        if self.client_socket is not None or self.is_connecting:
-            return
+            if self.client_socket is not None or self.is_connecting:
+                return
 
         self.run_command_async(
             arguments   = ["devices"],
@@ -221,8 +253,8 @@ class GlyphSyncer(QObject):
                 if response_dictionary.get("service") != "cassette_receiver":
                     continue
 
-                if self.client_socket is not None or self.is_connecting:
-                    continue
+                if self.connection_mode == "cable" or self.client_socket is not None or self.is_connecting:
+                    break
 
                 logger.info(f"Discovered Receiver via Wi-Fi at {sender_ip_address}")
                 self.connect_asynchronous(sender_ip_address, RECEIVER_TCP_PORT, "wireless")
@@ -243,11 +275,20 @@ class GlyphSyncer(QObject):
         new_list: list[str] = [line.split()[0] for line in lines[1:] if "device" in line]
 
         if self.devices == new_list:
-            if self.client_socket is None and not self.is_connecting:
-                for device in self.devices:
-                    if device not in self.blocked_devices:
-                        self.initialize_adb_device(device)
-                        break
+            available_devices = [device for device in self.devices if device not in self.blocked_devices]
+
+            if available_devices:
+                target_device = available_devices[0]
+
+                if self.connection_mode == "wireless":
+                    logger.info(f"Cable device available ({target_device}). Disconnecting wireless and switching to cable.")
+                    self.disconnect_socket()
+                    self.initialize_adb_device(target_device)
+
+                    return
+
+                if self.client_socket is None and not self.is_connecting:
+                    self.initialize_adb_device(target_device)
 
             return
 
@@ -266,20 +307,30 @@ class GlyphSyncer(QObject):
 
         self.device_changed.emit(new_list)
 
-        if self.client_socket is not None or self.is_connecting:
+        available_connected = [device for device in connected if device not in self.blocked_devices]
+
+        if not available_connected:
             return
 
-        for device in connected:
-            if device in self.blocked_devices:
-                continue
+        target_device = available_connected[0]
 
-            self.initialize_adb_device(device)
-            break
+        if self.connection_mode == "wireless":
+            logger.info(f"New cable device attached ({target_device}). Disconnecting wireless to switch to cable.")
+            self.disconnect_socket()
+            self.initialize_adb_device(target_device)
+
+            return
+
+        if self.client_socket is None and not self.is_connecting:
+            self.initialize_adb_device(target_device)
 
     # Device Initialization
 
     def initialize_adb_device(self, device_identifier: str) -> None:
-        if self.client_socket is not None or self.is_connecting:
+        if self.connection_mode == "cable" and self.client_socket is not None:
+            return
+
+        if self.is_connecting:
             return
 
         def check_package(
@@ -303,7 +354,10 @@ class GlyphSyncer(QObject):
             ]
 
             def on_cable_setup_completed() -> None:
-                if self.client_socket is not None or self.is_connecting:
+                if self.connection_mode == "cable" and self.client_socket is not None:
+                    return
+
+                if self.is_connecting:
                     return
 
                 QTimer.singleShot(
@@ -361,7 +415,10 @@ class GlyphSyncer(QObject):
             network_mode: str
         ) -> None:
 
-        if self.client_socket is not None:
+        if network_mode == "cable" and self.connection_mode == "wireless":
+            self.disconnect_socket()
+
+        elif self.client_socket is not None:
             return
 
         if self.is_connecting:
@@ -400,7 +457,9 @@ class GlyphSyncer(QObject):
                 )
                 self.sender_thread.start()
 
-                QTimer.singleShot(0, self.stop_scanning_loop)
+                if network_mode == "cable":
+                    QTimer.singleShot(0, self.stop_scanning_loop)
+
                 QTimer.singleShot(0, self.heartbeat_timer.start)
 
                 logger.success(f"Connected to Receiver via {network_mode.upper()} [{host_address}:{port_number}]")
@@ -520,36 +579,7 @@ class GlyphSyncer(QObject):
 
         logger.warning(f"Connection lost ({self.connection_mode})")
 
-        self.heartbeat_timer.stop()
-        self.is_sender_active     = False
-        self.has_warned_high_ping = False
-
-        while not self.send_queue.empty():
-            try:
-                self.send_queue.get_nowait()
-
-            except queue.Empty:
-                break
-
-        if self.client_socket is not None:
-            try:
-                self.client_socket.shutdown(socket.SHUT_RDWR)
-
-            except Exception:
-                pass
-
-            try:
-                self.client_socket.close()
-
-            except Exception:
-                pass
-
-            self.client_socket = None
-
-        self.connection_mode   = None
-        self.active_ip_address = None
-        self.is_connecting     = False
-
+        self.disconnect_socket()
         self.status_changed.emit("disconnected", "")
         self.start_scanning_loop()
 
@@ -709,23 +739,23 @@ class GlyphSyncer(QObject):
     def full_load(self, glyphs_dictionary: dict) -> None:
         if glyphs_dictionary is None:
             glyphs_dictionary = {}
-    
+
         enriched_list: list = []
-    
+
         for glyph_identifier_key, glyph_item in glyphs_dictionary.items():
             item_copy: dict = create_enriched_glyph_data(
                 glyph_identifier = str(glyph_identifier_key),
                 glyph_content    = glyph_item,
                 composition      = self.composition
             )
-    
+
             item_copy["id"] = glyph_identifier_key
-    
+
             enriched_list.append(item_copy)
-    
+
         self.send_payload({"action": "load", "glyphs": enriched_list})
         self.last_synced = copy.deepcopy({str(key): value for key, value in glyphs_dictionary.items()})
-    
+
         current_speed = Player.player.speed
         self.set_speed(current_speed)
 
