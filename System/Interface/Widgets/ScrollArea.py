@@ -205,11 +205,14 @@ class ElasticScrollArea(QScrollArea):
         self.update_fade_visibility()
 
     def wheelEvent(self, event: QWheelEvent) -> None:
-        delta_y    = event.angleDelta().y()
-        limit_px   = self.calculate_maximum_scroll()
-        resistance = self.calculate_resistance(limit_px)
+        delta_y         = event.angleDelta().y()
+        limit_px        = self.calculate_maximum_scroll()
+        resistance      = self.calculate_resistance(limit_px)
+        raw_sensitivity = Constants.current_settings.get("wheel_scroll_sensitivity", 1.0)
 
-        self.velocity_speed     -= (delta_y * Constants.current_settings.get("wheel_scroll_sensitivity", 1.0) / 8.0) * resistance
+        sensitivity = float(raw_sensitivity)
+
+        self.velocity_speed     -= (delta_y * sensitivity / 8.0) * resistance
         self.scrolling_is_active = True
 
         self.idle_timer.start(Constants.USER_SCROLL_IDLE_TIMEOUT)
@@ -334,7 +337,7 @@ class ElasticScrollArea(QScrollArea):
 
         self.canvas.move(0, int(y_px))
         self.update_fade_visibility()
-    
+
     def calculate_overshoot(self, limit_px: float) -> float:
         if self.raw_scroll_position < 0.0:
             return self.raw_scroll_position
@@ -356,13 +359,15 @@ class ElasticScrollArea(QScrollArea):
         else:
             excess_px = self.raw_scroll_position - limit_px
 
-        resistance_base = Constants.current_settings.get("overscroll_resistance", Constants.VISUAL_RESISTANCE_STRENGTH)
+        raw_base        = Constants.current_settings.get("overscroll_resistance", Constants.VISUAL_RESISTANCE_STRENGTH)
+        resistance_base = float(raw_base if raw_base is not None else Constants.VISUAL_RESISTANCE_STRENGTH)
 
         return max(0.05, 1.0 / (1.0 + excess_px / (resistance_base * 0.5))) * 0.3
 
     def update_velocity(self, overshoot_px: float) -> None:
         if overshoot_px == 0.0:
-            deceleration_rate = Constants.current_settings.get("inertia_deceleration_rate", Constants.INERTIA_DECELERATION_RATE)
+            raw_deceleration  = Constants.current_settings.get("inertia_deceleration_rate", Constants.INERTIA_DECELERATION_RATE)
+            deceleration_rate = float(raw_deceleration if raw_deceleration is not None else Constants.INERTIA_DECELERATION_RATE)
             self.velocity_speed *= deceleration_rate
 
             return
@@ -372,8 +377,8 @@ class ElasticScrollArea(QScrollArea):
 
             return
 
-        stiffness_setting = Constants.current_settings.get("scroll_spring_stiffness", 4) / 100.0
-        damping_setting   = Constants.current_settings.get("scroll_spring_damping",  40) / 100.0
+        stiffness_setting = float(Constants.current_settings.get("scroll_spring_stiffness", 4) or 4) / 100.0
+        damping_setting   = float(Constants.current_settings.get("scroll_spring_damping", 40) or 40) / 100.0
 
         spring_force         = -overshoot_px        * stiffness_setting
         damping_force        = -self.velocity_speed * damping_setting
@@ -385,7 +390,8 @@ class ElasticScrollArea(QScrollArea):
             limit_px: float
         ) -> float:
 
-        resistance_base = Constants.current_settings.get("overscroll_resistance", Constants.VISUAL_RESISTANCE_STRENGTH)
+        raw_base        = Constants.current_settings.get("overscroll_resistance", Constants.VISUAL_RESISTANCE_STRENGTH)
+        resistance_base = float(raw_base if raw_base is not None else Constants.VISUAL_RESISTANCE_STRENGTH)
 
         if raw_px < 0.0:
             return raw_px / (1.0 + abs(raw_px) / resistance_base)

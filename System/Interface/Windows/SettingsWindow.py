@@ -53,7 +53,7 @@ SETTING_WIDGET_REGISTRY: dict[str, tuple[Callable[[object, dict[str, object]], Q
         lambda value, configuration: Widgets.SelectorWithLabel(
             description   = str(configuration["title"]),
             items         = configuration["map"],
-            default_text  = str(configuration["default"]) if value is None else None,
+            default_text  = str(configuration.get("default", "")),
             default_value = value
         ),
         lambda widget: widget.current_data()
@@ -392,4 +392,10 @@ class SettingsWindow(FloatingWindowGPU):
         if not getter:
             return
 
-        self.settings.setValue(key, getter(widget))
+        value = getter(widget)
+
+        if value is None:
+            logger.warning(f"Setting '{key}' value getter returned None. Skipped saving to avoid corruption.")
+            return
+
+        self.settings.setValue(key, value)

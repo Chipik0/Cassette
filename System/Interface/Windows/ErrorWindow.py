@@ -30,8 +30,8 @@ class ErrorWindow(FloatingWindowGPU):
             button_text:      str            = "Cool",
             allow_report:     bool           = False,
             parent:           QWidget | None = None,
-            *args,
-            **kwargs
+            *args:            object,
+            **kwargs:         object
         ) -> None:
 
         super().__init__(title, parent = parent, *args, **kwargs)
@@ -43,6 +43,7 @@ class ErrorWindow(FloatingWindowGPU):
         self.network_worker        = None
         self.transmit_sound        = None
         self.sound_speed_handle    = None
+        self.contact_textbox       = None
         self.user_action_textbox   = None
         self.inspect_data_button   = None
         self.payload_preview_label = None
@@ -82,6 +83,14 @@ class ErrorWindow(FloatingWindowGPU):
         self.description_label = Widgets.DescriptionLabel(self.description_text, 600)
         self.description_label.setMaximumSize(900, 400)
 
+        self.contact_textbox = Widgets.Textbox(
+            input_type  = "text",
+            max_length  = 64,
+            placeholder = "Telegram / Discord (Optional)"
+        )
+
+        self.contact_textbox.textChanged.connect(self.handle_user_action_changed)
+
         self.user_action_textbox = Widgets.Textbox(
             input_type  = "text",
             max_length  = 500,
@@ -111,6 +120,7 @@ class ErrorWindow(FloatingWindowGPU):
         )
 
         self.content_layout.addWidget(self.description_label)
+        self.content_layout.addWidget(self.contact_textbox)
         self.content_layout.addWidget(self.user_action_textbox)
         self.content_layout.addWidget(self.inspect_data_button)
         self.content_layout.addWidget(self.payload_preview_label)
@@ -139,19 +149,26 @@ class ErrorWindow(FloatingWindowGPU):
             return version_file.read().strip()
 
     def build_payload_dictionary(self) -> dict:
-        user_text = ""
+        user_text    = ""
+        contact_text = ""
 
         if self.user_action_textbox is not None:
             raw_text  = self.user_action_textbox.text()
             user_text = str(raw_text).strip() if raw_text else ""
 
-        version_string  = self.read_application_version()
-        system_platform = f"{platform.system()} {platform.release()} ({platform.machine()}). Cassette Version: {version_string}"
+        if self.contact_textbox is not None:
+            raw_contact  = self.contact_textbox.text()
+            contact_text = str(raw_contact).strip() if raw_contact else ""
+
+        resolved_contact = contact_text if contact_text else "Anonymous"
+        version_string   = self.read_application_version()
+        system_platform  = f"{platform.system()} {platform.release()} ({platform.machine()}). Cassette Version: {version_string}"
 
         text = f"""
 An error encountered!
 
 *System Info:* `{system_platform}`
+*From:* {resolved_contact}
 
 *Error:* ```\n{self.description_text}```
 

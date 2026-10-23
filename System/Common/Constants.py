@@ -23,11 +23,27 @@ from System.Devices import (
 
 current_settings = Utils.SettingsController("chips047", "Cassette")
 
-def load_settings() -> None:
-    logger.debug("Loaded settings from chips047/Cassette")
-    current_settings.load()
+def values_match(
+        first:  object,
+        second: object
+    ) -> bool:
 
-def get_default_value(parameters: dict[str, object]) -> int | str | bool | None:
+    if first == second:
+        return True
+
+    if first is None or second is None:
+        return False
+
+    try:
+        if float(first) == float(second):
+            return True
+
+    except (ValueError, TypeError):
+        pass
+
+    return str(first).strip().lower() == str(second).strip().lower()
+
+def get_default_value(parameters: dict[str, object]) -> int | float | str | bool | None:
     element_type = parameters.get("type", "")
 
     if element_type == "checkbox":
@@ -37,9 +53,91 @@ def get_default_value(parameters: dict[str, object]) -> int | str | bool | None:
         return parameters.get("default", parameters.get("min", 0))
 
     if element_type.startswith("selector"):
-        return parameters["map"][parameters["default"]]
+        options_map = parameters.get("map", {})
+        default_key = parameters.get("default")
+
+        return options_map.get(default_key)
 
     return parameters.get("default")
+
+def validate_and_repair_settings(setting_components: dict[str, list[dict[str, object]]]) -> None:
+    settings       = current_settings.instance
+    settings_repaired = False
+
+    for components in setting_components.values():
+        for parameters in components:
+            key          = str(parameters["key"])
+            element_type = str(parameters.get("type", ""))
+
+            if key.startswith("_") and element_type not in ("tutorial_reset", "checkbox"):
+                continue
+
+            current_value = current_settings.get(key)
+            default_value = get_default_value(parameters)
+
+            if element_type == "checkbox":
+                if not isinstance(current_value, bool):
+                    fallback = bool(default_value)
+                    current_settings.data[key] = fallback
+                    settings.setValue(key, fallback)
+                    settings_repaired = True
+
+            elif element_type == "slider":
+                min_value = int(parameters.get("min", 0))
+                max_value = int(parameters.get("max", 100))
+
+                if not isinstance(current_value, (int, float)):
+                    fallback = int(default_value if default_value is not None else min_value)
+                    current_settings.data[key] = fallback
+                    settings.setValue(key, fallback)
+                    settings_repaired = True
+
+                elif current_value < min_value or current_value > max_value:
+                    clamped_value              = max(min_value, min(max_value, int(current_value)))
+                    current_settings.data[key] = clamped_value
+                    settings.setValue(key, clamped_value)
+                    settings_repaired          = True
+
+            elif element_type.startswith("selector"):
+                options_map   = parameters.get("map", {})
+                matched_value = None
+
+                for option_title, option_value in options_map.items():
+                    if values_match(current_value, option_value) or values_match(current_value, option_title):
+                        matched_value = option_value
+                        break
+
+                if matched_value is None:
+                    current_settings.data[key] = default_value
+                    settings.setValue(key, default_value)
+                    settings_repaired = True
+
+                elif current_value != matched_value:
+                    current_settings.data[key] = matched_value
+                    settings.setValue(key, matched_value)
+                    settings_repaired          = True
+
+            elif element_type == "delay_setup":
+                if not isinstance(current_value, (int, float)) or current_value is None:
+                    fallback                   = int(default_value if default_value is not None else 0)
+                    current_settings.data[key] = fallback
+                    settings.setValue(key, fallback)
+                    settings_repaired          = True
+
+            elif current_value is None and default_value is not None:
+                current_settings.data[key] = default_value
+                settings.setValue(key, default_value)
+                settings_repaired          = True
+
+    if settings_repaired:
+        settings.sync()
+        logger.warning("Repaired invalid or unaligned settings in chips047/Cassette")
+
+def load_settings() -> None:
+    current_settings.load()
+    validate_and_repair_settings(SettingsDict())
+
+    logger.debug("Loaded and verified settings from chips047/Cassette")
 
 def prepare_default_settings(setting_components: dict[str, list]) -> None:
     settings      = current_settings.instance
@@ -66,6 +164,7 @@ def prepare_default_settings(setting_components: dict[str, list]) -> None:
         settings.remove(key)
 
     settings.sync()
+    validate_and_repair_settings(setting_components)
 
     logger.success("Default settings prepared and synced.")
 
@@ -241,7 +340,7 @@ void main() {
 }
 """
 
-CASSETTE_VERTEX_SHADER_SOURCE   = """#version 330 core
+CASSETTE_VERTEX_SHADER_SOURCE = """#version 330 core
 layout (location = 0) in vec3 attribute_position;
 layout (location = 1) in vec3 attribute_normal;
 layout (location = 2) in vec2 attribute_texture_coordinate;
@@ -363,7 +462,7 @@ void main() {
 }
 """
 
-# SettingsSchema
+# Settings Schema
 
 class SettingsDictionaryMeta(type):
     def __getitem__(cls, item: str) -> list:
@@ -512,15 +611,15 @@ class SettingsDict(dict, metaclass = SettingsDictionaryMeta):
                     "title":       "Compositor GPU Rendering",
                     "key":         "gpu",
                     "description": "Significantly improves smoothness. Requires restart.",
-                    "default":      True
+                    "default":     True
                 },
                 {
                     "type":    "selector",
                     "title":   "Waveform Tile Width",
                     "key":     "tile_width",
                     "map": {
-                        "256": 256,
-                        "512": 512,
+                        "256":  256,
+                        "512":  512,
                         "1024": 1024
                     },
                     "default": "512"
@@ -558,10 +657,10 @@ class SettingsDict(dict, metaclass = SettingsDictionaryMeta):
                     "title":   "Horizontal Scroll Acceleration",
                     "key":     "scroll_acceleration",
                     "map": {
-                        "Low":       "0.1",
-                        "Normal":    "0.3",
-                        "High":      "0.5",
-                        "Very High": "0.8"
+                        "Low":       0.1,
+                        "Normal":    0.3,
+                        "High":      0.5,
+                        "Very High": 0.8
                     },
                     "default": "Normal"
                 },
@@ -584,9 +683,9 @@ class SettingsDict(dict, metaclass = SettingsDictionaryMeta):
                     "title":   "Menu Scroll Sensitivity",
                     "key":     "wheel_scroll_sensitivity",
                     "map": {
-                        "Low":    "0.125",
-                        "Normal": "0.175",
-                        "High":   "0.200"
+                        "Low":    0.125,
+                        "Normal": 0.175,
+                        "High":   0.200
                     },
                     "default": "Normal"
                 },
@@ -639,19 +738,19 @@ class SettingsDict(dict, metaclass = SettingsDictionaryMeta):
                     "default": default_style
                 },
                 {
-                    "type":  "selector",
-                    "title": "Animation Multiplier",
-                    "key":   "animation_multiplier",
+                    "type":    "selector",
+                    "title":   "Animation Multiplier",
+                    "key":     "animation_multiplier",
                     "map": {
-                        "0.75x": "0.75",
-                        "1.0x":  "1.0",
-                        "1.15x": "1.15",
-                        "1.25x": "1.25",
-                        "1.5x":  "1.5",
-                        "3.0x":  "3.0",
-                        "5.0x":  "5.0",
-                        "10.0x": "10.0",
-                        "20.0x": "20.0"
+                        "0.75x": 0.75,
+                        "1.0x":  1.0,
+                        "1.15x": 1.15,
+                        "1.25x": 1.25,
+                        "1.5x":  1.5,
+                        "3.0x":  3.0,
+                        "5.0x":  5.0,
+                        "10.0x": 10.0,
+                        "20.0x": 20.0
                     },
                     "default": "1.0x"
                 },
@@ -667,17 +766,17 @@ class SettingsDict(dict, metaclass = SettingsDictionaryMeta):
                     "title":       "Floating Window Animations",
                     "key":         "floating_window_animations",
                     "description": "Enables popup background animations.",
-                    "default":      True
+                    "default":     True
                 },
                 {
                     "type":    "selector",
                     "title":   "Window Hover Smoothing",
                     "key":     "window_hover_smoothing",
                     "map": {
-                        "No Tilt":   "0.0",
-                        "Slow":      "0.07",
-                        "Normal":    "0.2",
-                        "Very Fast": "0.8"
+                        "No Tilt":   0.0,
+                        "Slow":      0.07,
+                        "Normal":    0.2,
+                        "Very Fast": 0.8
                     },
                     "default": "Normal"
                 },
@@ -747,14 +846,14 @@ class SettingsDict(dict, metaclass = SettingsDictionaryMeta):
                     "title":   "Audio Blocksize",
                     "key":     "audio_blocksize",
                     "map": {
-                        "32":   "32",
-                        "64":   "64",
-                        "128":  "128",
-                        "256":  "256",
-                        "512":  "512",
-                        "1024": "1024",
-                        "2048": "2048",
-                        "4096": "4096"
+                        "32":   32,
+                        "64":   64,
+                        "128":  128,
+                        "256":  256,
+                        "512":  512,
+                        "1024": 1024,
+                        "2048": 2048,
+                        "4096": 4096
                     },
                     "default": "128"
                 },
@@ -893,11 +992,11 @@ class SettingsDict(dict, metaclass = SettingsDictionaryMeta):
                     "default":     True
                 },
                 {
-                    "type": "checkbox",
-                    "title": "Drag & Drop Sounds",
+                    "type":        "checkbox",
+                    "title":       "Drag & Drop Sounds",
                     "description": "Enables sound effects when dragging and dropping files.",
-                    "key": "drag_drop_sounds",
-                    "default": True
+                    "key":         "drag_drop_sounds",
+                    "default":     True
                 }
             ],
 
@@ -914,7 +1013,7 @@ class SettingsDict(dict, metaclass = SettingsDictionaryMeta):
                     "title":   "Mouse Click Behavior",
                     "key":     "mouse_click_behavior",
                     "map": {
-                        "Normal": "normal",
+                        "Normal":          "normal",
                         "Fast (On Press)": "fast"
                     },
                     "default": "Normal"
@@ -924,9 +1023,9 @@ class SettingsDict(dict, metaclass = SettingsDictionaryMeta):
                     "title":   "Playhead Position",
                     "key":     "playhead_position",
                     "map": {
-                        "Left":   "0.25",
-                        "Center": "0.5",
-                        "Right":  "0.75"
+                        "Left":   0.25,
+                        "Center": 0.5,
+                        "Right":  0.75
                     },
                     "default": "Left"
                 },
@@ -949,16 +1048,16 @@ class SettingsDict(dict, metaclass = SettingsDictionaryMeta):
                         "Big":        400,
                         "Very Big":   500
                     },
-                    "default": "Very big"
+                    "default": "Very Big"
                 },
                 {
                     "type":    "selector",
                     "title":   "Waveform Smoothing",
                     "key":     "waveform_smoothing",
                     "map": {
-                        "Accuracy":   "0.5",
-                        "Balance":    "1.7",
-                        "Smoothness": "3"
+                        "Accuracy":   0.5,
+                        "Balance":    1.7,
+                        "Smoothness": 3.0
                     },
                     "default": "Balance"
                 },

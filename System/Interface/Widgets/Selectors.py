@@ -2,6 +2,15 @@ from __future__ import annotations
 
 import random
 
+from PyQt6.QtCore import (
+    Qt,
+    QRectF,
+    QEvent,
+    QTimer,
+    QObject,
+    pyqtSignal
+)
+
 from PyQt6.QtGui import (
     QFont,
     QBrush,
@@ -10,15 +19,6 @@ from PyQt6.QtGui import (
     QWheelEvent,
     QFontMetrics,
     QPainterPath
-)
-
-from PyQt6.QtCore import (
-    Qt,
-    QRectF,
-    QEvent,
-    QTimer,
-    QObject,
-    pyqtSignal
 )
 
 from PyQt6.QtWidgets import (
@@ -82,19 +82,41 @@ class SegmentedStrip(Lifecycle.LoomAnimationMixin, QWidget):
 
         self.setStyleSheet(Styles.Controls.Selector)
 
-        if default_text is not None:
-            self.select_text(default_text, animated = False)
-            return
+        has_selection = False
 
         if default_value is not None:
-            self.select_data(default_value, animated = False)
-            return
+            has_selection = self.select_data(default_value, animated = False)
 
-        if not self.group.buttons():
-            return
+        if not has_selection and default_text is not None:
+            has_selection = self.select_text(default_text, animated = False)
 
-        self.group.buttons()[0].setChecked(True)
+        if not has_selection and self.group.buttons():
+            first_button = self.group.buttons()[0]
+            first_index  = self.group.id(first_button)
+            self.select_index(first_index, animated = False, emit = False)
+
         QTimer.singleShot(0, self.animate_entrance)
+
+    @staticmethod
+    def values_match(
+            first:  object,
+            second: object
+        ) -> bool:
+
+        if first == second:
+            return True
+
+        if first is None or second is None:
+            return False
+
+        try:
+            if float(first) == float(second):
+                return True
+
+        except (ValueError, TypeError):
+            pass
+
+        return str(first).strip().lower() == str(second).strip().lower()
 
     def resolve_hover_color(self, hover_color: object) -> QColor:
         if hover_color:
@@ -165,7 +187,6 @@ class SegmentedStrip(Lifecycle.LoomAnimationMixin, QWidget):
         button.setMinimumHeight(30)
 
         button.setStyleSheet(Styles.Controls.SelectorButton)
-
         button.installEventFilter(self)
 
         self.layout.addWidget(button)
@@ -443,7 +464,6 @@ class SegmentedStrip(Lifecycle.LoomAnimationMixin, QWidget):
         painter.setBrush(QBrush(self.hover_color))
 
         path = QPainterPath()
-
         path.addRoundedRect(rectangle, self.corner_radius, self.corner_radius)
         painter.drawPath(path)
 
@@ -460,7 +480,6 @@ class SegmentedStrip(Lifecycle.LoomAnimationMixin, QWidget):
         painter.setBrush(QBrush(self.pill_color))
 
         path = QPainterPath()
-
         path.addRoundedRect(rectangle, self.corner_radius, self.corner_radius)
         painter.drawPath(path)
 
@@ -500,42 +519,82 @@ class SegmentedStrip(Lifecycle.LoomAnimationMixin, QWidget):
             text:     str,
             animated: bool = True,
             emit:     bool = False
-        ) -> None:
+        ) -> bool:
 
         for button in self.group.buttons():
-            if button.text() != text:
+            if not self.values_match(button.text(), text):
                 continue
 
             self.select_index(self.group.id(button), animated = animated, emit = emit)
-            return
+            return True
+
+        for index, data in self.data_by_identifier.items():
+            if not self.values_match(data, text):
+                continue
+
+            self.select_index(index, animated = animated, emit = emit)
+            return True
+
+        return False
 
     def select_data(
             self,
             value:    object,
             animated: bool = True,
             emit:     bool = False
-        ) -> None:
+        ) -> bool:
 
         for index, data in self.data_by_identifier.items():
-            if str(data) != str(value):
+            if not self.values_match(data, value):
                 continue
 
             self.select_index(index, animated = animated, emit = emit)
-            return
+            return True
+
+        for button in self.group.buttons():
+            if not self.values_match(button.text(), value):
+                continue
+
+            self.select_index(self.group.id(button), animated = animated, emit = emit)
+            return True
+
+        return False
 
     def current_index(self) -> int:
-        return self.group.checkedId()
+        checked_identifier = self.group.checkedId()
+
+        if checked_identifier != -1:
+            return checked_identifier
+
+        if self.buttons:
+            return self.group.id(self.buttons[0])
+
+        return -1
 
     def current_text(self) -> str:
         checked_button = self.group.checkedButton()
 
-        if not checked_button:
-            return ""
+        if checked_button is not None:
+            return checked_button.text()
 
-        return checked_button.text()
+        if self.buttons:
+            return self.buttons[0].text()
+
+        return ""
 
     def current_data(self) -> object:
-        return self.data_by_identifier.get(self.group.checkedId())
+        checked_identifier = self.group.checkedId()
+
+        if checked_identifier in self.data_by_identifier:
+            return self.data_by_identifier[checked_identifier]
+
+        if self.buttons:
+            first_button = self.buttons[0]
+            first_index  = self.group.id(first_button)
+
+            return self.data_by_identifier.get(first_index)
+
+        return None
 
     # Helpers and Properties
 
@@ -563,7 +622,7 @@ class Selector(QWidget):
 
     def __init__(
             self,
-            items:         list[str],
+            items:         list[str] | dict,
             default_index: int = 0,
             switch_sound:  str = "Controls/Selector/Select"
         ) -> None:
