@@ -213,13 +213,6 @@ class GlyphSyncer(QObject):
         if self.is_connecting:
             return
 
-        if self.client_socket is None:
-            self.send_wireless_discovery_probe()
-            self.check_wireless_discovery_responses()
-
-            if self.client_socket is not None or self.is_connecting:
-                return
-
         self.run_command_async(
             arguments   = ["devices"],
             on_finished = self.on_devices_listed
@@ -274,55 +267,33 @@ class GlyphSyncer(QObject):
         lines:    list[str] = standard_output.strip().splitlines()
         new_list: list[str] = [line.split()[0] for line in lines[1:] if "device" in line]
 
-        if self.devices == new_list:
-            available_devices = [device for device in self.devices if device not in self.blocked_devices]
+        available_devices = [device for device in new_list if device not in self.blocked_devices]
 
-            if available_devices:
-                target_device = available_devices[0]
+        if available_devices:
+            target_device = available_devices[0]
 
-                if self.connection_mode == "wireless":
-                    logger.info(f"Cable device available ({target_device}). Disconnecting wireless and switching to cable.")
-                    self.disconnect_socket()
-                    self.initialize_adb_device(target_device)
+            if self.connection_mode == "wireless":
+                logger.info(f"Cable device available ({target_device}). Disconnecting wireless and switching to cable.")
+                self.disconnect_socket()
+                self.initialize_adb_device(target_device)
 
-                    return
+                return
 
-                if self.client_socket is None and not self.is_connecting:
-                    self.initialize_adb_device(target_device)
+            if self.client_socket is None and not self.is_connecting:
+                self.devices = new_list
+                self.device_changed.emit(new_list)
+                self.initialize_adb_device(target_device)
 
-            return
-
-        old_devices:  list[str] = self.devices
-        disconnected: list[str] = list(set(old_devices) - set(new_list))
-        connected:    list[str] = list(set(new_list) - set(old_devices))
+                return
 
         self.devices = new_list
-
-        for device in disconnected:
-            if device in self.blocked_devices:
-                self.blocked_devices.remove(device)
-
-            if self.connection_mode == "cable":
-                self.handle_disconnection()
-
         self.device_changed.emit(new_list)
 
-        available_connected = [device for device in connected if device not in self.blocked_devices]
-
-        if not available_connected:
+        if self.client_socket is not None or self.is_connecting:
             return
 
-        target_device = available_connected[0]
-
-        if self.connection_mode == "wireless":
-            logger.info(f"New cable device attached ({target_device}). Disconnecting wireless to switch to cable.")
-            self.disconnect_socket()
-            self.initialize_adb_device(target_device)
-
-            return
-
-        if self.client_socket is None and not self.is_connecting:
-            self.initialize_adb_device(target_device)
+        self.send_wireless_discovery_probe()
+        self.check_wireless_discovery_responses()
 
     # Device Initialization
 
